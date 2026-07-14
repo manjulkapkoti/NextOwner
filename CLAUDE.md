@@ -31,6 +31,7 @@ pick milestone (docs/design_implementation.md Part 4)
 - **The green gate is the PR merge, not individual commits.** A PR merges to `main` only when `/dod` passes (tests + the `docs/security.md` §8 security matrix), so `main` is always green.
 - **Flow:** `/start-milestone <name>` → `/new-spec` → failing tests → implement → `/dod` (pushes the branch + opens the PR when green) → `tech-lead` reviews the diff + `appsec-engineer` runs the matrix on it → **you** squash-merge → next milestone.
 - **Tooling:** `gh` CLI — `gh pr create` (open), `gh pr merge --squash --delete-branch` (human-approved merge).
+- **Full detail:** `docs/git_strategy.md` — the branch/PR rationale, the 9-step per-milestone flow, and conventions.
 
 ## Non-negotiable architecture rules (constitution Article 2)
 
