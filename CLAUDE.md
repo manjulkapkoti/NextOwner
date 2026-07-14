@@ -54,7 +54,7 @@ React + Vite + TypeScript + MUI + MobX · **Python FastAPI** + SQLModel · SQLit
 ## Conventions (constitution Article 4)
 
 - **`/api` prefix in all code** (WebSockets under `/ws`); local Vite dev-proxy forwards both to FastAPI — no CORS. Doc prose omits `/api` for readability; **code and tests always include it**.
-- Product name is **NextOwner** in all user-facing strings, `FastAPI(title="NextOwner API")`, and the SQLite file `nextowner.db`. (The repo folder may still read `AcquireMVP` — cosmetic only.)
+- Product name is **NextOwner** in all user-facing strings, `FastAPI(title="NextOwner API")`, and the SQLite file `nextowner.db`.
 - REST: plural nouns (`/listings`), sub-resources for ownership (`/listings/{id}/private`), POST verbs for state transitions (`/offers/{id}/accept`).
 - Error codes: `401` unauthenticated, `403` forbidden, `404` not found, **`409` invalid state transition**, `422` validation.
 

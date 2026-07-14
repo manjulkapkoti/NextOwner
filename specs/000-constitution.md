@@ -54,7 +54,7 @@
 
 ## Article 4 — Conventions
 
-- **Product name: NextOwner** (decided 2026-07-13). Use it in all user-facing strings, app titles (`FastAPI(title="NextOwner API")`), and branding; local SQLite file is `nextowner.db`. The repo folder may remain `AcquireMVP` — renaming it is optional and cosmetic. Before public launch: verify domain availability and run a USPTO trademark search (class 35/36).
+- **Product name: NextOwner** (decided 2026-07-13). Use it in all user-facing strings, app titles (`FastAPI(title="NextOwner API")`), and branding; local SQLite file is `nextowner.db`. The repo folder is `NextOwner`. Before public launch: verify domain availability and run a USPTO trademark search (class 35/36).
 - Folder layout as defined in `design_implementation.md` §3.3 (`app/`, `backend/app/{routers,services}`, `backend/tests/`, `seed/`, `specs/`).
 - REST style: plural nouns (`/listings`), sub-resources for ownership (`/listings/{id}/private`), POST verbs only for state transitions (`/listings/{id}/submit`, `/offers/{id}/accept`).
 - **Single-origin layout:** all backend routes mounted under the `/api` prefix (WebSockets under `/ws`); locally the Vite dev proxy forwards both to FastAPI (no CORS); production uses one domain with path routing (reverse proxy → SPA build + FastAPI). Doc prose may omit the `/api` prefix; code never does.

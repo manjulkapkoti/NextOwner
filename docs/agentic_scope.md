@@ -1,4 +1,4 @@
-# Agentic Enhancements for an Acquire.com-Style Marketplace
+# Agentic Enhancements for NextOwner (an online M&A marketplace)
 
 > Companion to [`acquire_design.md`](./acquire_design.md). This document proposes how **agentic AI** — LLM-driven systems that plan, use tools, iterate, and act toward a goal with humans approving the consequential steps — can be layered onto the marketplace design to improve the business, not just decorate it with chat.
 

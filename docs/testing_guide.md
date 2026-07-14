@@ -56,7 +56,7 @@ npm init playwright@latest                    # choose e2e/ as the tests folder
 ### 3.2 Folder layout
 
 ```
-AcquireMVP/
+NextOwner/
 ├── app/src/**/*.test.tsx        # unit + component tests, colocated with code
 ├── backend/tests/
 │   ├── conftest.py              # shared fixtures: db, client, as_user, seed  ← write once

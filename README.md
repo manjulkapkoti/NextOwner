@@ -1,11 +1,11 @@
 # NextOwner
 
-A marketplace for buying and selling small online businesses — an Acquire.com-style MVP built for learning, **entirely local** (no cloud account needed). Planning phase is complete; development starts at **Milestone 0**.
+A marketplace for buying and selling small online businesses — an online M&A marketplace MVP ,a two-sided platform where founders sell their profitable online businesses (SaaS, ecommerce, agencies, etc.) and buyers (solo entrepreneurs, PE firms, strategics) take over them. It is built for learning, **entirely local** (no cloud account needed). Planning phase is complete; development starts at **Milestone 0**.
 
 ## Project structure
 
 ```
-AcquireMVP/
+NextOwner/
 ├── README.md                  ← you are here
 ├── docs/                      # all research & guides (see map below)
 │   ├── diagrams/              # architecture & workflow diagrams (.excalidraw + .html)
@@ -20,16 +20,16 @@ AcquireMVP/
 
 ## Documentation map
 
-| Read this… | …for |
-|---|---|
+| Read this…                                                         | …for                                                                                                                                                                                          |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`docs/design_implementation.md`](./docs/design_implementation.md) | **Start here.** The business explained from zero (Part 1), every architecture component (Part 2), local dev setup (Part 3), the milestone build guide (Part 4), Supabase alternative (Part 6) |
-| [`docs/acquire_design.md`](./docs/acquire_design.md) | The original Acquire.com research: tech stack, feature list, MVP subset, FR-1…23 + NFRs |
-| [`docs/testing_guide.md`](./docs/testing_guide.md) | Test framework setup + per-milestone test checklists (tests = executable acceptance criteria) |
-| [`specs/000-constitution.md`](./specs/000-constitution.md) | The rules every spec and line of code must follow |
-| [`docs/agentic_scope.md`](./docs/agentic_scope.md) | Post-MVP AI/agentic roadmap (deal-scout, diligence agent, …) |
-| [`docs/research/synthesis.md`](./docs/research/synthesis.md) | Cross-company synthesis: the market map, 7 category laws, stack comparison, decisions ledger, NextOwner's white space |
-| [`docs/research/`](./docs/research/) | Individual competitor teardowns + [`cool_features.md`](./docs/research/cool_features.md) (adopted & backlog ideas) |
-| [`docs/temp_readme.md`](./docs/temp_readme.md) | Q&A notes: milestones-as-phases, spec-driven development workflow |
+| [`docs/acquire_design.md`](./docs/acquire_design.md)               | The original Acquire.com research: tech stack, feature list, MVP subset, FR-1…23 + NFRs                                                                                                       |
+| [`docs/testing_guide.md`](./docs/testing_guide.md)                 | Test framework setup + per-milestone test checklists (tests = executable acceptance criteria)                                                                                                 |
+| [`specs/000-constitution.md`](./specs/000-constitution.md)         | The rules every spec and line of code must follow                                                                                                                                             |
+| [`docs/agentic_scope.md`](./docs/agentic_scope.md)                 | Post-MVP AI/agentic roadmap (deal-scout, diligence agent, …)                                                                                                                                  |
+| [`docs/research/synthesis.md`](./docs/research/synthesis.md)       | Cross-company synthesis: the market map, 7 category laws, stack comparison, decisions ledger, NextOwner's white space                                                                         |
+| [`docs/research/`](./docs/research/)                               | Individual competitor teardowns + [`cool_features.md`](./docs/research/cool_features.md) (adopted & backlog ideas)                                                                            |
+| [`docs/temp_readme.md`](./docs/temp_readme.md)                     | Q&A notes: milestones-as-phases, spec-driven development workflow                                                                                                                             |
 
 ## Stack (constitution Article 1)
 

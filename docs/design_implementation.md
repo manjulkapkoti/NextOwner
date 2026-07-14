@@ -259,7 +259,7 @@ That's the whole list: SQLite ships inside Python, so there is **no Docker, no J
 ### 3.3 Project scaffold
 
 ```
-AcquireMVP/
+NextOwner/
 ├── README.md                     # project entry point
 ├── docs/                         # research · guides · diagrams (this file lives here)
 ├── specs/                        # SDD constitution + per-milestone specs
