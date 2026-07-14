@@ -32,6 +32,21 @@ Violating these breaks the product's trust model. Apply them to agent code too �
 4. **Status state machines are the business.** `listing.status`, `offer.status`, `access_request.status` change only inside endpoints that validate the transition. Clients never set status fields directly.
 5. **The NDA gate is the heart of the design.** `require_private_access` (`permissions.py`) guards private data and document downloads; `backend/tests/test_nda_gate.py` is the most important test file in the project.
 
+## Security is priority #1 (owner's standing directive)
+
+Security is the explicit top priority for this codebase — treat it as a first-class requirement in every spec, endpoint, and review, not an afterthought. The 5 rules above are the core; also apply these on **all** product code, and think adversarially (write the attacker's request, then block it):
+
+- **Default-deny authorization on every non-public route.** No endpoint ships without an explicit `permissions.py` check. When in doubt, forbid. For every privileged action, write the **forbidden-path test** (wrong identity → 401/403/404, illegal transition → 409) *before* the happy path — these permission tests are the crown jewels (`docs/testing_guide.md` §1).
+- **Validate every input at the boundary** with Pydantic/SQLModel schemas; reject mass-assignment of server-controlled fields (`status`, `is_admin`, `owner_id`, `verified`, prices). Only the DB layer's parameterized queries touch SQL — never string-build queries.
+- **Secrets live in env only** (JWT signing key, future vendor keys) — never hardcoded, never logged, never committed (`.env` is gitignored). JWTs: bcrypt password hashing, signed tokens, verify signature + claims + expiry on every request.
+- **Fail closed and don't leak.** Return correct status codes with generic client-facing messages; never surface stack traces, SQL, or internal detail. Public `response_model`s exclude private/identity fields by schema.
+- **File uploads are hostile:** enforce type + size, normalize/confine paths (no traversal outside `uploads/{listing_id}/`), and serve only through permission-checked endpoints. WebSockets: verify JWT + membership on connect.
+- **Agents get no bypass** — they act as scoped users through the same gates (Article 1).
+
+If a change touches auth, permissions, data exposure, uploads, money, or WebSockets, call it out and cover it with negative tests before considering it done.
+
+**The full threat model and end-to-end checklist is `docs/security.md`** — consult it when writing any spec (§7 per-milestone + §6 edge cases), endpoint/query/component (§1 the boundary you're crossing), or review (§8 touched→must-cover matrix). It is binding alongside the constitution.
+
 ## Stack (constitution Article 1)
 
 React + Vite + TypeScript + MUI + MobX · **Python FastAPI** + SQLModel · SQLite (`nextowner.db`) → Postgres later · JWT auth (bcrypt) · WebSockets for chat · pytest / Vitest / Playwright. All third-party vendors (Stripe, Persona, Escrow.com) are **mocked locally**. 100% local — no cloud, no Docker. Node 20+, Python 3.12+.
@@ -54,10 +69,13 @@ cd backend && pytest -q -x --lf             # re-run only last failures
 
 Tests use fresh in-memory SQLite per test via `dependency_overrides`; they go through the real endpoints except for seeding (making admin, force-setting status). See `docs/testing_guide.md`.
 
+**Windows dev machine:** activate the backend venv with `.venv\Scripts\activate` (PowerShell/cmd) or `source .venv/Scripts/activate` in Git Bash — the Bash tool runs Git Bash, so the Unix `.venv/bin/activate` path does not exist.
+
 ## Key references
 
 @specs/000-constitution.md
 
+- `docs/security.md` — **binding.** End-to-end threat model + security checklist; consult at every step (owner's #1 priority).
 - `docs/design_implementation.md` — architecture (Part 2), local dev setup (§3.3–3.4), milestone build guide (Part 4). **Start here for any implementation.**
 - `docs/testing_guide.md` — test framework + per-milestone test checklists (§5); tests ARE the acceptance criteria.
 - `docs/acquire_design.md` — requirements FR-1…23 + NFRs (cite these in specs).

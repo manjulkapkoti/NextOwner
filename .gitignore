@@ -32,6 +32,9 @@ test-results/
 CLAUDE.local.md
 .claude/settings.local.json
 
+# Personal setup reminder (not shared)
+remember_todo.md
+
 # OS / editor
 .DS_Store
 Thumbs.db

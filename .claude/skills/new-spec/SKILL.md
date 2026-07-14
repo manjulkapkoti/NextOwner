@@ -22,6 +22,7 @@ Create `specs/NNN-<name>/spec.md` and `specs/NNN-<name>/plan.md` for the milesto
    - **FR references** — the FR-N items from `docs/acquire_design.md` this milestone satisfies.
    - **User stories** — "As a <role>, I want <capability>, so that <value>."
    - **Acceptance criteria** — numbered GIVEN/WHEN/THEN scenarios. Cover happy paths **and** the forbidden paths (wrong identity → 403/404, invalid transition → 409, bad input → 422). **Each scenario must map to exactly one test** — if you can't phrase it as a testable scenario, it's too vague. Derive these from the testing_guide §5 checklist for this milestone.
+   - **Security & abuse** — a dedicated subsection (security is the owner's #1 priority). Pull this milestone's row from `docs/security.md` §7 plus the relevant §6 edge cases, and write each as a forbidden-path GIVEN/WHEN/THEN (IDOR, mass-assignment, path traversal, spoofed identity, schema-leak, illegal transition, revocation). These are permission tests — the crown jewels.
    - **Out of scope** — what this milestone deliberately defers.
 
 4. **Create `specs/NNN-<name>/plan.md`** with:
