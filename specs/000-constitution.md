@@ -49,7 +49,7 @@
 
 1. **Spec-driven:** each milestone (Part 4 of `design_implementation.md`) gets `specs/NNN-name/spec.md` (user stories + GIVEN/WHEN/THEN acceptance criteria + FR references) and `plan.md` (schema deltas, endpoints, components) *before* implementation. Spec just-in-time — one or two milestones ahead, no further.
 2. **Tests are the acceptance criteria:** every GIVEN/WHEN/THEN becomes exactly one test (`testing_guide.md`); write them failing before implementing.
-3. **Definition of done:** a milestone is done when its tests pass **and** the full `npm test` suite is green. Commit only when green.
+3. **Definition of done:** a milestone is done when its tests pass **and** the full `npm test` suite is green. Work happens on a per-milestone feature branch off `main`; commit freely on the branch (including the failing-tests-first commit). `main` is updated **only by merging a PR that is green** (tests + the security must-cover matrix) — never by a direct commit, so `main` is always green.
 4. **Milestone order is binding** (M0→M11 as sequenced in Part 4); Phase E items (M8–M11) may be reordered among themselves.
 
 ## Article 4 — Conventions
@@ -70,3 +70,4 @@
 - 2026-07-13 — Product named **NextOwner** (Article 4).
 - 2026-07-13 — Adopted from Baton research: one platform-wide NDA + per-listing access approval (affects Milestone 5 / FR-13), and single-origin `/api` path layout with Vite dev proxy (Article 4).
 - 2026-07-13 — Agent-readiness note added to Article 1: stack confirmed as the recommended base for owner-controlled agent development; agents bound by the same permission gates as humans; no agent frameworks — loops built on the provider SDK.
+- 2026-07-14 — Adopted a per-milestone feature-branch → PR → squash-merge workflow; the green gate is the PR merge, not individual branch commits (Article 3 §3).

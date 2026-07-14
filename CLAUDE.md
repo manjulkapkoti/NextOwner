@@ -16,11 +16,21 @@ Every milestone follows this loop (constitution Article 3, `README.md`):
 pick milestone (docs/design_implementation.md Part 4)
 → write specs/NNN-name/spec.md (user stories + GIVEN/WHEN/THEN + FR refs) and plan.md   ← before code
 → write its tests from docs/testing_guide.md §5 — they FAIL first
-→ implement → tests pass → full `npm test` green → commit → next milestone
+→ implement → tests pass → full `npm test` green → open PR → squash-merge to main → next milestone
 ```
 
 - **Every GIVEN/WHEN/THEN acceptance criterion becomes exactly one test, written failing before implementing.** If you can't write the test, the criterion is too vague — fix the spec.
-- **Definition of done:** a milestone is done only when its tests pass **and** the full `npm test` suite is green. **Commit only when green.** Milestone order M0→M11 is binding (see `/dod`, `/new-spec`).
+- **Definition of done:** a milestone is done only when its tests pass **and** the full `npm test` suite is green, **and its PR merges** (see Git workflow below). Milestone order M0→M11 is binding (see `/start-milestone`, `/new-spec`, `/dod`).
+
+## Git workflow (branch → PR → merge)
+
+`main` is protected — **never commit to it directly.** Every milestone's work happens on its own feature branch and lands via a PR.
+
+- **One branch + one PR per milestone**, cut from fresh `main`: `git checkout main && git pull` → `git checkout -b feat/NNN-slug` (`feat|fix|chore`). All agents commit to that single branch; the orchestrator manages git, agents produce the code/tests.
+- **Conventional Commits** (`feat:`/`fix:`/`test:`/`docs:`/`chore:`). Commit freely on the branch — including the **failing-tests-first** commit.
+- **The green gate is the PR merge, not individual commits.** A PR merges to `main` only when `/dod` passes (tests + the `docs/security.md` §8 security matrix), so `main` is always green.
+- **Flow:** `/start-milestone <name>` → `/new-spec` → failing tests → implement → `/dod` (pushes the branch + opens the PR when green) → `tech-lead` reviews the diff + `appsec-engineer` runs the matrix on it → **you** squash-merge → next milestone.
+- **Tooling:** `gh` CLI — `gh pr create` (open), `gh pr merge --squash --delete-branch` (human-approved merge).
 
 ## Non-negotiable architecture rules (constitution Article 2)
 

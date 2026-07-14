@@ -22,7 +22,9 @@ A milestone is "done" only when **its tests pass AND the full `npm test` suite i
 4. **Security must-cover check (owner's #1 priority).** For everything this milestone touched, run the `docs/security.md` §8 touched→must-cover matrix: if it changed **auth, permissions/a new route, create/PUT, a public route, uploads, money/offers, or WebSockets**, confirm the corresponding negative test exists and passes (invalid-token 401, wrong-identity 403/IDOR, mass-assignment ignored, schema-leak, path traversal, illegal-transition 409, spoofed-sender rejected). A milestone with a missing negative test is **not done**, even if the positive tests are green — flag the gap.
 
 5. **Report the result plainly:**
-   - **Green + checklist complete** → state it's done. Remind the user of "commit only when green," and offer to stage + commit (per-milestone commit gives a known-good checkpoint). Do not commit without the user's go-ahead.
-   - **Any failure** → show the failing test output. Do not describe the milestone as done. Point at the specific failing scenario.
+   - **Green + checklist complete** → the milestone is done; proceed to open the PR (step 6).
+   - **Any failure** → show the failing test output. Do not describe the milestone as done, and do **not** open a PR. Point at the specific failing scenario.
 
-6. Never edit tests to make them pass. If a test is wrong, fix the spec/test deliberately and say so — the tests are the acceptance criteria.
+6. **Open the PR (only when green + checklist complete).** If you're on a milestone feature branch (not `main`): commit any final work with a Conventional Commit message, `git push -u origin <branch>`, then `gh pr create --base main --fill` (or a title/body summarizing the milestone, the FRs covered, the `/dod` result, and the security-matrix outcome). Confirm with the user before pushing/opening. **Do not merge** — `tech-lead` reviews the diff and `appsec-engineer` runs the matrix on it, then the human squash-merges (`gh pr merge --squash --delete-branch`). If you're on `main`, stop and tell the user to run `/start-milestone` first. If `gh` isn't installed yet, push the branch and give the user the PR-compare URL instead.
+
+7. Never edit tests to make them pass. If a test is wrong, fix the spec/test deliberately and say so — the tests are the acceptance criteria.
