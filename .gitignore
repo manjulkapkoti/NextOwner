@@ -1,0 +1,39 @@
+# Python / FastAPI backend
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Local database + uploaded data-room files (created at Milestone 0+)
+nextowner.db
+*.db-journal
+backend/uploads/
+uploads/
+
+# Node / Vite frontend
+node_modules/
+dist/
+build/
+*.local
+
+# Test / E2E artifacts
+coverage/
+playwright-report/
+test-results/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Claude Code — personal, machine-local settings
+CLAUDE.local.md
+.claude/settings.local.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

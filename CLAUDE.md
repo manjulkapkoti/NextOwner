@@ -1,0 +1,68 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project status: pre-Milestone-0
+
+This repo is currently **planning-only** — Markdown docs, diagrams, and a diagram generator. There is **no application code yet**: `app/`, `backend/`, `seed/`, the root `package.json`, `nextowner.db`, and the test suite **do not exist** until Milestone 0 scaffolds them. Any build/test command below is the *planned* command and only works after the relevant milestone. Do not assume these paths exist — check first.
+
+The only runnable code today is the diagram generator under `docs/diagrams/diagGenerator/` (see `/gen-diagrams`).
+
+## How we work: Spec-Driven Development (mandatory)
+
+Every milestone follows this loop (constitution Article 3, `README.md`):
+
+```
+pick milestone (docs/design_implementation.md Part 4)
+→ write specs/NNN-name/spec.md (user stories + GIVEN/WHEN/THEN + FR refs) and plan.md   ← before code
+→ write its tests from docs/testing_guide.md §5 — they FAIL first
+→ implement → tests pass → full `npm test` green → commit → next milestone
+```
+
+- **Every GIVEN/WHEN/THEN acceptance criterion becomes exactly one test, written failing before implementing.** If you can't write the test, the criterion is too vague — fix the spec.
+- **Definition of done:** a milestone is done only when its tests pass **and** the full `npm test` suite is green. **Commit only when green.** Milestone order M0→M11 is binding (see `/dod`, `/new-spec`).
+
+## Non-negotiable architecture rules (constitution Article 2)
+
+Violating these breaks the product's trust model. Apply them to agent code too — agents run *as* scoped users through the same gates, never with a bypass identity.
+
+1. **The API is the only door.** The browser never touches the DB. Every privilege check lives in `backend/app/permissions.py` — one function per trust boundary.
+2. **Never trust the client** for `owner_id`, `sender_id`, `status`, or prices in privileged flows — the server derives them from the JWT + DB.
+3. **Public/private split.** Anonymous data (`Listing`) and NDA-gated data (`ListingPrivate`) live in separate tables served by separate endpoints. Public Pydantic `response_model`s must make identity leaks impossible *by schema*.
+4. **Status state machines are the business.** `listing.status`, `offer.status`, `access_request.status` change only inside endpoints that validate the transition. Clients never set status fields directly.
+5. **The NDA gate is the heart of the design.** `require_private_access` (`permissions.py`) guards private data and document downloads; `backend/tests/test_nda_gate.py` is the most important test file in the project.
+
+## Stack (constitution Article 1)
+
+React + Vite + TypeScript + MUI + MobX · **Python FastAPI** + SQLModel · SQLite (`nextowner.db`) → Postgres later · JWT auth (bcrypt) · WebSockets for chat · pytest / Vitest / Playwright. All third-party vendors (Stripe, Persona, Escrow.com) are **mocked locally**. 100% local — no cloud, no Docker. Node 20+, Python 3.12+.
+
+## Conventions (constitution Article 4)
+
+- **`/api` prefix in all code** (WebSockets under `/ws`); local Vite dev-proxy forwards both to FastAPI — no CORS. Doc prose omits `/api` for readability; **code and tests always include it**.
+- Product name is **NextOwner** in all user-facing strings, `FastAPI(title="NextOwner API")`, and the SQLite file `nextowner.db`. (The repo folder may still read `AcquireMVP` — cosmetic only.)
+- REST: plural nouns (`/listings`), sub-resources for ownership (`/listings/{id}/private`), POST verbs for state transitions (`/offers/{id}/accept`).
+- Error codes: `401` unauthenticated, `403` forbidden, `404` not found, **`409` invalid state transition**, `422` validation.
+
+## Commands (planned — only after the relevant milestone)
+
+```bash
+npm test                                    # full suite (backend pytest + frontend vitest) — the DoD gate
+cd backend && pytest -q                     # fast backend loop
+cd backend && pytest tests/test_nda_gate.py -q   # a single file
+cd backend && pytest -q -x --lf             # re-run only last failures
+```
+
+Tests use fresh in-memory SQLite per test via `dependency_overrides`; they go through the real endpoints except for seeding (making admin, force-setting status). See `docs/testing_guide.md`.
+
+## Key references
+
+@specs/000-constitution.md
+
+- `docs/design_implementation.md` — architecture (Part 2), local dev setup (§3.3–3.4), milestone build guide (Part 4). **Start here for any implementation.**
+- `docs/testing_guide.md` — test framework + per-milestone test checklists (§5); tests ARE the acceptance criteria.
+- `docs/acquire_design.md` — requirements FR-1…23 + NFRs (cite these in specs).
+- `docs/agentic_scope.md` — post-MVP agentic roadmap.
+
+## Diagrams
+
+`docs/diagrams/*.excalidraw` and `*.html` are **generated** from the `elements_*.json` sources in `docs/diagrams/diagGenerator/` — the JSON is the source of truth, and editing one output never updates the other. To change a diagram, edit its JSON and regenerate both outputs with `/gen-diagrams`.
