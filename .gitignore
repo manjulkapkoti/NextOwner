@@ -32,8 +32,9 @@ test-results/
 CLAUDE.local.md
 .claude/settings.local.json
 
-# Personal setup reminder (not shared)
+# Personal / portable docs (kept local, not part of this repo)
 remember_todo.md
+PRODUCT_PLAYBOOK.md
 
 # OS / editor
 .DS_Store
