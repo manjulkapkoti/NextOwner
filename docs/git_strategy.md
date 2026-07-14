@@ -32,7 +32,7 @@ Sub-agents run in isolation and hand work back to the main session. Having each 
 6. Push    →  git push -u origin feat/001-auth-roles                                  ┐
 7. PR      →  open PR → main (body: FRs, security-matrix result, test summary)        ┘ ← /dod (gh pr create)
 8. Review  →  tech-lead reviews the diff · appsec runs the matrix on the PR   ← your "reviewers"
-9. Merge   →  you approve → squash-merge → delete branch → back to main → next milestone
+9. Land    →  you approve → /land: squash-merge → delete branch → sync local main → next milestone
 ```
 
 ---
@@ -48,4 +48,4 @@ Sub-agents run in isolation and hand work back to the main session. Having each 
 
 - `/start-milestone <name>` → step 1 (cut the branch off fresh `main`).
 - `/dod` → steps 5–7 (run the green gate, then push + `gh pr create` when green; never auto-merges).
-- `gh pr merge --squash --delete-branch` → step 9 (human-approved merge).
+- `/land [pr#]` → step 9: after your approval, squash-merges (`gh pr merge --squash --delete-branch`) if the PR is still open — or just syncs if you already merged — then `git checkout main && git pull --ff-only && git fetch --prune` to ready the next branch. Queries status on demand (no passive notification); run on a `/loop` to poll.
