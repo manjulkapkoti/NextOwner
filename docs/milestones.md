@@ -18,6 +18,8 @@
 
 **Rules:** spec only 1–2 milestones ahead · every GIVEN/WHEN/THEN = one test, written failing first · `main` is updated only via a **green PR** · commit freely on the branch (WIP is fine).
 
+**Automate it:** `/run-milestone <slug>` drives steps 1–5 for you (branch → spec → failing tests → implement → `/dod` → open PR) and stops at the green PR for your review. Add `--pause-after-spec` to approve the spec before it builds. The merge always stays manual — you review, then `/close-feature`.
+
 ---
 
 ## The milestones
