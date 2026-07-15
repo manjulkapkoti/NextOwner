@@ -28,14 +28,31 @@ Sub-agents run in isolation and hand work back to the main session. Having each 
 2. Spec    →  product-lead scopes → /new-spec → commit     ("docs: spec M1 auth")
 3. Tests   →  appsec writes failing tests → commit         ("test: failing acceptance tests M1")
 4. Build   →  backend/frontend implement → commit(s)       ("feat: auth endpoints + JWT")
-5. Green   →  /dod: full suite + security must-cover matrix must pass
-6. Push    →  git push -u origin feat/001-auth-roles                                  ┐
-7. PR      →  open PR → main (body: FRs, security-matrix result, test summary)        ┘ ← /dod (gh pr create)
-8. Review  →  tech-lead reviews the diff · appsec runs the matrix on the PR   ← your "reviewers"
-9. Close   →  you approve → /close-feature: squash-merge → delete branch → sync local main → next milestone
+5. Green   →  /dod: full suite + security must-cover matrix + checklist must pass   (verifies green — does NOT open the PR)
+6. Review  →  tech-lead reviews the diff · appsec runs the matrix + negative tests   ← agent gate, ON THE BRANCH,
+              → fix findings, re-run tests, until both sign off                        BEFORE the PR exists
+7. PR      →  git push -u origin … → gh pr create → main                              ← opened only after sign-off;
+              (body: FRs, security-matrix result, test summary, agent sign-off)         a PR = "ready for a human"
+8. Human   →  you review the PR → approve
+9. Close   →  /close-feature: squash-merge → delete branch → sync local main → next milestone
 ```
 
 ---
+
+## Two open PRs (staleness + conflict recovery)
+
+Milestones are built **one at a time**, so each branch is cut from fresh `main` and squash-merges cleanly — normally there's only one PR in flight and this never comes up. But when two PRs are open at once (e.g. a process/hotfix PR alongside a milestone), the moment the first merges the second is based on an **older `main`**:
+
+- **No file overlap** → the second still merges cleanly, in either order. Just re-sync its branch (`git merge origin/main`) and re-run `/dod` before merging, so it's verified against the `main` it actually lands on (keeps `main` always-green).
+- **Same lines touched** → GitHub marks the second `CONFLICTING`. `gh pr merge` and `/close-feature` **refuse** it (fail-safe — never a blind merge). Recover on the **branch**:
+
+  1. **Sync onto the new main:** `git checkout <branch> && git fetch origin && git merge origin/main` (or `rebase`).
+  2. **Resolve the markers** — reconcile *both* PRs' intent (their specs + commits). A conflict in a **security-sensitive file** (`permissions.py`, auth, status state machines, response models) is new security surface — a bad merge silently drops a guard, so treat it as such.
+  3. **Commit + push.**
+  4. **Re-gate — the resolution is new, unreviewed code:** `/dod` (tests + §8 matrix) must pass **and** the `tech-lead` + `appsec-engineer` review re-runs on the merged result (mandatory for any security-touching file). Never merge a hand-resolved conflict blind.
+  5. **Then** `/close-feature <pr#>`.
+
+**Semantic conflicts** (two milestones changing the same business/security rule in different directions) don't have a mechanical answer — surface both options for a human call rather than guess. **Best avoided entirely:** keep milestone PRs sequential; when an independent change must run alongside, merge it first and re-sync/re-gate the rest.
 
 ## Conventions
 
@@ -47,5 +64,6 @@ Sub-agents run in isolation and hand work back to the main session. Having each 
 ## Tooling
 
 - `/start-milestone <name>` → step 1 (cut the branch off fresh `main`).
-- `/dod` → steps 5–7 (run the green gate, then push + `gh pr create` when green; never auto-merges).
-- `/close-feature [pr#]` → step 9: after your approval, squash-merges (`gh pr merge --squash --delete-branch`) if the PR is still open — or just syncs if you already merged — then `git checkout main && git pull --ff-only && git fetch --prune` to ready the next branch. Queries status on demand (no passive notification); run on a `/loop` to poll.
+- `/dod` → step 5 only (the green gate: full suite + security matrix + checklist). It **no longer opens the PR** — the `tech-lead` + `appsec-engineer` review gate (step 6) runs on the branch first, and the push + `gh pr create` (step 7) happen only after both sign off. The orchestrator (or `/run-milestone`) owns that push/PR step; never auto-merges.
+- `/run-milestone <slug>` → automates steps 1–7 (branch → spec → failing tests → implement → `/dod` green gate → agent review & test on the branch → open the PR once vetted), then stops at the PR for the human.
+- `/close-feature [pr#]` → step 9: after your approval, squash-merges (`gh pr merge --squash --delete-branch`) if the PR is still open — or just syncs if you already merged — then `git checkout main && git pull --ff-only && git fetch --prune` to ready the next branch. On a `CONFLICTING` PR it stops (no blind merge) — see § Two open PRs. Queries status on demand (no passive notification); run on a `/loop` to poll.

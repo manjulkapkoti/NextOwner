@@ -11,14 +11,15 @@
 2. /new-spec <slug>            # product-lead scopes → spec.md + plan.md (incl. a Security & abuse section)
 3. (failing tests first)       # appsec-engineer writes the forbidden-path tests — they FAIL
 4. (implement)                 # backend-engineer / frontend-engineer build until the tests pass
-5. /dod                        # full `npm test` + the security must-cover matrix → opens the PR when green
-6. (review)                    # tech-lead reviews the diff · appsec runs the matrix on the PR
-7. "close the feature"         # squash-merge + sync main → next milestone
+5. /dod                        # full `npm test` + the security must-cover matrix → verifies green (NO PR yet)
+6. (agent review + test)       # tech-lead reviews the diff · appsec runs the matrix — ON THE BRANCH, fix findings
+7. (open PR)                   # only after both sign off → a PR = "agent-vetted, ready for a human"
+8. (human review) → "close the feature"   # you approve → squash-merge + sync main → next milestone
 ```
 
 **Rules:** spec only 1–2 milestones ahead · every GIVEN/WHEN/THEN = one test, written failing first · `main` is updated only via a **green PR** · commit freely on the branch (WIP is fine).
 
-**Automate it:** `/run-milestone <slug>` drives steps 1–5 for you (branch → spec → failing tests → implement → `/dod` → open PR) and stops at the green PR for your review. Add `--pause-after-spec` to approve the spec before it builds. The merge always stays manual — you review, then `/close-feature`.
+**Automate it:** `/run-milestone <slug>` drives steps 1–7 for you (branch → spec → failing tests → implement → `/dod` green gate → **tech-lead + appsec review & test on the branch** → open the PR once they sign off) and stops at the agent-vetted PR for your review. Add `--pause-after-spec` to approve the spec before it builds. The merge always stays manual — you review, then `/close-feature`.
 
 For example:
 
