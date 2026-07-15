@@ -35,6 +35,15 @@ pick milestone (docs/design_implementation.md Part 4)
 - **Closing the feature (after approval):** `/close-feature [pr#]` queries the PR and runs `gh pr merge --squash --delete-branch` if it's still open (or just syncs if you already merged), then `git checkout main && git pull` — ready for the next branch. No passive notification; it queries on demand (or run it on a `/loop` to poll).
 - **Full detail:** `docs/git_strategy.md` — the branch/PR rationale, the 9-step per-milestone flow, and conventions.
 
+## Session continuity (resume across sessions)
+
+Work spans days and a session can die mid-task (crash, closed tab, usage limit). To resume cleanly:
+
+- **Start a session with `/resume`** — it reconstructs where you left off from git + `npm test` (the red tests are the to-do list) + `docs/progress.md`, trusting git+tests and self-healing if the status file is stale.
+- **At a stopping point, run `/checkpoint`** — updates `docs/progress.md` (the "▶ next action"), commits WIP on the branch, pushes, and ensures a draft PR exists.
+- **Crash-proof, automatic:** a `Stop` hook (`.claude/settings.json` → `.claude/hooks/flight_recorder.py`) rewrites the gitignored `.claude/session-state.md` every turn, so even an abrupt death leaves a fresh, recoverable snapshot — nothing depends on a graceful shutdown.
+- **Full design + rationale:** `docs/session_recovery.md`.
+
 ## Non-negotiable architecture rules (constitution Article 2)
 
 Violating these breaks the product's trust model. Apply them to agent code too — agents run *as* scoped users through the same gates, never with a bypass identity.
