@@ -20,7 +20,7 @@ Closes out a milestone: once its PR is approved, squash-merge it (if not already
 
 4. **Decide:**
    - **OPEN + MERGEABLE + (APPROVED, or the user explicitly said to close the feature)** → `gh pr merge <n> --squash --delete-branch`.
-   - **OPEN + CONFLICTING** → stop. Report the conflict; do not merge.
+   - **OPEN + CONFLICTING** → stop; do **not** merge. The branch is behind an updated `main` — run the **conflict-recovery loop** (§ below) on the branch, then retry.
    - **OPEN + CHANGES_REQUESTED, or not approved and no explicit go-ahead** → stop. Tell the user it needs approval first; never merge an unreviewed/blocked PR.
    - **Already MERGED** (they merged in the browser) → skip the merge; go straight to sync.
    - **CLOSED (not merged)** → stop; report.
@@ -29,4 +29,14 @@ Closes out a milestone: once its PR is approved, squash-merge it (if not already
 
 6. **Report:** the merged commit now on `main`, the branch deleted, and that we're ready for the next `/start-milestone`.
 
-Never force-merge a PR with `CHANGES_REQUESTED` or conflicts. The security must-cover matrix (`appsec-engineer`) and the `tech-lead` diff review happen on the PR *before* this step — see `/dod` and `docs/git_strategy.md`.
+## Conflict recovery (a second PR gone stale)
+
+When two PRs are open at once, the moment the first squash-merges the second is based on an **older `main`**; if they touched the same lines GitHub marks it `CONFLICTING`, and step 4 stops here. Resolve it on the **branch**, before merging:
+
+1. **Sync the branch onto the new main:** `git checkout <branch> && git fetch origin && git merge origin/main` (or `git rebase origin/main`).
+2. **Resolve the conflict markers** — reconcile *both* sides' intent (each PR's spec + commits). A conflict in a **security-sensitive file** (`permissions.py`, auth, status state machines, response models) is new security surface — a bad merge silently drops a guard.
+3. **Commit + push** the resolution.
+4. **Re-run the gate — a resolved conflict is new, unreviewed code:** `/dod` (tests + the `docs/security.md` §8 matrix) must pass **and** the `tech-lead` + `appsec-engineer` review re-runs on the merged result (mandatory for any security-touching file). Never merge a hand-resolved conflict blind.
+5. **Then** `/close-feature <pr#>` — now `MERGEABLE`. Full detail: `docs/git_strategy.md` § Two open PRs.
+
+Never force-merge a PR with `CHANGES_REQUESTED` or conflicts. The `appsec-engineer` security must-cover matrix and the `tech-lead` diff review happen **on the branch, before the PR is opened** (a PR = agent-vetted, ready for a human) — see `/run-milestone`, `/dod`, and `docs/git_strategy.md`.

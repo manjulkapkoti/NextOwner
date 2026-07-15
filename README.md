@@ -41,7 +41,8 @@ React + Vite + MUI + MobX · **Python FastAPI** · SQLModel · SQLite → Postgr
 pick milestone (docs/design_implementation.md Part 4)
 → write specs/NNN-name/spec.md (user stories + GIVEN/WHEN/THEN, cite FRs)
 → write its tests from the checklist (docs/testing_guide.md) — they fail
-→ implement → tests pass → full suite green → commit → next milestone
+→ implement → tests pass → full suite green
+→ tech-lead + appsec review & test on the branch → open PR (agent-vetted) → you approve → squash-merge → next milestone
 ```
 
 Next action: **Milestone 0** — scaffold `app/` + `backend/` per `docs/design_implementation.md` §3.3–3.4, prove the pipeline with `GET /health`, then write `specs/001-auth-roles/spec.md`.

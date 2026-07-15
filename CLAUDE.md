@@ -16,7 +16,8 @@ Every milestone follows this loop (constitution Article 3, `README.md`):
 pick milestone (docs/design_implementation.md Part 4)
 → write specs/NNN-name/spec.md (user stories + GIVEN/WHEN/THEN + FR refs) and plan.md   ← before code
 → write its tests from docs/testing_guide.md §5 — they FAIL first
-→ implement → tests pass → full `npm test` green → open PR → squash-merge to main → next milestone
+→ implement → tests pass → full `npm test` green
+→ tech-lead + appsec-engineer review & test on the branch → open PR (agent-vetted) → you approve → squash-merge to main → next milestone
 ```
 
 - **Every GIVEN/WHEN/THEN acceptance criterion becomes exactly one test, written failing before implementing.** If you can't write the test, the criterion is too vague — fix the spec.
