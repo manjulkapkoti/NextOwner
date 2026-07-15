@@ -1,13 +1,13 @@
 ---
-name: land
-description: Land a milestone's PR after it's approved — query its status, squash-merge it (if still open) or detect an already-done merge, then sync local main so the next branch can be cut. Run after approving a milestone PR, or say "land it".
+name: close-feature
+description: Close out a milestone's feature after its PR is approved — query the PR's status, squash-merge it (if still open) or detect an already-done merge, then sync local main so the next branch can be cut. Run after approving a milestone PR, or say "close the feature".
 ---
 
-# Land the PR (merge + sync)
+# Close the feature (merge + sync)
 
-Closes out a milestone: once its PR is approved, squash-merge it (if not already merged) and sync local `main` so we're ready for the next `/start-milestone`. Per the constitution, **the human approves the merge** — only proceed when the PR is approved or the user explicitly says to land it.
+Closes out a milestone: once its PR is approved, squash-merge it (if not already merged) and sync local `main` so we're ready for the next `/start-milestone`. Per the constitution, **the human approves the merge** — only proceed when the PR is approved or the user explicitly says to close the feature.
 
-> There is no passive notification — this **queries** PR status on demand (when you invoke `/land` or say "land it"). For active watching, run it on a loop (`/loop 3m /land <pr#>`), which polls and lands once it's approved.
+> There is no passive notification — this **queries** PR status on demand (when you invoke `/close-feature` or say "close the feature"). For active watching, run it on a loop (`/loop 3m /close-feature <pr#>`), which polls and closes it once it's approved.
 
 ## Steps
 
@@ -19,7 +19,7 @@ Closes out a milestone: once its PR is approved, squash-merge it (if not already
 3. **Read the status** — `state` (OPEN | MERGED | CLOSED), `reviewDecision` (APPROVED | REVIEW_REQUIRED | CHANGES_REQUESTED), `mergeable` (MERGEABLE | CONFLICTING).
 
 4. **Decide:**
-   - **OPEN + MERGEABLE + (APPROVED, or the user explicitly said "land it")** → `gh pr merge <n> --squash --delete-branch`.
+   - **OPEN + MERGEABLE + (APPROVED, or the user explicitly said to close the feature)** → `gh pr merge <n> --squash --delete-branch`.
    - **OPEN + CONFLICTING** → stop. Report the conflict; do not merge.
    - **OPEN + CHANGES_REQUESTED, or not approved and no explicit go-ahead** → stop. Tell the user it needs approval first; never merge an unreviewed/blocked PR.
    - **Already MERGED** (they merged in the browser) → skip the merge; go straight to sync.
