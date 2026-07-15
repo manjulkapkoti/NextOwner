@@ -29,13 +29,20 @@ Sub-agents run in isolation and hand work back to the main session. Having each 
 3. Tests   →  appsec writes failing tests → commit         ("test: failing acceptance tests M1")
 4. Build   →  backend/frontend implement → commit(s)       ("feat: auth endpoints + JWT")
 5. Green   →  /dod: full suite + security must-cover matrix + checklist must pass   (verifies green — does NOT open the PR)
-6. Review  →  tech-lead reviews the diff · appsec runs the matrix + negative tests   ← agent gate, ON THE BRANCH,
-              → fix findings, re-run tests, until both sign off                        BEFORE the PR exists
+6. Review  →  INLINE by the orchestrator every milestone (architecture + §8 matrix)  ← ON THE BRANCH,
+              + 1 independent appsec agent on M1/M2/M5/M7/M10 (diff-scoped)             BEFORE the PR exists
+              → fix findings, re-run tests, until clean
 7. PR      →  git push -u origin … → gh pr create → main                              ← opened only after sign-off;
               (body: FRs, security-matrix result, test summary, agent sign-off)         a PR = "ready for a human"
 8. Human   →  you review the PR → approve
 9. Close   →  /close-feature: squash-merge → delete branch → sync local main → next milestone
 ```
+
+## Branch review (step 6) — inline-first, to conserve context/usage
+
+The pre-PR review is **inline by default**: the orchestrator (in the `tech-lead` role) reviews every milestone's diff itself — architecture + the constitution's invariants + the `docs/security.md` §8 must-cover matrix — reusing warm context (cheap). Cold-spawning review agents re-reads the whole repo and burns the session budget, so we don't do it every milestone.
+
+**One independent `appsec-engineer` agent is added only on the security-critical milestones** — **M1** (auth), **M2** (uploads), **M5 ⭐** (NDA gate), **M7** (offers/money), **M10** (verification) — for cold, blind-spot-free security eyes. Even then: a **single** agent (no separate `tech-lead` agent), **scoped to the diff** (`git diff main...<branch>` + the relevant §8 rows, not a full-repo read), run **async in the background** (transcript stays out of the main context), on **Sonnet** (Opus only for M5). The `/dod` forbidden-path tests are the always-on security floor on *every* milestone regardless.
 
 ---
 
@@ -49,7 +56,7 @@ Milestones are built **one at a time**, so each branch is cut from fresh `main` 
   1. **Sync onto the new main:** `git checkout <branch> && git fetch origin && git merge origin/main` (or `rebase`).
   2. **Resolve the markers** — reconcile *both* PRs' intent (their specs + commits). A conflict in a **security-sensitive file** (`permissions.py`, auth, status state machines, response models) is new security surface — a bad merge silently drops a guard, so treat it as such.
   3. **Commit + push.**
-  4. **Re-gate — the resolution is new, unreviewed code:** `/dod` (tests + §8 matrix) must pass **and** the `tech-lead` + `appsec-engineer` review re-runs on the merged result (mandatory for any security-touching file). Never merge a hand-resolved conflict blind.
+  4. **Re-gate — the resolution is new, unreviewed code:** `/dod` (tests + §8 matrix) must pass **and** the branch review re-runs on the merged result — inline, plus the `appsec-engineer` agent if the conflict touched a security-sensitive file. Never merge a hand-resolved conflict blind.
   5. **Then** `/close-feature <pr#>`.
 
 **Semantic conflicts** (two milestones changing the same business/security rule in different directions) don't have a mechanical answer — surface both options for a human call rather than guess. **Best avoided entirely:** keep milestone PRs sequential; when an independent change must run alongside, merge it first and re-sync/re-gate the rest.
@@ -64,6 +71,6 @@ Milestones are built **one at a time**, so each branch is cut from fresh `main` 
 ## Tooling
 
 - `/start-milestone <name>` → step 1 (cut the branch off fresh `main`).
-- `/dod` → step 5 only (the green gate: full suite + security matrix + checklist). It **no longer opens the PR** — the `tech-lead` + `appsec-engineer` review gate (step 6) runs on the branch first, and the push + `gh pr create` (step 7) happen only after both sign off. The orchestrator (or `/run-milestone`) owns that push/PR step; never auto-merges.
-- `/run-milestone <slug>` → automates steps 1–7 (branch → spec → failing tests → implement → `/dod` green gate → agent review & test on the branch → open the PR once vetted), then stops at the PR for the human.
+- `/dod` → step 5 only (the green gate: full suite + security matrix + checklist). It **no longer opens the PR** — the branch review (step 6 — inline, plus an independent `appsec` pass on the security-critical milestones) runs first, and the push + `gh pr create` (step 7) happen only after it's clean. The orchestrator (or `/run-milestone`) owns that push/PR step; never auto-merges.
+- `/run-milestone <slug>` → automates steps 1–7 (branch → spec → failing tests → implement → `/dod` green gate → branch review — inline, + appsec on security-critical milestones → open the PR once vetted), then stops at the PR for the human.
 - `/close-feature [pr#]` → step 9: after your approval, squash-merges (`gh pr merge --squash --delete-branch`) if the PR is still open — or just syncs if you already merged — then `git checkout main && git pull --ff-only && git fetch --prune` to ready the next branch. On a `CONFLICTING` PR it stops (no blind merge) — see § Two open PRs. Queries status on demand (no passive notification); run on a `/loop` to poll.
