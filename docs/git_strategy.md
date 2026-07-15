@@ -28,11 +28,13 @@ Sub-agents run in isolation and hand work back to the main session. Having each 
 2. Spec    →  product-lead scopes → /new-spec → commit     ("docs: spec M1 auth")
 3. Tests   →  appsec writes failing tests → commit         ("test: failing acceptance tests M1")
 4. Build   →  backend/frontend implement → commit(s)       ("feat: auth endpoints + JWT")
-5. Green   →  /dod: full suite + security must-cover matrix must pass
-6. Push    →  git push -u origin feat/001-auth-roles                                  ┐
-7. PR      →  open PR → main (body: FRs, security-matrix result, test summary)        ┘ ← /dod (gh pr create)
-8. Review  →  tech-lead reviews the diff · appsec runs the matrix on the PR   ← your "reviewers"
-9. Close   →  you approve → /close-feature: squash-merge → delete branch → sync local main → next milestone
+5. Green   →  /dod: full suite + security must-cover matrix + checklist must pass   (verifies green — does NOT open the PR)
+6. Review  →  tech-lead reviews the diff · appsec runs the matrix + negative tests   ← agent gate, ON THE BRANCH,
+              → fix findings, re-run tests, until both sign off                        BEFORE the PR exists
+7. PR      →  git push -u origin … → gh pr create → main                              ← opened only after sign-off;
+              (body: FRs, security-matrix result, test summary, agent sign-off)         a PR = "ready for a human"
+8. Human   →  you review the PR → approve
+9. Close   →  /close-feature: squash-merge → delete branch → sync local main → next milestone
 ```
 
 ---
@@ -47,5 +49,6 @@ Sub-agents run in isolation and hand work back to the main session. Having each 
 ## Tooling
 
 - `/start-milestone <name>` → step 1 (cut the branch off fresh `main`).
-- `/dod` → steps 5–7 (run the green gate, then push + `gh pr create` when green; never auto-merges).
+- `/dod` → step 5 only (the green gate: full suite + security matrix + checklist). It **no longer opens the PR** — the `tech-lead` + `appsec-engineer` review gate (step 6) runs on the branch first, and the push + `gh pr create` (step 7) happen only after both sign off. The orchestrator (or `/run-milestone`) owns that push/PR step; never auto-merges.
+- `/run-milestone <slug>` → automates steps 1–7 (branch → spec → failing tests → implement → `/dod` green gate → agent review & test on the branch → open the PR once vetted), then stops at the PR for the human.
 - `/close-feature [pr#]` → step 9: after your approval, squash-merges (`gh pr merge --squash --delete-branch`) if the PR is still open — or just syncs if you already merged — then `git checkout main && git pull --ff-only && git fetch --prune` to ready the next branch. Queries status on demand (no passive notification); run on a `/loop` to poll.
