@@ -104,6 +104,7 @@ Everything arriving from the browser is **hostile until proven otherwise** — a
 
 ### Audit & logging
 - Timestamped event rows already exist for offers (`offer_event`) and access decisions (`access_request.decided_at`). Extend the habit: log admin actions, logins, and **permission denials** server-side. Never log secrets, passwords, tokens, or full PII in plaintext. The `track()` analytics wrapper never receives private fields.
+- Audit rows store **ids + minimal data, not PII snapshots** — so a user can be anonymized without breaking the trail. The data-model privacy slice (PII inventory, erasure-ready schema, KYC-via-vendor) lives in **`docs/data_protection.md`**.
 
 ### Dependencies & supply chain
 - Pin versions (`requirements.txt`, `package-lock.json`); run `pip audit` / `npm audit`; review any new dependency; keep FastAPI/Starlette/PyJWT/bcrypt patched.

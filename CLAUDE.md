@@ -102,6 +102,7 @@ Tests use fresh in-memory SQLite per test via `dependency_overrides`; they go th
 - `docs/testing_guide.md` — test framework + per-milestone test checklists (§5); tests ARE the acceptance criteria.
 - `docs/acquire_design.md` — requirements FR-1…23 + NFRs (cite these in specs).
 - `docs/error_handling.md` — the product's failure contract (error response shape, backend/frontend patterns, vendor failure modes); every spec gets an **Errors & failure modes** section.
+- `docs/data_protection.md` — the technical privacy slice (PII inventory, data-minimization, **erasure-ready schema**, KYC-via-vendor); the legal/policy layer is deferred to `legal-compliance`.
 - `docs/agentic_scope.md` — post-MVP agentic roadmap.
 
 ## Diagrams
