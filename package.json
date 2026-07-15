@@ -1,0 +1,12 @@
+{
+  "name": "nextowner",
+  "private": true,
+  "version": "0.0.0",
+  "description": "NextOwner — root test orchestration (backend pytest + frontend vitest).",
+  "scripts": {
+    "test:api": "cd backend && .venv\\Scripts\\python -m pytest",
+    "test:unit": "npm run test --prefix app",
+    "test:e2e": "playwright test",
+    "test": "npm run test:api && npm run test:unit"
+  }
+}
