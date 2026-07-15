@@ -20,7 +20,7 @@
 
 **Automate it:** `/run-milestone <slug>` drives steps 1–5 for you (branch → spec → failing tests → implement → `/dod` → open PR) and stops at the green PR for your review. Add `--pause-after-spec` to approve the spec before it builds. The merge always stays manual — you review, then `/close-feature`.
 
-For ex-
+For example:
 
 - /run-milestone m0-scaffold (then review → "close the feature")
 - /run-milestone auth-roles --pause-after-spec
