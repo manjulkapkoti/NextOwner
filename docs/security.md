@@ -91,6 +91,7 @@ Everything arriving from the browser is **hostile until proven otherwise** — a
 
 ### Output & error handling
 - `response_model` everywhere; global exception handler → generic message + correct code; never leak internals; log server-side with a request id.
+- The full failure contract (error shape, `AppError` hierarchy, frontend patterns, vendor failure modes) lives in **`docs/error_handling.md`** — this section is the security/leakage angle of it.
 
 ### Secrets & configuration
 - All secrets (JWT signing key, DB URL, future Stripe/Persona/Escrow keys) live in **`.env` (gitignored)** loaded via a settings module (`pydantic-settings`). **Never hardcode, never log, never commit.** Provide `.env.example` with placeholder keys. Different secret per environment; rotate on any suspected leak.
