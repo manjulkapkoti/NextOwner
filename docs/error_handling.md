@@ -74,7 +74,7 @@ Rules:
   - a top-level React **`ErrorBoundary`** → fallback UI for render-time crashes (never a white screen);
   - a global **snackbar/toast** for transient errors (409, 500, network);
   - **inline field errors** for 422 (map each `loc` → the form field);
-  - the **empty / loading / error triad** for every data view (NFR: `acquire_design.md`).
+  - the **empty / loading / error triad** for every data view (NFR: `requirements.md` §3).
 - **Never render server internals** — show the generic `detail`; surface `request_id` only as "reference: …" for support.
 
 ## 4. Error classes → handling

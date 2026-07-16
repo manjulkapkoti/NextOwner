@@ -99,10 +99,11 @@ Tests use fresh in-memory SQLite per test via `dependency_overrides`; they go th
 @specs/000-constitution.md
 
 - `docs/security.md` — **binding.** End-to-end threat model + security checklist; consult at every step (owner's #1 priority).
-- `docs/design_implementation.md` — architecture (Part 2), local dev setup (§3.3–3.4), milestone build guide (Part 4). **Start here for any implementation.**
+- `docs/design_implementation.md` — **NextOwner's architecture (Part 3** — stack, data model, the NDA gate, horizontal scale**)** + the mental model (Part 5); the business from zero (Part 1); local dev setup (§3.1–3.4); milestone build guide (Part 4). **Start here for any implementation.**
 - `docs/milestones.md` — the milestone runbook + **§ Scope fold-ins** (per-milestone gap-review additions; read at spec time).
 - `docs/testing_guide.md` — test framework + per-milestone test checklists (§5); tests ARE the acceptance criteria.
-- `docs/acquire_design.md` — requirements FR-1…23 + NFRs (cite these in specs).
+- `docs/requirements.md` — **NextOwner's requirements source of truth**: MVP scope (F1–F12) + FR-1…23 + NFRs (**cite these in specs**).
+- `docs/research/` — competitor teardowns + `synthesis.md`, plus `supabase_alternative.md` (the rejected BaaS option). **Reference only — nothing here is binding.** Learn from it; never derive a requirement from it. (`acquire_design.md` lives here — it is *not* the requirements file.)
 - `docs/error_handling.md` — the product's failure contract (error response shape, backend/frontend patterns, vendor failure modes); every spec gets an **Errors & failure modes** section.
 - `docs/data_protection.md` — the technical privacy slice (PII inventory, data-minimization, **erasure-ready schema**, KYC-via-vendor); the legal/policy layer is deferred to `legal-compliance`.
 - `docs/agentic_scope.md` — post-MVP agentic roadmap.

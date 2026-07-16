@@ -357,7 +357,7 @@ Because milestones build on each other, **always run the full `npm test` before 
 
 ---
 
-## 7. If You Chose the Part 6 Alternative (Supabase, no custom backend)
+## 7. If You Chose the Supabase Alternative (`docs/research/supabase_alternative.md` — considered and rejected; kept for comparison)
 
 The philosophy and the per-milestone checklists above stay identical — only the tools change, because the trust boundary moves from your API into the database (RLS):
 
