@@ -73,18 +73,20 @@ NextOwner/
 
 ### 3.3 Run scripts — the "easy setup steps"
 
-Add to the **root** `package.json` so everything runs from one place:
+The **root** `package.json` runs everything from one place:
 
 ```json
 {
   "scripts": {
-    "test:api":  "cd backend && pytest -q",
-    "test:unit": "cd app && vitest run",
+    "test:api":  "node scripts/test-api.mjs",
+    "test:unit": "npm run test --prefix app",
     "test:e2e":  "playwright test",
     "test":      "npm run test:api && npm run test:unit"
   }
 }
 ```
+
+`test:api` uses a tiny launcher (`scripts/test-api.mjs`) that finds the backend venv's Python on either layout (Windows `Scripts/`, POSIX `bin/`) and falls back to `python` on PATH (what CI uses) — so the root `npm test` works everywhere without activating the venv.
 
 Day-to-day workflow:
 
@@ -348,6 +350,8 @@ This single test touches every milestone; when it's green, your MVP demonstrably
 ## 6. Regression Habit
 
 Because milestones build on each other, **always run the full `npm test` before calling a milestone done** — M7's endpoint changes can silently break M5's gate. The suite stays fast (in-memory SQLite tests run in milliseconds), so there's no excuse to skip it. If you use git: commit per milestone, and only commit when `npm test` is green — that gives you a known-good checkpoint to return to.
+
+**CI runs this same suite on every PR and on `main` pushes** (`.github/workflows/ci.yml` — backend pytest + frontend tsc/vitest), so a red PR can't merge; the local `npm test` loop stays the fast path, CI is the enforcement.
 
 ---
 
