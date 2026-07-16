@@ -10,7 +10,7 @@
 > breach-notification process, retention *policy* (durations), and at-rest
 > encryption (arrives with the Postgres swap). Building that machinery for a
 > 100%-local MVP with mocked vendors and zero real users would be premature.
-> The requirement itself is already captured — `acquire_design.md` NFR *Privacy
+> The requirement itself is already captured — `requirements.md` §3 NFR *Privacy
 > & compliance*.
 
 ---
@@ -49,7 +49,7 @@ The one thing that's painful to retrofit. A user is referenced by listings, mess
 
 ## 4. KYC / identity documents — held by the vendor, not us
 
-Follow the acquire pattern (`acquire_design.md`): the verification vendor (Persona) **holds the identity documents**; our DB stores **only the verification result** (`verified: bool`, timestamp, a vendor reference) — never the raw docs. This minimizes our most sensitive PII surface. The M10 mock must model this: our DB never receives the document, only the outcome.
+Follow the Acquire pattern (`research/acquire_design.md`): the verification vendor (Persona) **holds the identity documents**; our DB stores **only the verification result** (`verified: bool`, timestamp, a vendor reference) — never the raw docs. This minimizes our most sensitive PII surface. The M10 mock must model this: our DB never receives the document, only the outcome.
 
 ## 5. Retention (pointers; durations → `legal-compliance`)
 

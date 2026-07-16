@@ -107,7 +107,7 @@ Nothing — no spec, data-model, or architecture changes. (Same result as Exitwi
 
 ### Strong validations (no action, more confidence)
 - **The MVP scope is a viable business** — a near-identical product (browse → gate → message → offer → invoice → transfer) runs profitably at the micro end with a tiny team.
-- **Monetization placement** — the third company gating messaging/offers behind a buyer subscription (~$249–$390/yr) confirms `acquire_design.md` FR-19's post-MVP plan.
+- **Monetization placement** — the third company gating messaging/offers behind a buyer subscription (~$249–$390/yr) confirms [`requirements.md`](../requirements.md) FR-19's post-MVP plan.
 - **Firebase twice** — two of four marketplaces chose BaaS; NextOwner's FastAPI choice remains a deliberate learning trade-off, well-documented in the constitution.
 
 ### Adopt later (post-MVP backlog)

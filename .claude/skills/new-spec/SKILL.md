@@ -14,7 +14,7 @@ Create `specs/NNN-<name>/spec.md` and `specs/NNN-<name>/plan.md` for the milesto
    - `docs/design_implementation.md` Part 4 — find the matching milestone's scope.
    - `docs/milestones.md` — this milestone's table row **and its § Scope fold-ins entry** (gap-review additions that must become acceptance criteria in this spec).
    - `docs/testing_guide.md` §5 — the milestone's test checklist (each ☐ becomes a GIVEN/WHEN/THEN).
-   - `docs/acquire_design.md` — the FR-1…23 numbers to cite.
+   - `docs/requirements.md` — the FR-1…23 numbers to cite.
    - `docs/security.md` §7 + §6 — this milestone's security focus + edge cases (for the **Security & abuse** section).
    - `docs/error_handling.md` — the failure contract + this milestone's error/failure paths (for the **Errors & failure modes** section).
    - `docs/data_protection.md` — if this milestone adds a PII field or a person-referencing table (record its erasure/anonymization behavior in `plan.md`).
@@ -23,7 +23,7 @@ Create `specs/NNN-<name>/spec.md` and `specs/NNN-<name>/plan.md` for the milesto
 
 3. **Create `specs/NNN-<name>/spec.md`** with this structure:
    - **Milestone** — name + link to its section in `docs/design_implementation.md` Part 4.
-   - **FR references** — the FR-N items from `docs/acquire_design.md` this milestone satisfies.
+   - **FR references** — the FR-N items from `docs/requirements.md` this milestone satisfies.
    - **User stories** — "As a <role>, I want <capability>, so that <value>."
    - **Acceptance criteria** — numbered GIVEN/WHEN/THEN scenarios. Cover happy paths **and** the forbidden paths (wrong identity → 403/404, invalid transition → 409, bad input → 422). **Each scenario must map to exactly one test** — if you can't phrase it as a testable scenario, it's too vague. Derive these from the testing_guide §5 checklist for this milestone.
    - **Security & abuse** — a dedicated subsection (security is the owner's #1 priority). Pull this milestone's row from `docs/security.md` §7 plus the relevant §6 edge cases, and write each as a forbidden-path GIVEN/WHEN/THEN (IDOR, mass-assignment, path traversal, spoofed identity, schema-leak, illegal transition, revocation). These are permission tests — the crown jewels.

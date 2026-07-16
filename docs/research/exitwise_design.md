@@ -1,6 +1,6 @@
 # Exitwise.com — Architecture & Design Research
 
-> Research date: **13 July 2026** · Third site in the series ([`../acquire_design.md`](../acquire_design.md) → [`baton_design.md`](./baton_design.md) → this).
+> Research date: **13 July 2026** · Third site in the series ([`acquire_design.md`](./acquire_design.md) → [`baton_design.md`](./baton_design.md) → this).
 > Method: HTML/bundle inspection (Cloudflare blocks generic fetchers with a 403 — a browser user-agent works), sitemap enumeration, embed detection, web search. Backend claims marked **(inferred)**.
 > Verdict for NextOwner: see §6.
 

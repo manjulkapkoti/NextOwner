@@ -224,7 +224,7 @@ These are post-MVP but decided now so nothing is retrofitted blindly:
 
 ## 10. Architecture verdict (recorded)
 
-The current architecture (`design_implementation.md` Part 2–3, `diagrams/nextowner_system_architecture`) is **security-sound and needs no structural rewrite** — it is built on "the API is the only door," `permissions.py` one-function-per-boundary, the public/private table split, bcrypt/JWT, and permission-checked uploads.
+The current architecture (`design_implementation.md` Part 3, `diagrams/nextowner_system_architecture`) is **security-sound and needs no structural rewrite** — it is built on "the API is the only door," `permissions.py` one-function-per-boundary, the public/private table split, bcrypt/JWT, and permission-checked uploads.
 
 **Additive items to introduce as the build reaches them** (not rewrites):
 - A **config/secrets module** (`.env` → `pydantic-settings`) as the home for the JWT signing key and future vendor keys — introduce in **M1**.

@@ -1,6 +1,6 @@
 # Baton.com — Architecture & Design Research
 
-> Research date: **13 July 2026** · Second site in the competitive-research series (first: [`../acquire_design.md`](../acquire_design.md)).
+> Research date: **13 July 2026** · Second site in the competitive-research series (first: [`acquire_design.md`](./acquire_design.md)).
 > Method: marketing pages, HTTP header analysis, Next.js `__NEXT_DATA__` + build-manifest inspection, JS chunk signature scanning, sitemap enumeration, and **their own engineering blog** (a luxury Acquire didn't offer). Unverifiable items marked **(inferred)**.
 > Verdict for NextOwner: see §6.
 

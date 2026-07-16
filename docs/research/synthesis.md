@@ -1,6 +1,6 @@
 # Competitive Research Synthesis — Four Companies, One Market
 
-> Date: **13 July 2026**. Inputs: [`../acquire_design.md`](../acquire_design.md) · [`baton_design.md`](./baton_design.md) · [`exitwise_design.md`](./exitwise_design.md) · [`littleexits_design.md`](./littleexits_design.md) · [`cool_features.md`](./cool_features.md).
+> Date: **13 July 2026**. Inputs: [`acquire_design.md`](./acquire_design.md) · [`baton_design.md`](./baton_design.md) · [`exitwise_design.md`](./exitwise_design.md) · [`littleexits_design.md`](./littleexits_design.md) · [`cool_features.md`](./cool_features.md).
 > Purpose: what the four teardowns mean **together** — the category's rules, where NextOwner sits, and what it changed in our plan.
 
 ---
