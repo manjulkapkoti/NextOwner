@@ -2,11 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project status: pre-Milestone-0
+## Project status: M0 shipped — next: M1 (auth-roles)
 
-This repo is currently **planning-only** — Markdown docs, diagrams, and a diagram generator. There is **no application code yet**: `app/`, `backend/`, `seed/`, the root `package.json`, `nextowner.db`, and the test suite **do not exist** until Milestone 0 scaffolds them. Any build/test command below is the *planned* command and only works after the relevant milestone. Do not assume these paths exist — check first.
+Milestone 0 scaffolded the app: `app/` (React + Vite + TS SPA), `backend/` (FastAPI + SQLModel), the root `package.json` test orchestration, and the pytest/Vitest harness — `npm test` runs for real. Not yet built: `seed/` (arrives M4), all real domain tables and endpoints (M1+ — today only the throwaway `SandboxItem` / `/api/sandbox` pair exists, to be deleted at M1), and Playwright E2E (Phase D). `nextowner.db` is created on first run (gitignored). For the live "where are we": `docs/progress.md`, or run `/resume`.
 
-The only runnable code today is the diagram generator under `docs/diagrams/diagGenerator/` (see `/gen-diagrams`).
+Also runnable: the diagram generator under `docs/diagrams/diagGenerator/` (see `/gen-diagrams`).
 
 ## How we work: Spec-Driven Development (mandatory)
 
@@ -21,7 +21,7 @@ pick milestone (docs/design_implementation.md Part 4)
 ```
 
 - **Every GIVEN/WHEN/THEN acceptance criterion becomes exactly one test, written failing before implementing.** If you can't write the test, the criterion is too vague — fix the spec.
-- **Definition of done:** a milestone is done only when its tests pass **and** the full `npm test` suite is green, **and its PR merges** (see Git workflow below). Milestone order M0→M11 is binding (see `/start-milestone`, `/new-spec`, `/dod`).
+- **Definition of done:** a milestone is done only when its tests pass **and** the full `npm test` suite is green, **and its PR merges** (see Git workflow below). Milestone order M0→M12 is binding (see `/start-milestone`, `/new-spec`, `/dod`); per-milestone **scope fold-ins** live in `docs/milestones.md` § Scope fold-ins — `/new-spec` reads them.
 
 ## Git workflow (branch → PR → merge)
 
@@ -80,12 +80,12 @@ React + Vite + TypeScript + MUI + MobX · **Python FastAPI** + SQLModel · SQLit
 - REST: plural nouns (`/listings`), sub-resources for ownership (`/listings/{id}/private`), POST verbs for state transitions (`/offers/{id}/accept`).
 - Error codes: `401` unauthenticated, `403` forbidden, `404` not found, **`409` invalid state transition**, `422` validation.
 
-## Commands (planned — only after the relevant milestone)
+## Commands (`npm test` works since M0; per-file examples exist from their milestones)
 
 ```bash
 npm test                                    # full suite (backend pytest + frontend vitest) — the DoD gate
 cd backend && pytest -q                     # fast backend loop
-cd backend && pytest tests/test_nda_gate.py -q   # a single file
+cd backend && pytest tests/test_nda_gate.py -q   # a single file (exists from M5)
 cd backend && pytest -q -x --lf             # re-run only last failures
 ```
 
@@ -99,6 +99,7 @@ Tests use fresh in-memory SQLite per test via `dependency_overrides`; they go th
 
 - `docs/security.md` — **binding.** End-to-end threat model + security checklist; consult at every step (owner's #1 priority).
 - `docs/design_implementation.md` — architecture (Part 2), local dev setup (§3.3–3.4), milestone build guide (Part 4). **Start here for any implementation.**
+- `docs/milestones.md` — the milestone runbook + **§ Scope fold-ins** (per-milestone gap-review additions; read at spec time).
 - `docs/testing_guide.md` — test framework + per-milestone test checklists (§5); tests ARE the acceptance criteria.
 - `docs/acquire_design.md` — requirements FR-1…23 + NFRs (cite these in specs).
 - `docs/error_handling.md` — the product's failure contract (error response shape, backend/frontend patterns, vendor failure modes); every spec gets an **Errors & failure modes** section.

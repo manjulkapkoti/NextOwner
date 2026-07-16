@@ -364,7 +364,10 @@ The schema is relational — the full SQL version is written out in **Part 6.3**
 ```python
 # backend/app/models.py
 from sqlmodel import SQLModel, Field
-from datetime import datetime
+from datetime import datetime, timezone
+
+def _utcnow() -> datetime:   # tz-aware UTC — datetime.utcnow is deprecated (3.12); same helper as backend/app/models.py
+    return datetime.now(timezone.utc)
 
 class Listing(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
@@ -377,7 +380,7 @@ class Listing(SQLModel, table=True):
     asking_price: float
     ttm_revenue: float; ttm_profit: float
     mrr: float; churn_pct: float; customers: int
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
     published_at: datetime | None = None
 
 class ListingPrivate(SQLModel, table=True):        # the data room (NDA-gated)
@@ -392,7 +395,7 @@ class AccessRequest(SQLModel, table=True):          # the access gate's ledger
     listing_id: int = Field(foreign_key="listing.id", index=True)
     buyer_id: int = Field(foreign_key="user.id", index=True)
     status: str = "requested"                       # requested|approved|denied
-    requested_at: datetime = Field(default_factory=datetime.utcnow)
+    requested_at: datetime = Field(default_factory=_utcnow)
     decided_at: datetime | None = None
     # The NDA itself is platform-wide and user-level (Baton-style, adopted
     # 2026-07-13): users.nda_signed_at is stamped once; creating any access
@@ -474,7 +477,7 @@ Your "inspection tooling" in this stack: **`/docs`** (Swagger UI — poke every 
 
 ## Part 4 — Build Guide, Milestone by Milestone
 
-Each milestone maps to the MVP features (M1–M12) in `acquire_design.md`. Build in this order — every step produces something clickable.
+Each milestone maps to the MVP features (F1–F12) in `acquire_design.md` (renumbered from M1–M12 on 2026-07-16 to avoid collision with milestone numbers). Build in this order — every step produces something clickable.
 
 > **Testing:** every milestone below has a matching test checklist in [`testing_guide.md`](./testing_guide.md), plus the one-time framework setup. A milestone counts as _done_ when its tests pass and all earlier tests still pass.
 > **Path convention:** endpoint paths below omit the `/api` prefix for readability (see §3.4) — in code it is always `/api/...`.
@@ -483,73 +486,84 @@ Each milestone maps to the MVP features (M1–M12) in `acquire_design.md`. Build
 
 Scaffold per Part 3. Prove the loop end to end: a `GET /health` endpoint returning `{"status":"ok"}`, one throwaway `POST /sandbox` that writes a row and a `GET /sandbox` that reads it back, called from a React page. Click around `/docs`, look at `nextowner.db` in a SQLite browser. _You've now used the whole pipeline._
 
-### Milestone 1 — Auth & roles (M1)
+### Milestone 1 — Auth & roles (F1)
 
 - `POST /auth/register` (email, password → bcrypt hash, role buyer/seller) and `POST /auth/login` (OAuth2 password form → JWT). `GET /auth/me` returns the current user from the token.
 - `get_current_user` dependency decodes the JWT on every protected route; `require_admin` checks an `is_admin` column (set it by hand in the DB or via `seed.py` — your local stand-in for a real admin system).
 - Frontend: MobX `authStore` keeps the token + user; router guards `/sell`, `/admin`.
 - Google OAuth is a post-MVP nicety — email/password teaches the full mechanics first.
 
-### Milestone 2 — Seller listing builder (M2 + uploads)
+### Milestone 2 — Seller listing builder (F2 + uploads)
 
 - Multi-step form (MUI Stepper): basics → metrics → story → documents → review.
 - `POST /listings` creates a **draft** owned by the caller (server sets `owner_id` and `status` — never trust those from the client); `PUT /listings/{id}` edits while draft/paused; `POST /listings/{id}/submit` → `pending_review` (a server-controlled transition).
 - `POST /listings/{id}/documents` accepts multipart uploads into `uploads/{listing_id}/`, storing paths in `ListingPrivate`.
 - _Business lesson:_ structured metric fields (not free text) are what makes listings comparable and searchable — the marketplace's real product is standardized data.
 
-### Milestone 3 — Admin curation queue (M3)
+### Milestone 3 — Admin curation queue (F3)
 
 - `GET /admin/listings?status=pending_review` behind `require_admin`; `/admin` page renders the queue.
 - `POST /admin/listings/{id}/approve` → `live` + `published_at`; `POST …/reject` stores the reason. Both validate the current status (you can't approve what isn't pending).
 - _Business lesson:_ this human gate is Acquire's quality moat (~45% pass). Cheap to build, priceless to the brand.
 
-### Milestone 4 — Marketplace browse + anonymous cards (M4, M5)
+### Milestone 4 — Marketplace browse + anonymous cards (F4, F5)
 
 - `GET /listings?type=saas&min_profit=…&max_price=…` — filters become SQL `WHERE` clauses; pagination via `limit/offset`. Only `live` listings are ever returned.
 - The response uses a `ListingPublic` Pydantic model — identity fields aren't in the schema, so the API _cannot_ leak them. The card's blurred/locked section advertises what the NDA unlocks (also the future paywall surface).
 - `seed/seed.py` inserts ~30 fake listings so browsing feels real.
 
-### Milestone 5 — Platform NDA + access gate (M6)
+### Milestone 5 — Platform NDA + access gate (F6)
 
 - **One platform-wide NDA (adopted from Baton, 2026-07-13):** the first time a buyer requests access anywhere, show the NDA modal → checkbox + button = click-wrap signature → `POST /auth/nda` stamps `user.nda_signed_at`. Signed once, never shown again.
 - "Request access" on a listing → `POST /listings/{id}/access-request` (403 if the platform NDA isn't signed yet) creates the row with `status:"requested"`, timestamped (one per buyer-listing pair — enforce with a unique constraint). The per-listing audit trail survives; only the repeated signing ceremony is gone.
 - Seller dashboard: `GET /access-requests?listing_id=…` with buyer profile → `POST /access-requests/{id}/approve|deny` (only the listing's seller may decide).
 - The `require_private_access` dependency (§3.6) guards `GET /listings/{id}/private` **and** document downloads. **Verify in `/docs` that a non-approved buyer gets 403.** This milestone _is_ the product's trust core.
 
-### Milestone 6 — Realtime chat (M7)
+### Milestone 6 — Realtime chat (F7)
 
 - Approving access also creates a `conversation` row.
 - **WebSocket endpoint** `WS /ws/conversations/{id}?token=…`: verify the JWT and membership on connect, keep a tiny in-memory connection manager (`{conversation_id: [sockets]}`), persist each message to the DB, broadcast it to the other participant's socket. Two browser windows side by side update instantly.
 - This is the one place you hand-build what Firestore gave for free — it's ~40 lines and excellent learning. (Fallback if you want to defer WebSockets: poll `GET /conversations/{id}/messages?after=<timestamp>` every few seconds — ugly but fine at MVP.)
 - Unread counters: a `last_read_at` per participant, updated when the window is open.
 
-### Milestone 7 — Offers / LOI (M8)
+### Milestone 7 — Offers / LOI (F8)
 
 - "Make an offer" form → `POST /offers` validates (access approved? listing live?) and writes the offer plus an `offer_event` audit row.
 - `POST /offers/{id}/accept|decline|counter` — seller only, validates the current status, appends events.
 - Accepting flips `offer.status="accepted"` **and** `listing.status="under_offer"` in one DB transaction — the state machine in action, atomically.
 - MVP stops here; escrow/APA are mocked buttons on a "deal" page if you want the full lifecycle visible.
 
-### Milestone 8 — Saved searches & alerts (M9)
+### Milestone 8 — Notifications engine + saved searches & alerts (F9)
 
 - Buyers save current filters: `POST /saved-searches` (filters as a JSON column).
 - In the approve endpoint (M3), add a **BackgroundTask**: after the listing goes live, match it against all saved searches and insert `notification` rows. `GET /notifications` powers an in-app inbox (poll it, or refetch on route change — fine for MVP).
 - Email version: log to console, or run [MailHog](https://github.com/mailhog/MailHog) locally and send SMTP to it from Python (`smtplib`) — a real inbox UI at `localhost:8025` with zero external service.
+- **Scope expanded (2026-07-16 gap review):** this milestone is also the general **notifications engine** (FR-22 + the FR-16 email fallback). Earlier milestones (M3/M5/M6/M7) emit notification event rows — listing approved/rejected, access requested/decided, new message, new offer — and M8 builds the delivery surface (the in-app inbox above + email) for **all** of them, alongside the saved-search fan-out. Without these events the two-sided loop stalls until someone happens to log in. Every delivery is caller-scoped.
 
-### Milestone 9 — Watchlist (M10) — an hour
+### Milestone 9 — Watchlist (F10) — an hour
 
 `POST /watchlist/{listing_id}` / `DELETE /watchlist/{listing_id}` toggle; `GET /watchlist` joins to listings for the "Watchlist" page.
 
-### Milestone 10 — Manual buyer verification (M11)
+### Milestone 10 — Manual buyer verification (F11)
 
 - Buyer uploads a proof-of-funds doc → `buyer_verified:"pending"`.
 - Admin reviews in `/admin` → sets `verified` → badge shows in access requests and chat.
 - _This is your Persona mock_ — same states, no vendor. Swapping in real Persona later means replacing one page with their widget plus one webhook endpoint.
 
-### Milestone 11 — Valuation calculator (M12)
+### Milestone 11 — Valuation calculator (F12)
 
 - Public page, pure frontend: inputs (type, MRR/revenue, profit, growth, churn) → multiple lookup table → estimated range with a friendly explanation. (No backend needed — or make it your first fun `POST /valuation` endpoint if you prefer.)
 - _Business lesson:_ this is a lead magnet — on the real site it captures seller emails before they list.
+
+### Milestone 12 — Deal completion *(appended 2026-07-16 — gap review)*
+
+The close is where the business model lives (the success fee recognizes at close — research synthesis law #6), and without `sold` rows the future comps corpus (`agentic_scope.md` proposal F) never accumulates. M7 deliberately stopped at `under_offer`; this milestone finishes the state machine:
+
+- **`POST /listings/{id}/mark-sold`** (seller-only): `under_offer → sold`, stamps `sold_at`, records the **final sale price server-derived from the accepted offer** (never client-set — Article 2 #4), and moves the accepted offer to its terminal state — all in one transaction, with `listing_event` + `offer_event` audit rows.
+- **`POST /listings/{id}/relist`** (seller-only — the deal fell through): `under_offer → live`; the accepted offer becomes terminal (the spec names the status); sibling offers follow the policy M7 decided.
+- Terminal states weaken nothing: the NDA gate still guards a `sold` listing's private data; illegal transitions → 409.
+- **Optional extensions** (from the Little Exits research, fine to defer): invoice artifact on completion (L2), the asset-transfer checklist state machine (L3), and mocked escrow states (`initiated → funded → released`) surfacing `error_handling.md` §5's escrow failure modes. (This supersedes the M7 aside about "escrow/APA as mocked buttons on a deal page".)
+- The **E2E golden path extends to "sold"** once this lands (`testing_guide.md` §5).
 
 ### Post-MVP (when local is solid)
 
