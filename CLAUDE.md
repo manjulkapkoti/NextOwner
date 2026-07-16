@@ -21,7 +21,7 @@ pick milestone (docs/design_implementation.md Part 4)
 ```
 
 - **Every GIVEN/WHEN/THEN acceptance criterion becomes exactly one test, written failing before implementing.** If you can't write the test, the criterion is too vague — fix the spec.
-- **Definition of done:** a milestone is done only when its tests pass **and** the full `npm test` suite is green, **and its PR merges** (see Git workflow below). Milestone order M0→M11 is binding (see `/start-milestone`, `/new-spec`, `/dod`).
+- **Definition of done:** a milestone is done only when its tests pass **and** the full `npm test` suite is green, **and its PR merges** (see Git workflow below). Milestone order M0→M12 is binding (see `/start-milestone`, `/new-spec`, `/dod`); per-milestone **scope fold-ins** live in `docs/milestones.md` § Scope fold-ins — `/new-spec` reads them.
 
 ## Git workflow (branch → PR → merge)
 
@@ -99,6 +99,7 @@ Tests use fresh in-memory SQLite per test via `dependency_overrides`; they go th
 
 - `docs/security.md` — **binding.** End-to-end threat model + security checklist; consult at every step (owner's #1 priority).
 - `docs/design_implementation.md` — architecture (Part 2), local dev setup (§3.3–3.4), milestone build guide (Part 4). **Start here for any implementation.**
+- `docs/milestones.md` — the milestone runbook + **§ Scope fold-ins** (per-milestone gap-review additions; read at spec time).
 - `docs/testing_guide.md` — test framework + per-milestone test checklists (§5); tests ARE the acceptance criteria.
 - `docs/acquire_design.md` — requirements FR-1…23 + NFRs (cite these in specs).
 - `docs/error_handling.md` — the product's failure contract (error response shape, backend/frontend patterns, vendor failure modes); every spec gets an **Errors & failure modes** section.

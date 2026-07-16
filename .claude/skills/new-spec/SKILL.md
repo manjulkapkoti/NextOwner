@@ -12,6 +12,7 @@ Create `specs/NNN-<name>/spec.md` and `specs/NNN-<name>/plan.md` for the milesto
 1. **Read the ground truth first** (do not invent requirements):
    - `specs/000-constitution.md` — the binding rules every spec must comply with.
    - `docs/design_implementation.md` Part 4 — find the matching milestone's scope.
+   - `docs/milestones.md` — this milestone's table row **and its § Scope fold-ins entry** (gap-review additions that must become acceptance criteria in this spec).
    - `docs/testing_guide.md` §5 — the milestone's test checklist (each ☐ becomes a GIVEN/WHEN/THEN).
    - `docs/acquire_design.md` — the FR-1…23 numbers to cite.
    - `docs/security.md` §7 + §6 — this milestone's security focus + edge cases (for the **Security & abuse** section).

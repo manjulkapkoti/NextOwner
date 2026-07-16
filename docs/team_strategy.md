@@ -8,7 +8,7 @@
 
 ### 1. Product & Technical Leadership
 
-- **Product Lead / Head of Product** — *8–12 yrs, marketplace or fintech.* Owns the roadmap (the M0–M11 milestone plan and beyond), prioritizes the FR-1…23 backlog, defines the curation policy (Acquire's ~45% quality gate is the moat) and the monetization model (subscriptions + listing fees). The bridge between `acquire_design.md` (business) and the build.
+- **Product Lead / Head of Product** — *8–12 yrs, marketplace or fintech.* Owns the roadmap (the M0–M12 milestone plan and beyond), prioritizes the FR-1…23 backlog, defines the curation policy (Acquire's ~45% quality gate is the moat) and the monetization model (subscriptions + listing fees). The bridge between `acquire_design.md` (business) and the build.
 - **Engineering Lead / Tech Lead** — *10+ yrs, full-stack.* Guardian of the "API is the only door" architecture and the spec-driven-development discipline (spec → failing tests → implement → green). Owns architectural decisions, code review, the SQLite→Postgres migration, and keeping the agent-readiness invariants intact as the code grows. **Deeply hands-on across the whole stack** — Python (FastAPI), React + JavaScript/TypeScript, full-stack integration, SQL *and* NoSQL data modeling, and system design (the strongest axis) — so no architectural call is ever made second-hand.
 
 ### 2. Core Engineering
@@ -47,7 +47,7 @@ Don't hire all ~13 at once. Sequence it:
 
 | Phase | Focus | Add these roles |
 |---|---|---|
-| **1 — MVP build (M0–M11)** | Ship the core product | Product Lead, Tech Lead, 1 Backend, 1 Frontend, **AppSec**, Product Designer (QA folded into engineering) |
+| **1 — MVP build (M0–M12)** | Ship the core product | Product Lead, Tech Lead, 1 Backend, 1 Frontend, **AppSec**, Product Designer (QA folded into engineering) |
 | **2 — Harden & launch** | Production, trust, go-live | + DevOps/SRE, Trust & Safety/Ops Lead, fractional Legal, dedicated QA/SDET |
 | **3 — Scale & intelligence** | Growth + the agentic layer | + Growth Lead, AI/ML Engineer, Data Analyst |
 

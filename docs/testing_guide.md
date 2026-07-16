@@ -332,8 +332,15 @@ Write these from the milestone spec *before* implementing (SDD). ☐ = one test 
 **M11 — Valuation calculator**
 - ☐ Unit table-test (Vitest or pytest, wherever the logic lives): (type, revenue, profit, churn) → expected range, incl. edge cases (zero profit, absurd churn).
 
+**M12 — Deal completion** *(appended 2026-07-16 — gap review)*
+- ☐ Seller marks the deal sold → listing `sold` + `sold_at` + final price recorded (derived from the accepted offer, **not** the request body), accepted offer terminal — one transaction, assert all.
+- ☐ Deal fell through (re-list) → listing back to `live`, accepted offer terminal; sibling offers follow the policy the M7 spec decided.
+- ☐ Both paths write `listing_event` / `offer_event` audit rows.
+- ☐ Non-seller attempting either transition → 403. ☐ Either transition on a non-`under_offer` listing → 409.
+- ☐ The NDA gate still guards a `sold` listing's private data (approved buyer 200, everyone else 403).
+
 **After Phase D — the E2E golden path** (one Playwright script; run `fastapi dev` + `npm run dev` first)
-- ☐ Seller signs up → creates listing → admin approves → buyer signs up → finds listing via filter → signs NDA → seller approves → buyer reads private data → chat exchange → buyer submits offer → seller accepts → listing shows "under offer".
+- ☐ Seller signs up → creates listing → admin approves → buyer signs up → finds listing via filter → signs NDA → seller approves → buyer reads private data → chat exchange → buyer submits offer → seller accepts → listing shows "under offer" → *(once M12 lands)* seller marks it sold → listing shows "sold".
 This single test touches every milestone; when it's green, your MVP demonstrably works end to end.
 
 ---

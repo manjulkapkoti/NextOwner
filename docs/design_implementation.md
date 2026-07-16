@@ -533,11 +533,12 @@ Scaffold per Part 3. Prove the loop end to end: a `GET /health` endpoint returni
 - Accepting flips `offer.status="accepted"` **and** `listing.status="under_offer"` in one DB transaction — the state machine in action, atomically.
 - MVP stops here; escrow/APA are mocked buttons on a "deal" page if you want the full lifecycle visible.
 
-### Milestone 8 — Saved searches & alerts (F9)
+### Milestone 8 — Notifications engine + saved searches & alerts (F9)
 
 - Buyers save current filters: `POST /saved-searches` (filters as a JSON column).
 - In the approve endpoint (M3), add a **BackgroundTask**: after the listing goes live, match it against all saved searches and insert `notification` rows. `GET /notifications` powers an in-app inbox (poll it, or refetch on route change — fine for MVP).
 - Email version: log to console, or run [MailHog](https://github.com/mailhog/MailHog) locally and send SMTP to it from Python (`smtplib`) — a real inbox UI at `localhost:8025` with zero external service.
+- **Scope expanded (2026-07-16 gap review):** this milestone is also the general **notifications engine** (FR-22 + the FR-16 email fallback). Earlier milestones (M3/M5/M6/M7) emit notification event rows — listing approved/rejected, access requested/decided, new message, new offer — and M8 builds the delivery surface (the in-app inbox above + email) for **all** of them, alongside the saved-search fan-out. Without these events the two-sided loop stalls until someone happens to log in. Every delivery is caller-scoped.
 
 ### Milestone 9 — Watchlist (F10) — an hour
 
@@ -553,6 +554,16 @@ Scaffold per Part 3. Prove the loop end to end: a `GET /health` endpoint returni
 
 - Public page, pure frontend: inputs (type, MRR/revenue, profit, growth, churn) → multiple lookup table → estimated range with a friendly explanation. (No backend needed — or make it your first fun `POST /valuation` endpoint if you prefer.)
 - _Business lesson:_ this is a lead magnet — on the real site it captures seller emails before they list.
+
+### Milestone 12 — Deal completion *(appended 2026-07-16 — gap review)*
+
+The close is where the business model lives (the success fee recognizes at close — research synthesis law #6), and without `sold` rows the future comps corpus (`agentic_scope.md` proposal F) never accumulates. M7 deliberately stopped at `under_offer`; this milestone finishes the state machine:
+
+- **`POST /listings/{id}/mark-sold`** (seller-only): `under_offer → sold`, stamps `sold_at`, records the **final sale price server-derived from the accepted offer** (never client-set — Article 2 #4), and moves the accepted offer to its terminal state — all in one transaction, with `listing_event` + `offer_event` audit rows.
+- **`POST /listings/{id}/relist`** (seller-only — the deal fell through): `under_offer → live`; the accepted offer becomes terminal (the spec names the status); sibling offers follow the policy M7 decided.
+- Terminal states weaken nothing: the NDA gate still guards a `sold` listing's private data; illegal transitions → 409.
+- **Optional extensions** (from the Little Exits research, fine to defer): invoice artifact on completion (L2), the asset-transfer checklist state machine (L3), and mocked escrow states (`initiated → funded → released`) surfacing `error_handling.md` §5's escrow failure modes. (This supersedes the M7 aside about "escrow/APA as mocked buttons on a deal page".)
+- The **E2E golden path extends to "sold"** once this lands (`testing_guide.md` §5).
 
 ### Post-MVP (when local is solid)
 

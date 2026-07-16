@@ -165,7 +165,7 @@ Run this list against every milestone that adds a route or a state change.
 
 ---
 
-## 7. Per-milestone security focus (M0–M11)
+## 7. Per-milestone security focus (M0–M12)
 
 Each milestone's spec must include a **"Security & abuse"** subsection turning the relevant items below into GIVEN/WHEN/THEN forbidden-path scenarios.
 
@@ -181,7 +181,8 @@ Each milestone's spec must include a **"Security & abuse"** subsection turning t
 - **M9 — Watchlist:** every operation caller-scoped; a user only ever sees/edits their own items.
 - **M10 — Buyer verification:** buyer cannot self-verify (`verified` ignored/403); only admin flips it; proof-of-funds upload obeys the M2 upload rules.
 - **M11 — Valuation calculator:** pure client calc; if a `POST /valuation` endpoint is added, validate inputs and keep it injection-safe; no data exposure.
-- **After Phase D — E2E golden path:** the Playwright run exercises the full trust chain (sign-up → gated data → offer) — a passing golden path is also a security regression check.
+- **M12 — Deal completion:** seller-only `sold` / fell-through transitions (anyone else → 403); 409 from any non-`under_offer` state; atomic offer+listing flip in one transaction; the recorded final price is **server-derived from the accepted offer** (never client-set — Article 2 #4); `listing_event`/`offer_event` audit rows on both paths; terminal states must not weaken the NDA gate (a `sold` listing's private data stays gated).
+- **After Phase D — E2E golden path:** the Playwright run exercises the full trust chain (sign-up → gated data → offer → sold) — a passing golden path is also a security regression check.
 
 ---
 
