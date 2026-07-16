@@ -1,6 +1,6 @@
 # NextOwner — Team Strategy
 
-> How to staff NextOwner from its current stage (planning complete, pre-Milestone-0) to a completed, launched, monetized product. The team is shaped by three facts about *this* product: it is a **two-sided trust marketplace** (intermediating real business sales, money, NDAs, KYC), **security is the #1 priority**, and it is built **agent-ready** on a spec-driven process. That means more weight on security, trust/ops, and marketplace growth than a typical SaaS build.
+> How to staff NextOwner from the start of the build (planning complete; M0 scaffold shipped) to a completed, launched, monetized product. The team is shaped by three facts about *this* product: it is a **two-sided trust marketplace** (intermediating real business sales, money, NDAs, KYC), **security is the #1 priority**, and it is built **agent-ready** on a spec-driven process. That means more weight on security, trust/ops, and marketplace growth than a typical SaaS build.
 
 ---
 

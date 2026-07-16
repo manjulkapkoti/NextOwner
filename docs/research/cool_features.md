@@ -42,7 +42,7 @@
 | A1 | **Metrics API sync** (ChartMogul/Metricable/Stripe) so listings show *verified* MRR/churn | Trust through data plumbing, not promises. Post-MVP integration; mock fixtures in MVP. |
 | A2 | **Financial recasting** (`RecastFinancialList` flag) — normalized P&L across listings | Standardized data is the marketplace's real product; keep listing metrics structured (M2 lesson). |
 | A3 | **Auto-signed NDA → instant data-room access** | The friction-killer Acquire optimizes; Baton's B3 is the next step of the same idea. |
-| A4 | **Buyer verification tiers** (Persona KYC + proof of funds) surfaced as badges to sellers | Sellers triage buyers by signal, not vibes → M10/M11's manual version. |
+| A4 | **Buyer verification tiers** (Persona KYC + proof of funds) surfaced as badges to sellers | Sellers triage buyers by signal, not vibes → milestone M10's manual version. |
 | A5 | **Saved-search instant alerts incl. Slack** | Retention loop for buyers; email version is M8, Slack a cheap later add. |
 | A6 | **Feature flags + maintenance mode baked into app config** | Operational maturity visible in the bundle; `flags.py` honors the same principle. |
 

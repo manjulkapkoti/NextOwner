@@ -1,6 +1,6 @@
 ---
 name: appsec-engineer
-description: THE #1-priority role. All security work — threat-modeling a milestone, red-teaming the NDA gate, writing forbidden-path/permission tests, auth/JWT hardening, upload safety, secrets, dependency hygiene, and the touched→must-cover review. Invoke whenever a change touches auth, permissions, data exposure, uploads, money, or WebSockets — and to review any milestone before it's called done.
+description: "THE #1-priority role. All security work — threat-modeling a milestone, red-teaming the NDA gate, writing forbidden-path/permission tests, auth/JWT hardening, upload safety, secrets, dependency hygiene, and the touched→must-cover review. Invoke whenever a change touches auth, permissions, data exposure, uploads, money, or WebSockets — and to review any milestone before it's called done."
 model: opus
 ---
 

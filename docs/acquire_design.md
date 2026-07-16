@@ -159,22 +159,24 @@ Text view of the same architecture:
 
 Goal of the MVP: prove the core loop — **a seller can list a business, a qualified buyer can find it, they connect, and express deal intent** — without building payments-heavy or service-heavy features.
 
+> *2026-07-16: renumbered **M1–M12 → F1–F12** (F = MVP feature) so these can't be confused with the build milestones M0–M12 in `docs/milestones.md` — "M5" used to mean browse here and the NDA gate there.*
+
 | # | MVP feature | Source feature | Why in MVP |
 |---|---|---|---|
-| M1 | Email + Google auth, buyer/seller roles | 18–20 | Table stakes; Firebase Auth makes it ~free |
-| M2 | Seller listing builder with structured financial fields | 1 | Core supply |
-| M3 | Admin curation queue (approve/reject listing) | 5, 32 | Marketplace quality is the moat — needed day 1 |
-| M4 | Anonymous public listing card + gated private details | 6, 19 | The freemium/NDA gate is the core mechanic |
-| M5 | Browse + filter (type, price, revenue, profit) + keyword search | 18 | Core demand |
-| M6 | Click-to-sign NDA that unlocks private details | 22 | Lightweight version of the trust gate |
-| M7 | In-app buyer↔seller messaging (realtime) | 10, 25 | The "connection" moment — the marketplace's job |
-| M8 | Simple offer/LOI form (structured terms, accept/decline) | 11, 26 | Proves deal intent end-to-end |
-| M9 | Saved search + email alerts for new listings | 23 | Retention loop for buyers |
-| M10 | Watchlist/favorites | 31 | Cheap, high-engagement |
-| M11 | Basic buyer verification (email + manual proof-of-funds upload) | 21 | Manual stand-in for Persona |
-| M12 | Rule-of-thumb valuation calculator (multiple × revenue/profit) | 2 | Great lead magnet, simple to build |
+| F1 | Email + Google auth, buyer/seller roles | 18–20 | Table stakes; Firebase Auth makes it ~free |
+| F2 | Seller listing builder with structured financial fields | 1 | Core supply |
+| F3 | Admin curation queue (approve/reject listing) | 5, 32 | Marketplace quality is the moat — needed day 1 |
+| F4 | Anonymous public listing card + gated private details | 6, 19 | The freemium/NDA gate is the core mechanic |
+| F5 | Browse + filter (type, price, revenue, profit) + keyword search | 18 | Core demand |
+| F6 | Click-to-sign NDA that unlocks private details | 22 | Lightweight version of the trust gate |
+| F7 | In-app buyer↔seller messaging (realtime) | 10, 25 | The "connection" moment — the marketplace's job |
+| F8 | Simple offer/LOI form (structured terms, accept/decline) | 11, 26 | Proves deal intent end-to-end |
+| F9 | Saved search + email alerts for new listings | 23 | Retention loop for buyers |
+| F10 | Watchlist/favorites | 31 | Cheap, high-engagement |
+| F11 | Basic buyer verification (email + manual proof-of-funds upload) | 21 | Manual stand-in for Persona |
+| F12 | Rule-of-thumb valuation calculator (multiple × revenue/profit) | 2 | Great lead magnet, simple to build |
 
-**Deliberately excluded from MVP** (add post-validation): Stripe subscriptions & paywall (M4 can be a manual gate first), Persona KYC, escrow integration, APA generation, metrics-sync integrations (ChartMogul etc.), financing, advisor programs, Academy, Slack alerts, session replay, referral program.
+**Deliberately excluded from MVP** (add post-validation): Stripe subscriptions & paywall (F4 can be a manual gate first), Persona KYC, escrow integration, APA generation, metrics-sync integrations (ChartMogul etc.), financing, advisor programs, Academy, Slack alerts, session replay, referral program.
 
 ---
 

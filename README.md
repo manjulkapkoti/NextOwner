@@ -1,6 +1,6 @@
 # NextOwner
 
-A marketplace for buying and selling small online businesses — an online M&A marketplace MVP ,a two-sided platform where founders sell their profitable online businesses (SaaS, ecommerce, agencies, etc.) and buyers (solo entrepreneurs, PE firms, strategics) take over them. It is built for learning, **entirely local** (no cloud account needed). Planning phase is complete; development starts at **Milestone 0**.
+A marketplace for buying and selling small online businesses — an online M&A marketplace MVP, a two-sided platform where founders sell their profitable online businesses (SaaS, ecommerce, agencies, etc.) and buyers (solo entrepreneurs, PE firms, strategics) take over them. It is built for learning, **entirely local** (no cloud account needed). Planning is complete and **Milestone 0** (scaffold + health check) has shipped; development continues at **Milestone 1** (auth & roles) — see [`docs/milestones.md`](./docs/milestones.md) and [`docs/progress.md`](./docs/progress.md).
 
 ## Project structure
 
@@ -13,9 +13,9 @@ NextOwner/
 │   └── research/              # competitor teardowns (Acquire, Baton, Exitwise, Little Exits)
 ├── specs/                     # spec-driven development artifacts
 │   └── 000-constitution.md    # binding decisions: stack, principles, process, conventions
-├── app/                       # React SPA        — created at Milestone 0
-├── backend/                   # FastAPI backend  — created at Milestone 0
-└── seed/                      # demo-data script — created at Milestone 0
+├── app/                       # React SPA        — shipped at Milestone 0
+├── backend/                   # FastAPI backend  — shipped at Milestone 0
+└── seed/                      # demo-data script — arrives with M4 (marketplace browse)
 ```
 
 ## Documentation map
@@ -29,7 +29,12 @@ NextOwner/
 | [`docs/agentic_scope.md`](./docs/agentic_scope.md)                 | Post-MVP AI/agentic roadmap (deal-scout, diligence agent, …)                                                                                                                                  |
 | [`docs/research/synthesis.md`](./docs/research/synthesis.md)       | Cross-company synthesis: the market map, 7 category laws, stack comparison, decisions ledger, NextOwner's white space                                                                         |
 | [`docs/research/`](./docs/research/)                               | Individual competitor teardowns + [`cool_features.md`](./docs/research/cool_features.md) (adopted & backlog ideas)                                                                            |
-| [`docs/temp_readme.md`](./docs/temp_readme.md)                     | Q&A notes: milestones-as-phases, spec-driven development workflow                                                                                                                             |
+| [`docs/security.md`](./docs/security.md)                           | **Binding.** End-to-end threat model + security checklist — security is the owner's #1 priority                                                                                               |
+| [`docs/error_handling.md`](./docs/error_handling.md)               | The product's failure contract (error shapes, backend/frontend patterns, vendor failure modes)                                                                                                |
+| [`docs/data_protection.md`](./docs/data_protection.md)             | The technical privacy slice (PII inventory, data minimization, erasure-ready schema, KYC-via-vendor)                                                                                          |
+| [`docs/milestones.md`](./docs/milestones.md)                       | The milestone runbook: the per-milestone loop, the M0→M12 checklist, scope fold-ins, progress tracker                                                                                         |
+| [`docs/git_strategy.md`](./docs/git_strategy.md)                   | Branch → PR → squash-merge workflow; the pre-PR branch review; conflict recovery                                                                                                              |
+| [`docs/session_recovery.md`](./docs/session_recovery.md)           | Resume across sessions: `/checkpoint`, `/resume`, the crash-proof flight recorder                                                                                                             |
 
 ## Stack (constitution Article 1)
 
@@ -45,4 +50,4 @@ pick milestone (docs/design_implementation.md Part 4)
 → review & test on the branch (inline; + an appsec pass on security-critical milestones) → open PR (vetted) → you approve → squash-merge → next milestone
 ```
 
-Next action: **Milestone 0** — scaffold `app/` + `backend/` per `docs/design_implementation.md` §3.3–3.4, prove the pipeline with `GET /health`, then write `specs/001-auth-roles/spec.md`.
+Next action: **Milestone 1** — `/run-milestone auth-roles --pause-after-spec` (M0 is done; the live resume point is always `docs/progress.md` / `/resume`).

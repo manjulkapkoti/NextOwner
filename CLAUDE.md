@@ -2,11 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project status: pre-Milestone-0
+## Project status: M0 shipped — next: M1 (auth-roles)
 
-This repo is currently **planning-only** — Markdown docs, diagrams, and a diagram generator. There is **no application code yet**: `app/`, `backend/`, `seed/`, the root `package.json`, `nextowner.db`, and the test suite **do not exist** until Milestone 0 scaffolds them. Any build/test command below is the *planned* command and only works after the relevant milestone. Do not assume these paths exist — check first.
+Milestone 0 scaffolded the app: `app/` (React + Vite + TS SPA), `backend/` (FastAPI + SQLModel), the root `package.json` test orchestration, and the pytest/Vitest harness — `npm test` runs for real. Not yet built: `seed/` (arrives M4), all real domain tables and endpoints (M1+ — today only the throwaway `SandboxItem` / `/api/sandbox` pair exists, to be deleted at M1), and Playwright E2E (Phase D). `nextowner.db` is created on first run (gitignored). For the live "where are we": `docs/progress.md`, or run `/resume`.
 
-The only runnable code today is the diagram generator under `docs/diagrams/diagGenerator/` (see `/gen-diagrams`).
+Also runnable: the diagram generator under `docs/diagrams/diagGenerator/` (see `/gen-diagrams`).
 
 ## How we work: Spec-Driven Development (mandatory)
 
@@ -80,12 +80,12 @@ React + Vite + TypeScript + MUI + MobX · **Python FastAPI** + SQLModel · SQLit
 - REST: plural nouns (`/listings`), sub-resources for ownership (`/listings/{id}/private`), POST verbs for state transitions (`/offers/{id}/accept`).
 - Error codes: `401` unauthenticated, `403` forbidden, `404` not found, **`409` invalid state transition**, `422` validation.
 
-## Commands (planned — only after the relevant milestone)
+## Commands (`npm test` works since M0; per-file examples exist from their milestones)
 
 ```bash
 npm test                                    # full suite (backend pytest + frontend vitest) — the DoD gate
 cd backend && pytest -q                     # fast backend loop
-cd backend && pytest tests/test_nda_gate.py -q   # a single file
+cd backend && pytest tests/test_nda_gate.py -q   # a single file (exists from M5)
 cd backend && pytest -q -x --lf             # re-run only last failures
 ```
 
