@@ -477,7 +477,7 @@ Your "inspection tooling" in this stack: **`/docs`** (Swagger UI — poke every 
 
 ## Part 4 — Build Guide, Milestone by Milestone
 
-Each milestone maps to the MVP features (F1–F12) in `acquire_design.md` (renumbered from M1–M12 on 2026-07-16 to avoid collision with milestone numbers). Build in this order — every step produces something clickable.
+Each milestone maps to the MVP features (F1–F12) in `acquire_design.md` (renumbered from M1–M12 on 2026-07-16 to avoid collision with milestone numbers); M12, appended by the gap review, extends past the F-list to close the deal loop. Build in this order — every step produces something clickable.
 
 > **Testing:** every milestone below has a matching test checklist in [`testing_guide.md`](./testing_guide.md), plus the one-time framework setup. A milestone counts as _done_ when its tests pass and all earlier tests still pass.
 > **Path convention:** endpoint paths below omit the `/api` prefix for readability (see §3.4) — in code it is always `/api/...`.

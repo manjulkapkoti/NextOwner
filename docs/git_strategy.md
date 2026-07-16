@@ -61,11 +61,15 @@ Milestones are built **one at a time**, so each branch is cut from fresh `main` 
 
 **Semantic conflicts** (two milestones changing the same business/security rule in different directions) don't have a mechanical answer — surface both options for a human call rather than guess. **Best avoided entirely:** keep milestone PRs sequential; when an independent change must run alongside, merge it first and re-sync/re-gate the rest.
 
+## CI (added 2026-07-16)
+
+`.github/workflows/ci.yml` runs the full suite — backend pytest + frontend tsc/vitest, the same gate as the root `npm test` — on **every PR** and on every push to `main`, so the "merge only when green" rule is machine-checked, not just convention. **`main` is branch-protected** (applied 2026-07-16, when the repo went public): merging requires a PR with **both checks green** and the branch **up to date with `main`** (strict mode — machine-enforces the § Two open PRs re-sync rule), direct pushes / force-pushes / deletion are blocked, and it's **enforced for admins** too. Formal GitHub approvals aren't required (GitHub forbids approving your own PR — solo repo); the human review stays the `/close-feature` discipline. `/dod` remains the richer local gate (checklist + security matrix); CI + protection are the floor that can't be skipped, and the `.git/hooks/pre-commit` guard stays as the local backstop.
+
 ## Conventions
 
 - **Branches:** `feat|fix|chore/NNN-slug` (e.g. `feat/001-auth-roles`).
 - **Commits:** Conventional Commits — `feat:` / `fix:` / `test:` / `docs:` / `chore:`.
-- **Merge:** **squash-merge** — one clean commit per milestone on `main`; delete the branch after.
+- **Merge:** **squash-merge** — one clean commit per milestone on `main`; delete the branch after. **A PR must have green CI checks before `/close-feature` merges it.**
 - **Never commit directly to `main`** — enforced locally by a `.git/hooks/pre-commit` guard (override for a one-off: `git commit --no-verify`).
 
 ## Tooling

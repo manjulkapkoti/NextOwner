@@ -56,6 +56,7 @@ Follow the acquire pattern (`acquire_design.md`): the verification vendor (Perso
 - NDA acceptance + audit log → **retained** (legal records / immutable).
 - Data-room + uploaded docs → retained while the deal is active; deletion on listing removal / access revocation (design the delete path).
 - Exact retention **durations** and the legal basis → `legal-compliance`.
+- **Data export / portability** (a GDPR/CCPA data-subject flow, like erasure) → the flow itself is `legal-compliance`'s; the API-only-door design makes a per-user export endpoint a straightforward later add.
 
 ## 6. In the SDD loop (per milestone)
 
