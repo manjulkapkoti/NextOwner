@@ -77,16 +77,16 @@ Add one new layer to the existing serverless design — don't rebuild it:
    |  Orchestrator (e.g. Claude Agent SDK)        |
    |   - per-workflow agents: scout, copilot,     |
    |     diligence, vetting, deal-room, support   |
-   |   - run state + memory (Firestore)           |
+   |   - run state + memory (Postgres + pgvector) |
    |   - human-in-the-loop approval gates         |
    |   - eval suite + tracing + cost metering     |
    +----------------------------------------------+
         |  tool calls (MCP servers / function calling)
         v
    Existing assets become TOOLS:
-     Firestore (listings, deals)   Cloud Storage (data rooms)
+     Postgres (listings, deals)    uploads/ folder (data rooms)
      Stripe · ChartMogul · GA4     Escrow.com · e-signature
-     Notification engine           Vector index over listings,
+     Notification engine           pgvector index over listings,
                                    docs & closed-deal comps (new)
 ```
 
