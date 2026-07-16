@@ -63,7 +63,7 @@ Milestones are built **one at a time**, so each branch is cut from fresh `main` 
 
 ## CI (added 2026-07-16)
 
-`.github/workflows/ci.yml` runs the full suite — backend pytest + frontend tsc/vitest, the same gate as the root `npm test` — on **every PR** and on every push to `main`, so the "merge only when green" rule is machine-checked, not just convention. Where the GitHub plan allows it, `main` branch protection additionally requires a PR + green checks before merging (the repo is private; classic protection needs GitHub Pro — until then the `.git/hooks/pre-commit` guard and this CI signal are the enforcement). `/dod` remains the richer local gate (checklist + security matrix); CI is the floor that can't be skipped.
+`.github/workflows/ci.yml` runs the full suite — backend pytest + frontend tsc/vitest, the same gate as the root `npm test` — on **every PR** and on every push to `main`, so the "merge only when green" rule is machine-checked, not just convention. **`main` is branch-protected** (applied 2026-07-16, when the repo went public): merging requires a PR with **both checks green** and the branch **up to date with `main`** (strict mode — machine-enforces the § Two open PRs re-sync rule), direct pushes / force-pushes / deletion are blocked, and it's **enforced for admins** too. Formal GitHub approvals aren't required (GitHub forbids approving your own PR — solo repo); the human review stays the `/close-feature` discipline. `/dod` remains the richer local gate (checklist + security matrix); CI + protection are the floor that can't be skipped, and the `.git/hooks/pre-commit` guard stays as the local backstop.
 
 ## Conventions
 
