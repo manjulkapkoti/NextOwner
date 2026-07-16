@@ -66,11 +66,13 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
   - **`tos_accepted_at` (+ version)** stamped at registration — a retained legal record, same class as the NDA timestamp.
   - **Settings module owns `DATABASE_URL`** (env via pydantic-settings, per security.md §1.2/§10) — `db.py` stops hardcoding it; `.env.example` ships.
   - **Delete the throwaway `/api/sandbox` + `SandboxItem`** (M0 follow-up — an unauthenticated write path).
+  - **Rate-limit behind a swappable backend** (horizontal-scale blocker #1, 2026-07-16 amendment): the in-process counter is the right MVP implementation, but N instances ⇒ N× the limit, so don't hard-wire it — the store must be a config swap to a shared (Redis-class) backend. See `design_implementation.md` § *Horizontal scale*.
   - **Curate `requirements.txt`** as real dependencies arrive: direct deps pinned deliberately, separate from the transitive freeze, so `pip audit` findings map to intentional choices.
 - **M2 — listing builder**
   - **Money is `Decimal` (or integer cents), never `float`** — asking price, revenue, profit, MRR; record the single-currency (USD) assumption. (Supersedes the `float` sketch in design_implementation §3.5.)
   - **Listing lifecycle (FR-8):** `pause` / `close` transitions; **edits to a `live` listing send it back to `pending_review`** (no bait-and-switch behind curation) — forbidden-path tested.
   - **`GET /my/listings`** dashboard endpoint (M4's public browse deliberately never returns the owner's drafts).
+  - **Uploads go through a storage port, not `open()`** (horizontal-scale blocker #2, 2026-07-16 amendment): local disk under `uploads/{listing_id}/` stays the MVP implementation, but routers call a small `save(listing_id, file) → key` / `open(key)` interface so the object-storage (S3-class) swap is one adapter and never touches the permission gate. The path-confinement rules (security.md §6) are the *adapter's* job. See `design_implementation.md` § *Horizontal scale*.
   - Optional: **owner walkthrough `video_url`** field (Baton B4 — "recommended, not yet adopted" in the research decisions ledger).
 - **M3 — admin curation**
   - **`listing_event` audit table** (actor, action, reason, timestamp) — the NFR's "immutable audit log of listing state changes"; approve/reject (and later pause/sold) write rows. These rows are also the future golden set for the agentic vetting agent (proposal D).
@@ -83,6 +85,7 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
   - **The access-request list shows the buyer profile + verification status** (FR-14 — depends on the M1 profile fold-in).
   - **`GET /my/access-requests`** (buyer side) + emit notification events (requested / approved / denied).
 - **M6 — chat:** conversation **unique per (listing, buyer)**; **`last_read_at` per participant** (unread counts); **WebSocket error contract** (close codes for auth-fail / non-member / revocation / rate-cap — lands as an `error_handling.md` addendum); emit message events for the FR-16 email fallback (delivered at M8).
+  - **Broadcast behind a `publish(conversation_id, message)` port** (horizontal-scale blocker #3 — the worst of the three, 2026-07-16 amendment): the in-memory `{conversation_id: [sockets]}` dict is single-instance-only *by construction*, and behind a load balancer messages **fail silently** (buyer on instance A, seller on instance B — no error, just no delivery). Keep the dict; keep the routers ignorant of it, so a Redis / Postgres `LISTEN/NOTIFY` backplane drops in later. **Persist → publish → fan out**, in that order. See `design_implementation.md` § *Horizontal scale*.
 - **M7 — offers**
   - **Counter-offer model** decided in the spec (a new linked offer row vs. status mutation) + tested — the enum's `countered` is currently behavior-free.
   - **Sibling-offers policy on accept** (auto-decline with notification vs. leave pending) — decide + test; M12 honors it on re-list.

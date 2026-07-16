@@ -212,6 +212,7 @@ Each milestone's spec must include a **"Security & abuse"** subsection turning t
 These are post-MVP but decided now so nothing is retrofitted blindly:
 
 - **TLS everywhere** (`https://` + `wss://`), HSTS.
+- **mTLS on internal hops — *not* at the browser edge.** Mutual TLS is for **service-to-service** trust, and NextOwner's internal hops don't exist yet: backend→Postgres (after the SQLite swap) and backend→vendor (once Stripe/Persona/Escrow stop being mocks). Require `verify-full` TLS to Postgres at minimum; consider client certs where a vendor or a deployment's service mesh supports them. **Do not** pursue mTLS for browser→API: it needs a client certificate per device, which is a UX non-starter for a consumer marketplace (and no researched competitor does it). The browser edge is defended by TLS + JWT + the `permissions.py` gate.
 - **Security headers:** `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options`/`frame-ancestors`, `Referrer-Policy`, `Strict-Transport-Security`.
 - **Rate limiting / WAF** at the reverse proxy (the "App Check" equivalent the research docs defer).
 - **API docs exposure:** decide `/docs` + `/openapi.json` for production — disable or auth-gate them (a public endpoint map of every route is free recon; local dev keeps them, they're a core dev tool).
