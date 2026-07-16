@@ -357,6 +357,28 @@ export async function api(path: string, opts: RequestInit = {}) {
 
 **Production twin (post-MVP):** one domain, a reverse proxy (nginx/Caddy/cloud LB) routes `/api/*` and `/ws/*` to FastAPI and everything else to the SPA's static build — exactly what the Vite proxy simulates locally, and exactly how Baton serves `baton.com/market/*`. Convention: **doc prose writes endpoint paths without the `/api` prefix for readability; code (fetch calls, tests) always includes it.**
 
+#### Horizontal scale — what a second instance breaks (deferred-but-designed)
+
+*Recorded 2026-07-16 (constitution amendment log). Post-MVP work — but the seams are named now so M1/M2/M6 are built with them in mind, not retrofitted.*
+
+The moment that "cloud LB" above fronts **two** FastAPI processes instead of one, any state living *inside* a process becomes a bug. Acquire never faces this: Firebase is serverless, so the platform makes per-instance state physically impossible — which is why their NFR could promise 500k users "without re-architecture." NextOwner runs long-running processes and must earn that deliberately.
+
+**Already correct — don't lose it:** **JWT auth is stateless.** No server-side session, so no sticky sessions and no shared session store. That is the single biggest load-balancer prerequisite and the architecture has it for free. The `permissions.py` gate, the public/private split, and the status state machines are all per-request logic — they scale untouched.
+
+**The three blockers, and the fix for each:**
+
+| # | Per-instance state | Symptom at instance #2 | Fix (post-MVP) | Owned by |
+|---|---|---|---|---|
+| 1 | **Auth rate limiting** — an in-process counter | N instances ⇒ N× the intended limit; brute-force protection quietly weakens | A shared store (Redis-class), or the limiter's own backend setting | **M1** |
+| 2 | **Uploads on local disk** (`uploads/{listing_id}/`) | Instance A writes the file, instance B serves the download → 404 | Object storage (S3-class) behind the *same* permission-checked endpoint | **M2** |
+| 3 | **The in-memory WebSocket registry** (`{conversation_id: [sockets]}` — Part 4, Milestone 6) | Buyer on instance A, seller on instance B — messages **silently never arrive**. No error; just a broken product. Also contradicts the 99.9%-uptime-for-chat NFR | Persist → **publish** to a pub/sub backplane (Redis, or Postgres `LISTEN/NOTIFY`) → each instance fans out to its own local sockets | **M6** |
+
+(SQLite is a fourth, but it's already handled: Article 1 plans the Postgres swap as a connection-string change.)
+
+**The rule that keeps this cheap:** none of the three is worth *building* now — local disk and an in-process dict are the right MVP implementations, and premature Redis is pure cost. What matters is that each sits **behind a small interface from day one**, exactly as Article 1 already does for the agentic layer (`VectorStore`, the model client): a `save(listing_id, file) → key` / `open(key)` storage port, and a `publish(conversation_id, message)` broadcast port. Then the swap is one adapter, and it never touches the routers, the NDA gate, or the tests. Write the dict; just don't let the routers know it's a dict.
+
+**Why now, not later:** these are cheapest *before* the code exists. M1 and M2 are the next two milestones — after they ship, the same change means editing tested code instead of writing it right the first time. See `milestones.md` § Scope fold-ins (M1, M2, M6).
+
 ### 3.5 The data model (SQL tables)
 
 The schema is relational — the full SQL version is written out in **Part 6.3** (it's identical; both are standard SQL). In your build you declare it as **SQLModel** classes (SQLModel = SQLAlchemy + Pydantic, from the FastAPI author), and the tables are: `user`, `listing`, `listing_private`, `access_request`, `conversation`, `message`, `offer`, `offer_event`, `saved_search`, `watchlist`. The three most important ones:
@@ -522,7 +544,7 @@ Scaffold per Part 3. Prove the loop end to end: a `GET /health` endpoint returni
 ### Milestone 6 — Realtime chat (F7)
 
 - Approving access also creates a `conversation` row.
-- **WebSocket endpoint** `WS /ws/conversations/{id}?token=…`: verify the JWT and membership on connect, keep a tiny in-memory connection manager (`{conversation_id: [sockets]}`), persist each message to the DB, broadcast it to the other participant's socket. Two browser windows side by side update instantly.
+- **WebSocket endpoint** `WS /ws/conversations/{id}?token=…`: verify the JWT and membership on connect, keep a tiny in-memory connection manager (`{conversation_id: [sockets]}`), persist each message to the DB, broadcast it to the other participant's socket. Two browser windows side by side update instantly. **The in-memory dict is single-instance-only by construction** — correct for the MVP, fatal behind a load balancer. Keep the fan-out behind a `publish(conversation_id, message)` port so a pub/sub backplane drops in later without touching this endpoint (Part 3 § *Horizontal scale*, blocker #3).
 - This is the one place you hand-build what Firestore gave for free — it's ~40 lines and excellent learning. (Fallback if you want to defer WebSockets: poll `GET /conversations/{id}/messages?after=<timestamp>` every few seconds — ugly but fine at MVP.)
 - Unread counters: a `last_read_at` per participant, updated when the window is open.
 
