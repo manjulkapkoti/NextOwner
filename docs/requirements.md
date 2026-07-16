@@ -16,7 +16,7 @@ Goal of the MVP: prove the core loop — **a seller can list a business, a quali
 
 | # | MVP feature | Source feature | Why in MVP |
 |---|---|---|---|
-| F1 | Email + Google auth, buyer/seller roles | 18–20 | Table stakes; Firebase Auth makes it ~free |
+| F1 | Email + password auth, buyer/seller roles *(Google auth: post-MVP — see FR-1)* | 18–20 | Table stakes. *(Rationale corrected 2026-07-17: read "Firebase Auth makes it ~free" — Acquire's mechanism, and the stack Article 1 rejects. NextOwner issues its own JWTs from FastAPI with bcrypt, so this is real work, not free.)* |
 | F2 | Seller listing builder with structured financial fields | 1 | Core supply |
 | F3 | Admin curation queue (approve/reject listing) | 5, 32 | Marketplace quality is the moat — needed day 1 |
 | F4 | Anonymous public listing card + gated private details | 6, 19 | The freemium/NDA gate is the core mechanic |
@@ -36,7 +36,7 @@ Goal of the MVP: prove the core loop — **a seller can list a business, a quali
 ## 2. Functional Requirements
 
 ### Auth & profiles
-- **FR-1** Users can register/sign in with email-password and Google OAuth; sessions use short-lived tokens with refresh.
+- **FR-1** Users can register/sign in with **email + password**; sessions use short-lived tokens with refresh. **Google OAuth is (Post-MVP)** — *marked 2026-07-17: this clause read "email-password **and** Google OAuth" with no deferral marker, while `design_implementation.md` Part 4 (M1) had already ruled it "a post-MVP nicety — email/password teaches the full mechanics first." The binding doc and the build guide disagreed, and only the build guide said so. Two reasons it stays deferred: the learning goal (own the JWT mechanics first — Article 1 issues JWTs from our own endpoints with bcrypt), and a hosted OAuth provider needs a cloud project, which Article 1's "**100% local — no cloud account**" rule excludes for now. Re-scoping it means amending this FR deliberately.* (The **refresh-token** half of this FR is a live M1 decision — see `milestones.md` § Scope fold-ins → M1.)
 - **FR-2** A user selects a role (buyer / seller); a user may hold both roles under one account.
 - **FR-3** Buyers complete a profile: acquisition budget, target industries, experience, optional proof of funds.
 - **FR-4** Sellers can verify identity/business before listing goes live (MVP: manual review; scale: Persona-style KYC).
@@ -72,11 +72,13 @@ Goal of the MVP: prove the core loop — **a seller can list a business, a quali
 
 ## 3. Non-Functional Requirements
 
-> **Read-me first (added 2026-07-16).** This file is a **research teardown of Acquire**, but the constitution and `CLAUDE.md` promote its FRs + NFRs to NextOwner's **requirements source of truth** ("cite these in specs"). The FRs were adapted for NextOwner as that happened (see FR-13's amendment note); **this NFR table was not** — several cells still state the requirement in *Acquire's* stack vocabulary (Firestore security rules, Cloud Functions logs, Acquire's versioned bundle tags). **Read every cell for the *requirement*, never the mechanism** — NextOwner's mechanism is constitution Article 1.
+> **Read-me first — every row below is binding, but the wording still speaks Acquire's stack.** These NFRs were derived from the Acquire teardown (see this file's header) and, unlike the FRs above, **were never re-worded for NextOwner**: several cells state a real requirement in *Acquire's* vocabulary (Firestore security rules, Cloud Functions logs, Acquire's versioned bundle tags). **Read every cell for the *requirement*, never the mechanism** — NextOwner's mechanism is constitution Article 1.
+>
+> *(Corrected 2026-07-17: this note used to open **"This file is a research teardown of Acquire"** — true of the file it was written in, false of this one. It travelled here verbatim in the 2026-07-16 split, leaving the binding requirements doc declaring itself non-binding research 72 lines below its own header. Precisely the confusion the split existed to end.)*
 >
 > **Labelling convention.** Where a cell splits its parts — as **Scalability** now does — the labels are binding: ***Target*** and ***NextOwner*** state what **NextOwner must do** (cite these); ***Acquire*** is **observed evidence about a different product — never an instruction.** The Scalability row was split because its mechanism was actively misleading: it demanded scale *"without re-architecture"* while prescribing the serverless stack Article 1 rejects — precisely the auto-scaling NextOwner does **not** get for free. The contrast is kept rather than deleted, because *why* Acquire gets it free is the lesson.
 >
-> **Why the other rows aren't split (and can't be, cheaply).** A mechanical Acquire/NextOwner split of the remaining rows would need fresh research, not editing: this file's method (see [`research/acquire_design.md`](./research/acquire_design.md) — marketing pages, response headers, JS bundles) **cannot observe a p95 or an uptime SLO**, so most cells are **authored requirements wearing Acquire's vocabulary**, not measured Acquire facts. Splitting them would manufacture attributions nobody verified. Scalability was separable only because its mechanism *is* directly observed ([`research/acquire_design.md`](./research/acquire_design.md) §2's stack table: Cloud Functions + Firestore, evidence "config in bundle"). The rest stay as-is pending a real pass.
+> **Why the other rows aren't split (and can't be, cheaply).** A mechanical Acquire/NextOwner split of the remaining rows would need fresh research, not editing: **the teardown's** method ([`research/acquire_design.md`](./research/acquire_design.md) — marketing pages, response headers, JS bundles) **cannot observe a p95 or an uptime SLO**, so most cells are **authored requirements wearing Acquire's vocabulary**, not measured Acquire facts. Splitting them would manufacture attributions nobody verified. Scalability was separable only because its mechanism *is* directly observed ([`research/acquire_design.md`](./research/acquire_design.md) §2's stack table: Cloud Functions + Firestore, evidence "config in bundle"). The rest stay as-is pending a real pass.
 
 | Category | Requirement |
 |---|---|

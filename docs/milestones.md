@@ -61,6 +61,7 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
 
 - **M1 — auth & roles** *(product-lead may split the account-lifecycle items into a follow-on milestone if M1 balloons)*
   - **Account lifecycle:** password reset + email verification (SMTP to MailHog locally — the email channel arrives here as a util; M8 reuses it), and an explicit **refresh-token decision** (FR-1 promises refresh: implement it, or amend FR-1 deliberately — don't drift).
+  - **Google OAuth is NOT in M1 — email + password only** (FR-1, marked post-MVP 2026-07-17). Cite FR-1 in the spec **without** its OAuth clause. *Why this is a fold-in and not just a scope note: the deferral was only ever written in `design_implementation.md` Part 4's prose, while the binding FR-1 promised OAuth outright — so the two disagreed and `/new-spec` reads the binding one. The same drift-check that caught FR-1's refresh half (the bullet above) missed its OAuth half.* A hosted provider also needs a cloud project, which Article 1's "100% local — no cloud account" rule excludes.
   - **Both-roles path (FR-2):** how a buyer also becomes a seller (role-upgrade endpoint or role set) — decide + test.
   - **Minimal profiles (FR-3):** display name + buyer fields (budget, target industries, experience); `PUT /profile`. Surfaced later by M5 (FR-14: the seller sees the buyer profile) and M10 (verification badge).
   - **`tos_accepted_at` (+ version)** stamped at registration — a retained legal record, same class as the NDA timestamp.
