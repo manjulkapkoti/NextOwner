@@ -74,20 +74,20 @@ Add one new layer to the existing serverless design — don't rebuild it:
                  v
    +----------------------------------------------+
    |         AGENT ORCHESTRATION LAYER (new)      |
-   |  Orchestrator (e.g. Claude Agent SDK)        |
+   |  Orchestrator (owned loop or a framework)    |
    |   - per-workflow agents: scout, copilot,     |
    |     diligence, vetting, deal-room, support   |
-   |   - run state + memory (Firestore)           |
+   |   - run state + memory (Postgres · Qdrant)   |
    |   - human-in-the-loop approval gates         |
    |   - eval suite + tracing + cost metering     |
    +----------------------------------------------+
         |  tool calls (MCP servers / function calling)
         v
    Existing assets become TOOLS:
-     Firestore (listings, deals)   Cloud Storage (data rooms)
+     Postgres (listings, deals)    uploads/ folder (data rooms)
      Stripe · ChartMogul · GA4     Escrow.com · e-signature
-     Notification engine           Vector index over listings,
-                                   docs & closed-deal comps (new)
+     Notification engine           Qdrant index over listings,
+                                   docs & closed-deal comps (local embeddings)
 ```
 
 **Design principles**
@@ -97,7 +97,7 @@ Add one new layer to the existing serverless design — don't rebuild it:
 3. **Structured outputs everywhere:** rubrics, risk scores, and reports as JSON validated against schemas — the UI renders them, humans audit them.
 4. **Grounding + citations:** diligence and valuation claims must cite the source document/metric; unverifiable claims are labeled, not smoothed over.
 5. **Evals before autonomy:** each agent ships with a golden-set eval (e.g., curation agent scored against historical accept/reject decisions) and expands autonomy only as measured accuracy allows.
-6. **Model strategy:** frontier model (e.g., Claude) for diligence/legal reasoning; cheaper models for scoring/classification at feed scale; embeddings for matching.
+6. **Model & stack strategy (provider-agnostic, behind swappable interfaces):** a **local / open-source model** for agentic reasoning by default — frontier stays a drop-in swap; a **local embedding model** for matching; vectors in **local Qdrant** (a *rebuildable* index — Postgres stays the source of truth) behind a `VectorStore` interface, so pgvector remains an option. The orchestration loop is an **owned thin loop *or* a framework — decided at build time**; non-negotiable regardless: agents run as scoped users through the gates, and tools stay plain functions / MCP.
 
 **Cross-cutting risks & guardrails**
 
