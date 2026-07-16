@@ -112,6 +112,7 @@ Everything arriving from the browser is **hostile until proven otherwise** — a
 ### Third-party vendors & webhooks (mocked now, design for real later)
 - **Never trust the client's word that a payment/KYC/escrow event happened — trust the server-to-server webhook.** Verify webhook **signatures** (e.g. Stripe signing secret), enforce **idempotency**, and validate the payload. Build the **mocks to mirror this shape** (a mock webhook endpoint that still checks a signature/secret) so the real swap is a drop-in.
 - Vendor **client SDKs** (Stripe card form, Persona ID capture) keep sensitive data (card numbers, gov-ID) **off our servers** — preserve that boundary; our webhook is the source of truth for state changes.
+- **Money invariants (when the payments milestone lands):** amounts are **server-derived** (never client-set — Article 2 #4), each money transition is **atomic + audit-logged** (like the M7 accept), and the **escrow settlement** state machine authorizes release/refund/dispute through a **`permissions.py` gate** (a server decision, not a client claim). ⚠ Payments (subscription/listing-fee paywall + escrow settlement) is **not yet a sequenced milestone** — see `docs/milestones.md`.
 
 ### Agents (post-MVP, per constitution Article 1)
 - Agents run **as scoped users through the same `permissions.py` gates** — never a rules-bypassing super-identity; an agent physically cannot read a data room its user wasn't approved for.

@@ -96,7 +96,7 @@ The Stripe / Persona / Escrow mocks are **production-shaped state machines** (co
 - **Persona (KYC/verification):** pending, failed, needs-manual-review.
 - **Escrow.com (escrow):** funding-failed, dispute-opened, cancelled.
 
-Each is a state in the mock, surfaced through the §1 contract (mapped to 402/409/502 as appropriate) and covered by the owning milestone's spec (payments, M10 verification).
+Each is a state in the mock, surfaced through the §1 contract (mapped to 402/409/502 as appropriate) and covered by the owning milestone's spec — the **payments milestone** (not yet sequenced — see `docs/milestones.md`) and M10 verification.
 
 ## 6. Observability
 

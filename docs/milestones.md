@@ -48,6 +48,8 @@ For example:
 | **M11**   | `/start-milestone valuation-calculator`         | Valuation calculator (lead magnet)                                   | 011  | validate inputs if a `POST /valuation` endpoint is added; no injection                                                                              |
 | **E2E**   | after Phase D                                   | Playwright golden path: sign-up → gated data → offer → accept        | —    | the full trust chain green = a security regression check                                                                                            |
 
+> **⚠ Not yet sequenced — Payments & monetization.** The subscription / listing-fee **paywall** (at the *contact moment*, so logically ~M6 chat / M7 offers) and **escrow settlement** (post-accept) are **not** yet a numbered milestone. `product-lead` must scope + slot it. The security invariants are already captured (`docs/security.md` § Third-party vendors & webhooks — webhook signatures, idempotency, card/PAN off our servers, server-derived amounts, mock-mirrors-real); real Stripe/Escrow integration + PCI + KYC/AML stay deferred to `legal-compliance`. `docs/error_handling.md`'s Stripe/Escrow failure modes reference this pending milestone.
+
 ---
 
 ## Progress tracker
@@ -65,5 +67,6 @@ For example:
 - [ ] **M10** — buyer verification
 - [ ] **M11** — valuation calculator
 - [ ] **E2E** — Playwright golden path
+- [ ] **⚠ Payments & monetization** — subscription/listing-fee paywall + escrow settlement · **not yet sequenced** (`product-lead` to slot, ~M6–M7)
 
 _Milestone order M0→M11 is binding (constitution Article 3). Tick each box when its PR is merged and `main` is green._
