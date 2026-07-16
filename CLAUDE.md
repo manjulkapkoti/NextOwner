@@ -41,6 +41,7 @@ Work spans days and a session can die mid-task (crash, closed tab, usage limit).
 
 - **Start a session with `/resume`** — it reconstructs where you left off from git + `npm test` (the red tests are the to-do list) + `docs/progress.md`, trusting git+tests and self-healing if the status file is stale.
 - **At a stopping point, run `/checkpoint`** — updates `docs/progress.md` (the "▶ next action"), commits WIP on the branch, pushes, and ensures a draft PR exists.
+- **At each milestone's close, `docs/progress.md` refreshes itself:** `/dod` step 6 (and `/run-milestone`) commits the updated status + ▶ next action on the feature branch once the review is clean, before the PR opens — so `main`'s copy is correct the instant the PR merges, with no separate action needed.
 - **Crash-proof, automatic:** a `Stop` hook (`.claude/settings.json` → `.claude/hooks/flight_recorder.py`) rewrites the gitignored `.claude/session-state.md` every turn, so even an abrupt death leaves a fresh, recoverable snapshot — nothing depends on a graceful shutdown.
 - **Full design + rationale:** `docs/session_recovery.md`.
 
