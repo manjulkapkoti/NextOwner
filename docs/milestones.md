@@ -113,4 +113,4 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
 - [ ] **⚠ Payments & monetization** — subscription/listing-fee paywall + escrow settlement · **not yet sequenced** (`product-lead` to slot, ~M6–M7)
 - [ ] **⚠ Trust & safety / admin ops** — fraud reports, user management, deal monitoring (FR-21) · **not yet sequenced** (`product-lead` to slot)
 
-_Milestone order M0→M12 is binding (constitution Article 3; M12 appended 2026-07-16). Tick each box when its PR is merged and `main` is green._
+_Milestone order M0→M12 is binding (constitution Article 3; M12 appended 2026-07-16). Boxes tick automatically as part of `/dod` step 6's pre-PR commit (see `docs/session_recovery.md`), so a box is checked the instant its PR merges._

@@ -42,6 +42,7 @@ Each layer has one job; they don't duplicate each other, so nothing drifts.
 |---|---|---|---|
 | **Git** (commits, PRs, branches) | What's **done** | the repo / GitHub | every commit; a merged PR = a finished milestone |
 | **`docs/progress.md`** | Where we **are** + **▶ next action** | committed, on the branch | by `/checkpoint` (mid-milestone, manual) **and** automatically at milestone close (`/dod`'s pre-PR commit, step 6 — see below) |
+| **`docs/milestones.md`** § Progress tracker | Which milestones are **shipped** (checked boxes) | committed, on the branch | automatically at milestone close (same `/dod` step 6 commit as `progress.md`) |
 | **`.claude/session-state.md`** (flight recorder) | The **mechanical git snapshot** for crash recovery | gitignored, local | **automatically, every turn** (the `Stop` hook) |
 | **Claude memory** (`~/.claude/.../memory/`) | Durable **facts / preferences** (not volatile status) | auto-loaded each session | when a durable fact appears |
 | **Red tests** (`npm test`) | What's **left to do** in the current milestone | the test suite | continuously, as you implement |
@@ -74,13 +75,15 @@ noise; being on disk, it survives a crash.
   pushes, and ensures a **draft PR** exists. Makes the work durable and off-machine.
 - **Milestone close** (`/dod` step 6, automated end-to-end by `/run-milestone`) —
   once the branch review is clean, refreshes `docs/progress.md` (status + ▶ next
-  action + carryover notes) as one of the final commits **on the feature branch**,
-  before the PR opens. This is the only reliable automatic trigger point: branch
-  protection blocks direct commits to `main`, and no local hook can observe a
-  GitHub merge event (a PR can merge from the browser, in a different session, or
-  well after the branch work ended) — so baking the correct content into the PR's
-  own commits is what makes `main`'s copy correct **the instant it merges**, with
-  zero lag and no risk of colliding with the milestone's git orchestration.
+  action + carryover notes) **and** ticks the milestone's box in
+  `docs/milestones.md` § Progress tracker, as one of the final commits **on the
+  feature branch**, before the PR opens. This is the only reliable automatic
+  trigger point: branch protection blocks direct commits to `main`, and no local
+  hook can observe a GitHub merge event (a PR can merge from the browser, in a
+  different session, or well after the branch work ended) — so baking both edits
+  into the PR's own commits is what makes `main`'s copy correct **the instant it
+  merges**, with zero lag and no risk of colliding with the milestone's git
+  orchestration.
 - **`/resume`** (first thing in a new session) — reads the flight recorder +
   `progress.md`, then **interrogates git + runs the tests**, reconciles (trusting
   git + tests), flags an interrupted session (uncommitted residue), and reports
@@ -123,11 +126,12 @@ anything that spills across days.
 |---|---|---|
 | `docs/session_recovery.md` | This document | yes |
 | `docs/progress.md` | Semantic "you are here + ▶ next" | yes |
+| `docs/milestones.md` | The M0→M12 checklist; § Progress tracker ticks per milestone | yes |
 | `.claude/settings.json` | Registers the `Stop` hook | yes |
 | `.claude/hooks/flight_recorder.py` | Writes the flight recorder each turn | yes |
 | `.claude/session-state.md` | The flight recorder output | **no** (gitignored, per-machine) |
 | `.claude/skills/checkpoint/SKILL.md` | The `/checkpoint` ritual | yes |
-| `.claude/skills/dod/SKILL.md` | Green gate; step 6 also refreshes `progress.md` pre-PR | yes |
+| `.claude/skills/dod/SKILL.md` | Green gate; step 6 also refreshes `progress.md` + ticks `milestones.md` pre-PR | yes |
 | `.claude/skills/resume/SKILL.md` | The `/resume` ritual | yes |
 
 ## Verifying the hook
