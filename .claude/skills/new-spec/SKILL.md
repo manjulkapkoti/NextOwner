@@ -37,6 +37,7 @@ Create `specs/NNN-<name>/spec.md` and `specs/NNN-<name>/plan.md` for the milesto
    - **Frontend** — pages/components/MobX stores touched (`app/src/`).
    - **Response models** — note any public model that must exclude identity fields by schema.
    - **Errors** — the `AppError` subclasses / machine `code`s this milestone raises (`docs/error_handling.md`), plus the frontend error/empty/loading states and any `ApiError` handling touched.
+   - **Analytics events** — the `track(event, props)` events this milestone emits (event names + props; **never** private/identity fields — `docs/security.md` § Audit & logging).
    - **Data protection** — any new PII fields (justified, minimized, kept off public schemas) and the **erasure/anonymization behavior** of new person-referencing tables (`docs/data_protection.md`). The `user` table (M1) ships erasure-ready.
 
 5. **Comply with the constitution as you write:** never trust the client for `owner_id`/`sender_id`/`status`/prices; clients never set status directly; public vs private tables stay split; use the correct error codes (401/403/404/409/422) surfaced through the `docs/error_handling.md` contract (generic messages, machine `code`, no leaks).

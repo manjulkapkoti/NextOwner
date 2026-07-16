@@ -66,6 +66,7 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
   - **`tos_accepted_at` (+ version)** stamped at registration — a retained legal record, same class as the NDA timestamp.
   - **Settings module owns `DATABASE_URL`** (env via pydantic-settings, per security.md §1.2/§10) — `db.py` stops hardcoding it; `.env.example` ships.
   - **Delete the throwaway `/api/sandbox` + `SandboxItem`** (M0 follow-up — an unauthenticated write path).
+  - **Curate `requirements.txt`** as real dependencies arrive: direct deps pinned deliberately, separate from the transitive freeze, so `pip audit` findings map to intentional choices.
 - **M2 — listing builder**
   - **Money is `Decimal` (or integer cents), never `float`** — asking price, revenue, profit, MRR; record the single-currency (USD) assumption. (Supersedes the `float` sketch in design_implementation §3.5.)
   - **Listing lifecycle (FR-8):** `pause` / `close` transitions; **edits to a `live` listing send it back to `pending_review`** (no bait-and-switch behind curation) — forbidden-path tested.

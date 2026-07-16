@@ -214,6 +214,7 @@ These are post-MVP but decided now so nothing is retrofitted blindly:
 - **TLS everywhere** (`https://` + `wss://`), HSTS.
 - **Security headers:** `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options`/`frame-ancestors`, `Referrer-Policy`, `Strict-Transport-Security`.
 - **Rate limiting / WAF** at the reverse proxy (the "App Check" equivalent the research docs defer).
+- **API docs exposure:** decide `/docs` + `/openapi.json` for production — disable or auth-gate them (a public endpoint map of every route is free recon; local dev keeps them, they're a core dev tool).
 - **Secrets manager**, DB least-privilege role, automated backups, reviewed Alembic migrations.
 - **Postgres RLS** as optional defense-in-depth (the API stays the primary gate).
 - **Monitoring/alerting** on auth-failure and 403 spikes; centralized log aggregation (Sentry equivalent) — scrubbed of secrets/PII.

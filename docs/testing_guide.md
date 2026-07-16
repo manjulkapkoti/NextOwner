@@ -353,6 +353,8 @@ Because milestones build on each other, **always run the full `npm test` before 
 
 **CI runs this same suite on every PR and on `main` pushes** (`.github/workflows/ci.yml` — backend pytest + frontend tsc/vitest), so a red PR can't merge; the local `npm test` loop stays the fast path, CI is the enforcement.
 
+**Deferred NFR harnesses** *(recorded 2026-07-16 so they're decisions, not drift)*: **performance** — the p95 < 500 ms search NFR has no load/perf harness; build one around the Postgres swap / deploy (QA/SDET, `team_strategy.md`). **Accessibility** — add an axe-core pass to the Playwright golden path when it lands at Phase D (WCAG 2.1 AA NFR). **WebSocket scale** — the M6 in-memory connection manager is single-process by design; deploying beyond one process needs a pub/sub backplane (note for `devops-sre`).
+
 ---
 
 ## 7. If You Chose the Part 6 Alternative (Supabase, no custom backend)
