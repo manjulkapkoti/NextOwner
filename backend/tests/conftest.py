@@ -13,8 +13,13 @@ import os
 
 # Must precede `import app.main` — pydantic-settings reads the environment at
 # import time. A fixed test secret lets C3/C4 forge tokens the app will verify.
-os.environ.setdefault("JWT_SECRET", "test-secret-not-for-production")
+# ≥32 bytes — below that PyJWT warns (InsecureKeyLength) for HS256. Real
+# deployments set a strong secret from a secrets manager (security.md §9).
+os.environ.setdefault("JWT_SECRET", "test-secret-not-for-production-0123456789")
 os.environ.setdefault("JWT_ALGORITHM", "HS256")
+# Enables the gated /_debug/boom route so the 500-contract tests (G1/G3) have a
+# route that raises. Off by default in the app → never mounted in production.
+os.environ.setdefault("ENABLE_DEBUG_ROUTES", "1")
 
 import pytest
 from fastapi.testclient import TestClient
@@ -50,12 +55,30 @@ def client(session):
     lifespan so tests never touch the real ``nextowner.db`` file.
     """
     app.dependency_overrides[get_session] = lambda: session
-    c = TestClient(app)
+    # raise_server_exceptions=False so the 500 handler's *response* reaches the
+    # test (G1/G3) instead of the exception re-raising through TestClient.
+    c = TestClient(app, raise_server_exceptions=False)
     yield c
     app.dependency_overrides.clear()
 
 
 # ── M1 auth helpers ──────────────────────────────────────────────────────────
+
+@pytest.fixture(autouse=True)
+def _fresh_login_limiter():
+    """Give every test a clean rate-limiter, like the fresh per-test DB.
+
+    The login limiter is module-level in-process state (one counter per app
+    process — by design; the swappable backend is the horizontal-scale seam).
+    Across a pytest run that state would leak between tests — the F1 brute-force
+    test would trip it and later logins would 429 — so we reset it per test.
+    """
+    from app.ratelimit import InMemoryRateLimiterBackend
+    from app.routers import auth as auth_router
+
+    auth_router._login_limiter.backend = InMemoryRateLimiterBackend()
+    yield
+
 
 @pytest.fixture
 def register(client):
