@@ -5,7 +5,6 @@ soft-delete path and nullable PII, so a future GDPR erasure flow anonymizes in
 place without breaking referential integrity. The user-facing erasure *endpoint*
 is post-MVP; only the schema support lands here.
 
-`SandboxItem` is the throwaway M0 DB-pipeline proof — deleted at M1 slice 11.
 """
 
 from datetime import datetime, timezone
@@ -42,12 +41,4 @@ class User(SQLModel, table=True):
     # Erasure-ready (data_protection.md §3) — anonymize-in-place, never hard-delete
     deleted_at: datetime | None = None
 
-    created_at: datetime = Field(default_factory=_utcnow)
-
-
-class SandboxItem(SQLModel, table=True):
-    """Throwaway Milestone-0 row — proves the DB pipeline; removed at M1 slice 11."""
-
-    id: int | None = Field(default=None, primary_key=True)
-    note: str
     created_at: datetime = Field(default_factory=_utcnow)

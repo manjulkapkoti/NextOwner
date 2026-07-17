@@ -61,15 +61,3 @@ class UserRead(SQLModel):
 class LoginResponse(SQLModel):
     access_token: str
     token_type: str = "bearer"
-
-
-# ── Sandbox (M0 — deleted at M1 slice 11) ────────────────────────────────────
-
-class SandboxCreate(SQLModel):
-    note: str
-
-
-class SandboxRead(SQLModel):
-    id: int
-    note: str
-    created_at: datetime
