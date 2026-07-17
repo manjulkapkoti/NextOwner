@@ -1,25 +1,44 @@
 """SQLModel tables — the schema.
 
-Milestone 0 only defines a throwaway ``SandboxItem`` to prove the write→read
-DB path end to end. The real domain tables (user, listing, listing_private,
-access_request, offer, …) arrive with their milestones per
-``docs/design_implementation.md`` §3.5.
+`User` (M1) ships **erasure-ready** (`data_protection.md` §3): a `deleted_at`
+soft-delete path and nullable PII, so a future GDPR erasure flow anonymizes in
+place without breaking referential integrity. The user-facing erasure *endpoint*
+is post-MVP; only the schema support lands here.
+
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlmodel import Field, SQLModel
 
 
 def _utcnow() -> datetime:
     """Timezone-aware UTC now (``datetime.utcnow`` is deprecated in 3.12)."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
-class SandboxItem(SQLModel, table=True):
-    """Throwaway Milestone-0 row — proves the DB pipeline; removed once the
-    first real table lands."""
-
+class User(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    note: str
+    email: str = Field(unique=True, index=True)          # PII — never public, never logged
+    password_hash: str                                    # bcrypt — never returned
+
+    # Roles: two flags, not an enum — FR-2 allows holding *both* under one account.
+    is_buyer: bool = Field(default=False)
+    is_seller: bool = Field(default=False)
+    is_admin: bool = Field(default=False)                 # server-only; re-read from DB per request
+
+    # Minimal profile (FR-3)
+    display_name: str | None = None
+    budget: Decimal | None = None                         # money is Decimal, never float
+    target_industries: str | None = None
+    experience: str | None = None
+
+    # Retained legal record
+    tos_accepted_at: datetime | None = None
+    tos_version: str | None = None
+
+    # Erasure-ready (data_protection.md §3) — anonymize-in-place, never hard-delete
+    deleted_at: datetime | None = None
+
     created_at: datetime = Field(default_factory=_utcnow)

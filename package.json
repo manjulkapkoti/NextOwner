@@ -7,6 +7,9 @@
     "test:api": "node scripts/test-api.mjs",
     "test:unit": "npm run test --prefix app",
     "test:e2e": "playwright test",
-    "test": "npm run test:api && npm run test:unit"
+    "test": "npm run test:api && npm run test:unit",
+    "lint:api": "node scripts/lint-api.mjs",
+    "lint:web": "npm run lint --prefix app",
+    "lint": "npm run lint:api && npm run lint:web"
   }
 }
