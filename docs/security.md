@@ -177,7 +177,7 @@ Each milestone's spec must include a **"Security & abuse"** subsection turning t
 - **M5 — Platform NDA + access gate (crown jewels):** every state tested — unsigned NDA (403 on request), no request (403), `requested` (403), `approved` (200), owner (200), `denied` (403); unique-constraint duplicate (409); only the listing's seller may approve/deny; document download enforces the **same** gate; revocation re-denies.
 - **M6 — Chat:** authN on WS connect; membership authZ; sender from token (spoof ignored); history 403 for non-members; message size/rate caps; XSS-safe render.
 - **M7 — Offers:** requires approved access **and** live listing (else 403/409); atomic accept (offer + listing in one transaction); seller-only decisions; 409 on already-decided; `offer_event` audit row written.
-- **M8 — Saved searches & alerts:** notifications scoped to the caller; the background fan-out doesn't leak private data or create cross-user notifications.
+- **M8 — Notifications engine + saved searches + account lifecycle *(now security-critical)*:** notifications scoped to the caller; the background fan-out doesn't leak private data or create cross-user notifications. **Plus the account-lifecycle flows moved here from M1 (2026-07-17) — this is auth surface, which is why M8 joined the security-critical list:** a **password-reset token is account takeover if it leaks**, so — high entropy, **single-use** (consumed on redeem), **short expiry**, hashed at rest (treat it like a password, not an id), invalidated when the password changes; **uniform response whether or not the address exists** (no user enumeration — same rule as M1's login); **never** put the token in a log, a redirect, or anywhere a proxy records it; rate-limit the request-reset endpoint (it emails a third party on demand). Email verification: the token is single-use too, and the spec must **say what verification gates** — an unenforced `verified` flag is decoration.
 - **M9 — Watchlist:** every operation caller-scoped; a user only ever sees/edits their own items.
 - **M10 — Buyer verification:** buyer cannot self-verify (`verified` ignored/403); only admin flips it; proof-of-funds upload obeys the M2 upload rules.
 - **M11 — Valuation calculator:** pure client calc; if a `POST /valuation` endpoint is added, validate inputs and keep it injection-safe; no data exposure.
@@ -191,7 +191,7 @@ Each milestone's spec must include a **"Security & abuse"** subsection turning t
 1. **Spec (`/new-spec`):** add a **"Security & abuse"** subsection from §6 + §7 — the forbidden-path scenarios as GIVEN/WHEN/THEN, citing the FR and the control here.
 2. **Tests (before code):** every `401/403/404/409` is one failing test first (permission tests = crown jewels). Include the negative tests: IDOR, mass-assignment, path traversal, spoofed identity, schema-leak.
 3. **Implement:** gate first (default-deny) → validate input → parameterized query, caller-scoped → shape output (`response_model`) → secrets from env.
-4. **Review (the `/dod` green gate + the inline branch review every milestone; an independent `appsec-engineer` pass on the security-critical milestones M1/M2/M5/M7/M10) — touched → must-cover matrix:**
+4. **Review (the `/dod` green gate + the inline branch review every milestone; an independent `appsec-engineer` pass on the security-critical milestones M1/M2/M5/M7/M8/M10) — touched → must-cover matrix:**
 
    | If the change touches… | It must have a passing negative test for… |
    |---|---|

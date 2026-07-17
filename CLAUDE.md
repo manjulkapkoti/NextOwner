@@ -14,9 +14,10 @@ Every milestone follows this loop (constitution Article 3, `README.md`):
 
 ```
 pick milestone (docs/design_implementation.md Part 4)
-→ write specs/NNN-name/spec.md (user stories + GIVEN/WHEN/THEN + FR refs) and plan.md   ← before code
-→ write its tests from docs/testing_guide.md §5 — they FAIL first
-→ implement → tests pass → full `npm test` green
+→ write specs/NNN-name/spec.md (user stories + GIVEN/WHEN/THEN + FR refs) and plan.md (incl. Build order)   ← before code
+→ write its tests from docs/testing_guide.md §5 — they FAIL first (the red set is now the queue)
+→ implement slice by slice per plan.md's Build order — one trust boundary each, one commit each; the red count only goes down
+→ tests pass → full `npm test` green
 → review & test on the branch (inline; + an appsec pass on security-critical milestones) → open PR (vetted) → you approve → squash-merge to main → next milestone
 ```
 
@@ -30,7 +31,7 @@ pick milestone (docs/design_implementation.md Part 4)
 - **One branch + one PR per milestone**, cut from fresh `main`: `git checkout main && git pull` → `git checkout -b feat/NNN-slug` (`feat|fix|chore`). All agents commit to that single branch; the orchestrator manages git, agents produce the code/tests.
 - **Conventional Commits** (`feat:`/`fix:`/`test:`/`docs:`/`chore:`). Commit freely on the branch — including the **failing-tests-first** commit.
 - **The green gate is the PR merge, not individual commits.** A PR merges to `main` only when `/dod` passes (tests + the `docs/security.md` §8 security matrix), so `main` is always green. **CI (`.github/workflows/ci.yml`) runs the suite on every PR** — never merge a PR with red checks.
-- **Flow:** `/start-milestone <name>` → `/new-spec` → failing tests → implement → `/dod` (green gate — full suite + security matrix; **does not open the PR**) → **branch review** (inline by the orchestrator every milestone — architecture + the §8 matrix — **plus** one independent `appsec-engineer` pass on the security-critical milestones M1/M2/M5/M7/M10) → fix findings → **open the PR** (push + `gh pr create`, once it's clean) → **you** review + approve → `/close-feature` (squash-merges + syncs `main`) → next milestone. The review happens **before** the PR exists; opening a PR means the work is vetted and ready for a human. (Inline-first keeps context/usage low; the `/dod` forbidden-path tests are the always-on security floor — see `docs/git_strategy.md`.)
+- **Flow:** `/start-milestone <name>` → `/new-spec` → failing tests → implement → `/dod` (green gate — full suite + security matrix; **does not open the PR**) → **branch review** (inline by the orchestrator every milestone — architecture + the §8 matrix — **plus** one independent `appsec-engineer` pass on the security-critical milestones M1/M2/M5/M7/M8/M10) → fix findings → **open the PR** (push + `gh pr create`, once it's clean) → **you** review + approve → `/close-feature` (squash-merges + syncs `main`) → next milestone. The review happens **before** the PR exists; opening a PR means the work is vetted and ready for a human. (Inline-first keeps context/usage low; the `/dod` forbidden-path tests are the always-on security floor — see `docs/git_strategy.md`.)
 - **Tooling:** `gh` CLI — `gh pr create` (open), `gh pr merge --squash --delete-branch` (human-approved merge).
 - **Closing the feature (after approval):** `/close-feature [pr#]` queries the PR and runs `gh pr merge --squash --delete-branch` if it's still open (or just syncs if you already merged), then `git checkout main && git pull` — ready for the next branch. No passive notification; it queries on demand (or run it on a `/loop` to poll).
 - **Full detail:** `docs/git_strategy.md` — the branch/PR rationale, the 9-step per-milestone flow, and conventions.

@@ -319,10 +319,13 @@ Write these from the milestone spec *before* implementing (SDD). ☐ = one test 
 - ☐ Seller accept → offer `accepted` **and** listing `under_offer` (assert both — this is the transaction test).
 - ☐ Responding to an offer on someone else's listing → 403. ☐ Acting on an already-decided offer → 409.
 
-**M8 — Saved searches & alerts**
+**M8 — Notifications engine + saved searches + account lifecycle** *(security-critical — account lifecycle moved here from M1, 2026-07-17)*
 - ☐ Approving a listing creates a notification for the matching saved search…
 - ☐ …and none for a non-matching one. (BackgroundTasks run synchronously under TestClient — assert right after the approve call.)
 - ☐ `GET /notifications` returns only the caller's notifications.
+- ☐ Password reset: a valid token sets the new password; ☐ the **same token used twice → rejected** (single-use); ☐ an **expired** token → rejected; ☐ a token for user A cannot reset user B.
+- ☐ `POST /auth/forgot-password` returns the **same response for a known and an unknown address** (no user enumeration — the M1 login rule, applied here).
+- ☐ Email verification: the token flips `email_verified`; ☐ reusing it → rejected.
 
 **M9 — Watchlist**
 - ☐ Add → appears in `GET /watchlist`; ☐ delete → gone; ☐ the list only ever contains the caller's own items.

@@ -17,6 +17,6 @@ Every milestone's work happens on its own feature branch off `main` and lands vi
 
 4. **Create + switch to the branch:** `git checkout -b feat/NNN-slug`. Confirm with `git branch --show-current`.
 
-5. **Hand off:** tell the user the branch is ready and the next step is `/new-spec <slug>` (or `product-lead` scoping) → write failing tests → implement → `/dod` (green gate) → branch review (inline; + an independent `appsec-engineer` pass on the security-critical milestones M1/M2/M5/M7/M10) → open the PR once it's clean (a PR = vetted, ready for a human).
+5. **Hand off:** tell the user the branch is ready and the next step is `/new-spec <slug>` (or `product-lead` scoping) → write failing tests → implement → `/dod` (green gate) → branch review (inline; + an independent `appsec-engineer` pass on the security-critical milestones M1/M2/M5/M7/M8/M10) → open the PR once it's clean (a PR = vetted, ready for a human).
 
 Do not write specs or code in this skill — it only prepares the branch.
