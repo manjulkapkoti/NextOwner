@@ -62,3 +62,23 @@ def test_a6_invalid_email_is_422_on_the_email_field(client):
     assert r.status_code == 422
     locs = [".".join(str(p) for p in e["loc"]) for e in r.json()["detail"]]
     assert any("email" in loc for loc in locs)
+
+
+def test_a7_too_short_password_is_422(client):
+    """security.md §2 — a minimum password length is enforced at the boundary."""
+    r = client.post("/api/auth/register", json={**VALID, "password": "short"})
+    assert r.status_code == 422
+
+
+def test_a8_long_passphrase_registers_and_logs_in(client):
+    """bcrypt's 72-byte limit must not 500 — a long passphrase works end to end
+    (SHA-256 pre-hash), and it is not silently truncated."""
+    long_pw = "a-very-long-but-perfectly-legitimate-passphrase-" * 2  # ~96 chars
+    reg = client.post("/api/auth/register", json={"email": "long@example.com", "password": long_pw, "role": "buyer"})
+    assert reg.status_code == 201
+    # It logs in with the full password...
+    ok = client.post("/api/auth/login", data={"username": "long@example.com", "password": long_pw})
+    assert ok.status_code == 200
+    # ...and a truncated-at-72-bytes version does NOT (proves no silent truncation).
+    truncated = client.post("/api/auth/login", data={"username": "long@example.com", "password": long_pw[:72]})
+    assert truncated.status_code == 401

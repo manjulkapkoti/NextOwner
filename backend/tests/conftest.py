@@ -65,18 +65,19 @@ def client(session):
 # ── M1 auth helpers ──────────────────────────────────────────────────────────
 
 @pytest.fixture(autouse=True)
-def _fresh_login_limiter():
-    """Give every test a clean rate-limiter, like the fresh per-test DB.
+def _fresh_rate_limiters():
+    """Give every test clean rate-limiters, like the fresh per-test DB.
 
-    The login limiter is module-level in-process state (one counter per app
-    process — by design; the swappable backend is the horizontal-scale seam).
-    Across a pytest run that state would leak between tests — the F1 brute-force
-    test would trip it and later logins would 429 — so we reset it per test.
+    The limiters are module-level in-process state (one counter per app process
+    — by design; the swappable backend is the horizontal-scale seam). Across a
+    pytest run that state would leak between tests — the brute-force tests (F1,
+    F3) would trip them and later requests would 429 — so we reset per test.
     """
     from app.ratelimit import InMemoryRateLimiterBackend
     from app.routers import auth as auth_router
 
     auth_router._login_limiter.backend = InMemoryRateLimiterBackend()
+    auth_router._register_limiter.backend = InMemoryRateLimiterBackend()
     yield
 
 

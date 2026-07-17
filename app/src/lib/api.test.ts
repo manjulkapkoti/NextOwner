@@ -23,4 +23,24 @@ describe('api() error handling', () => {
     })
     await expect(api('/auth/me')).rejects.toBeInstanceOf(ApiError)
   })
+
+  it('clears a stale token and signals logout on a global 401 (H5)', async () => {
+    localStorage.setItem('token', 'stale.jwt.token')
+    const onUnauthorized = vi.fn()
+    window.addEventListener('auth:unauthorized', onUnauthorized)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ detail: 'no', code: 'unauthorized' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+      ),
+    )
+    await expect(api('/auth/me')).rejects.toBeInstanceOf(ApiError)
+    expect(localStorage.getItem('token')).toBeNull()   // stale token dropped
+    expect(onUnauthorized).toHaveBeenCalled()           // app told to redirect
+    window.removeEventListener('auth:unauthorized', onUnauthorized)
+  })
 })

@@ -7,6 +7,8 @@ JWTs are issued by our own endpoints, bcrypt for passwords.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
@@ -15,15 +17,25 @@ import jwt
 from .config import settings
 
 
+def _bcrypt_input(password: str) -> bytes:
+    """SHA-256 → base64 so any-length password fits bcrypt's 72-byte limit.
+
+    bcrypt hard-rejects secrets >72 bytes; feeding it a fixed-length digest (44
+    base64 bytes) removes that cliff **without silent truncation** and keeps
+    hashing and verifying symmetric. Standard pattern (Django/Dropbox variants).
+    """
+    return base64.b64encode(hashlib.sha256(password.encode("utf-8")).digest())
+
+
 def hash_password(password: str) -> str:
     """bcrypt hash (salt included in the digest)."""
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    return bcrypt.hashpw(_bcrypt_input(password), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, password_hash: str) -> bool:
     """Constant-time bcrypt compare; never raises on a malformed hash."""
     try:
-        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+        return bcrypt.checkpw(_bcrypt_input(password), password_hash.encode("utf-8"))
     except (ValueError, TypeError):
         return False
 

@@ -55,6 +55,8 @@
 - **A4** — GIVEN an existing user with `alice@example.com`, WHEN registering that email again, THEN **409** (`code: "email_taken"`).
 - **A5** — GIVEN a registration request with role `"wizard"`, WHEN posted, THEN **422** (field-level).
 - **A6** — GIVEN a registration request with `"email": "not-an-email"`, WHEN posted, THEN **422** with `loc` pointing at `email`.
+- **A7** *(added from appsec review)* — GIVEN a registration with a password shorter than the minimum, WHEN posted, THEN **422** (`security.md` §2 — a minimum length is enforced at the boundary).
+- **A8** *(added from appsec review)* — GIVEN a registration with a very long passphrase (>72 bytes), WHEN posted, THEN **201** (not a 500 — bcrypt's 72-byte limit is handled by a SHA-256 pre-hash), it logs in with the full password, and a 72-byte-truncated version does **not** (no silent truncation).
 
 ### B. Login & tokens
 
@@ -87,6 +89,7 @@
 
 - **F1** — GIVEN the configured failed-login threshold, WHEN it is exceeded from one caller, THEN **429** and further attempts are rejected for the window.
 - **F2** — GIVEN the rate limiter, WHEN inspected, THEN its **store is behind an interface** — swapping to a shared backend is a config change, not a rewrite (fold-in / horizontal-scale blocker #1).
+- **F3** *(added from appsec review)* — GIVEN repeated registrations from one caller, WHEN the threshold is exceeded, THEN **429** (`security.md` §1.1 requires rate-limiting **register** too, not only login — signup spam).
 
 ### G. The error contract (`error_handling.md` §7)
 
@@ -98,6 +101,7 @@
 
 - **H1** — GIVEN a logged-out visitor, WHEN they navigate to `/sell`, THEN they are redirected to login. *(Client-side guards are UX only — the server gate is the real boundary.)*
 - **H2** — GIVEN the API returns 401, WHEN `api()` handles it, THEN it throws a typed **`ApiError`** carrying `status` and `code` — not a bare `Error`.
+- **H5** *(added from appsec review)* — GIVEN the API returns 401, WHEN `api()` handles it, THEN it **clears the stale token** and emits an `auth:unauthorized` event so the app redirects to login (plan slice 9 / `security.md` §3 — global 401 handling).
 - **H3** — GIVEN the login form receives a **422**, WHEN rendered, THEN the message appears **inline on the offending field**.
 - **H4** — GIVEN a render-time crash inside a route, WHEN it happens, THEN the **`ErrorBoundary`** fallback renders — never a white screen.
 
@@ -161,3 +165,10 @@
 - **Proof-of-funds upload / verified badge** — M10.
 - **A real admin UI** — `is_admin` is set by hand in the DB at M1; the admin queue is M3.
 - **A user-facing erasure endpoint** — schema support only (above).
+
+### Deferred security decisions (recorded from the appsec review, 2026-07-17 — owner may override)
+
+The independent appsec pass raised two items that are **judgment calls, not clear-cut fixes**. Recorded here as deliberate deferrals with rationale (rather than shipped silently), per the reviewer's own recommendation:
+
+- **Registration-time email enumeration** (`409 email_taken` vs `201` reveals whether an email is registered). This is the industry-standard signup UX; making it non-enumerable requires a *"we've sent you an email"* confirmation flow that never confirms existence — which **is** the email-verification work already moved to **M8**. **Decision: accept for M1, close it at M8** with verification. (The login path is already enumeration-safe — B3.)
+- **Frontend not wired into an app shell** — `RequireAuth` / `LoginForm` exist and are unit-tested (H1, H3) but `App.tsx` has no `/login` or `/sell` route yet. No security hole (the server JWT gate is unconditional), but the integrated flow isn't live. **Decision: defer integration to M2**, which adds the first real authed pages to route between; the end-to-end flow is covered by the **Phase-D Playwright E2E**. Wiring a router now would rewrite the M0 health page for no user-visible gain.

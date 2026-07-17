@@ -23,11 +23,16 @@ from ..security import create_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# Module-level limiter → one in-process counter for the app. Swappable backend
-# (ratelimit.py) is the horizontal-scale seam.
+# Module-level limiters → one in-process counter per app. The swappable backend
+# (ratelimit.py) is the horizontal-scale seam. Both login AND register are
+# limited (security.md §1.1 — brute force on login, signup spam on register).
 _login_limiter = RateLimiter(
     max_attempts=settings.login_rate_limit_max,
     window_seconds=settings.login_rate_limit_window_seconds,
+)
+_register_limiter = RateLimiter(
+    max_attempts=settings.register_rate_limit_max,
+    window_seconds=settings.register_rate_limit_window_seconds,
 )
 
 # A precomputed hash to verify against when the email is unknown, so the unknown
@@ -36,7 +41,14 @@ _DUMMY_HASH = hash_password("not-a-real-password")
 
 
 @router.post("/register", response_model=UserRead, status_code=201)
-def register(body: UserRegister, session: Session = Depends(get_session)) -> User:
+def register(
+    body: UserRegister,
+    request: Request,
+    session: Session = Depends(get_session),
+) -> User:
+    key = request.client.host if request.client else "unknown"
+    if not _register_limiter.check(key):
+        raise RateLimited("Too many sign-up attempts — try again later")
     if session.exec(select(User).where(User.email == body.email)).first():
         raise Conflict("Email already registered", code="email_taken")
     user = User(

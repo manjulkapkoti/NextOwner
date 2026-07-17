@@ -13,6 +13,20 @@ def test_f1_repeated_failed_logins_get_rate_limited(client, register):
     assert got_429, "expected the login endpoint to rate-limit brute-force attempts"
 
 
+def test_f3_repeated_registrations_get_rate_limited(client):
+    """security.md §1.1 — register is rate-limited too (signup spam), not just login."""
+    got_429 = False
+    for i in range(20):
+        r = client.post(
+            "/api/auth/register",
+            json={"email": f"user{i}@example.com", "password": "correct horse battery staple", "role": "buyer"},
+        )
+        if r.status_code == 429:
+            got_429 = True
+            break
+    assert got_429, "expected /auth/register to rate-limit signup spam"
+
+
 def test_f2_rate_limiter_store_is_behind_a_swappable_interface():
     """Horizontal-scale blocker #1: the store must be a config swap, not a rewrite.
 

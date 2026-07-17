@@ -41,6 +41,14 @@ export async function api(path: string, opts: RequestInit = {}) {
     }
     const code = body?.code ?? null
     const detail = body?.detail
+    // Global 401 handling (plan.md slice 9 / security.md §3): a 401 means the
+    // token is missing/expired/invalid, so drop it and signal the app to send
+    // the user to login. Done here — the single API choke point — rather than
+    // per-call. A window event (not an authStore import) avoids a cycle.
+    if (res.status === 401) {
+      localStorage.removeItem('token')
+      window.dispatchEvent(new Event('auth:unauthorized'))
+    }
     // Surface the server's generic detail; never leak internals.
     const message = typeof detail === 'string' ? detail : res.statusText
     throw new ApiError(res.status, code, detail, message)

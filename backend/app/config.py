@@ -20,9 +20,12 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60           # short-lived; refresh deferred (security.md §9)
     tos_version: str = "2026-07-17"                  # which ToS text a registration accepted
 
-    # Login rate limiting (brute-force / credential stuffing — security.md §6)
+    # Auth-endpoint rate limiting (brute-force / credential stuffing / signup
+    # spam — security.md §1.1 requires BOTH login and register).
     login_rate_limit_max: int = 5
     login_rate_limit_window_seconds: int = 60
+    register_rate_limit_max: int = 10
+    register_rate_limit_window_seconds: int = 60
 
     # Test-only: mount the /_debug/boom route (500-contract tests). Off in prod.
     enable_debug_routes: bool = False

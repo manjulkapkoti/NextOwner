@@ -10,7 +10,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import EmailStr
+from pydantic import EmailStr, Field
 from sqlmodel import SQLModel
 
 Role = Literal["buyer", "seller"]
@@ -23,7 +23,11 @@ class UserRegister(SQLModel):
     directly: `role` is mapped to a flag server-side, so escalation is impossible."""
 
     email: EmailStr
-    password: str
+    # Length bounds enforced at the boundary (security.md §2): a floor against
+    # weak passwords, a ceiling against request-size abuse. bcrypt's 72-byte
+    # limit is handled by the SHA-256 pre-hash in security.py, so long
+    # passphrases work rather than 500-ing.
+    password: str = Field(min_length=8, max_length=128)
     role: Role
 
 
