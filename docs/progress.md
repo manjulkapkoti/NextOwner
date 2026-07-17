@@ -7,13 +7,19 @@
 > file is the human-readable "you are here + ▶ next". Full design:
 > `docs/session_recovery.md`.
 
-**Milestone status:** M0 shipped ✅ · **M1 (`auth-roles`) built, reviewed, PR open — awaiting human approval.**
-**In flight:** branch `feat/001-auth-roles` — 12-slice build complete, `/dod` green (backend 32, frontend 8), inline + independent appsec review done (findings fixed), PR opened.
-**Open PRs:** M1 auth-roles (see the PR).
+**Milestone status:** M0 ✅ · M1 (`auth-roles`) ✅ merged · **M2 (`listing-builder`) built, reviewed, PR open — awaiting human approval.**
+**In flight:** branch `feat/002-listing-builder` — 8-slice build complete, `/dod` green (backend 65, frontend 11), inline + independent appsec review done (1 blocker — upload DoS — fixed on the branch), PR opened.
+**Open PRs:** M2 listing-builder (see the PR).
 
 ## ▶ NEXT ACTION
-Review the M1 PR, then **"close the feature"** (`/close-feature <pr#>`) to squash-merge + sync `main`. Then M2:
-**`/run-milestone listing-builder --pause-after-spec`**
+Review the M2 PR, then **"close the feature"** (`/close-feature <pr#>`) to squash-merge + sync `main`. Then M3:
+**`/run-milestone admin-curation --pause-after-spec`**
+
+## Carryover notes
+- **M2 decisions to know:** owner-scoped routes return **404** (not 403) for not-yours; document serving is **owner-only** (buyer NDA access is M5); a `ListingDocument` table replaced the JSON `document_paths` sketch; money via a `Money` TypeDecorator (lossless Decimal).
+- **Still deferred (M1 finding #6 + M2):** the frontend has tested components but **no assembled app shell** — no router, `App.tsx` is still the M0 health page. The login flow and listing wizard aren't reachable in a running app yet. Owner: whenever the app-shell milestone is scoped (candidate: fold into M4 browse, or a small dedicated slice).
+- **M3 is security-critical** (admin curation → `require_admin`, publish transition): gets the independent appsec pass.
+- Refresh deferred to deploy-hardening; account lifecycle (password reset, email verification) owned by M8; security-critical list is M1/M2/M5/M7/M8/M10.
 
 ## Carryover notes
 - M1 is **security-critical** → inline review **+** one diff-scoped `appsec` agent (Sonnet). See `docs/git_strategy.md` § Branch review.
