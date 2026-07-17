@@ -105,7 +105,7 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
 ## Progress tracker
 
 - [x] **M0** — scaffold + `GET /health`
-- [ ] **M1** — auth & roles *(+ account lifecycle, profiles, ToS stamp — § Scope fold-ins)*
+- [x] **M1** — auth & roles *(+ profiles, ToS stamp, error contract, rate-limit; account lifecycle moved to M8 — § Scope fold-ins)*
 - [ ] **M2** — listing builder + uploads *(+ lifecycle transitions, `Decimal` money — § Scope fold-ins)*
 - [ ] **M3** — admin curation *(+ `listing_event` audit — § Scope fold-ins)*
 - [ ] **M4** — marketplace browse *(+ keyword search, seed data — § Scope fold-ins)*

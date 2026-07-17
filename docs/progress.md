@@ -7,13 +7,13 @@
 > file is the human-readable "you are here + ▶ next". Full design:
 > `docs/session_recovery.md`.
 
-**Milestone status:** M0 shipped ✅ · M1 (`auth-roles`) not started.
-**In flight:** none — `main` is clean and in sync with `origin`; no milestone branch open. CI PR (#14, green-gate enforcement) merged ✅.
-**Open PRs:** none.
+**Milestone status:** M0 shipped ✅ · **M1 (`auth-roles`) built, reviewed, PR open — awaiting human approval.**
+**In flight:** branch `feat/001-auth-roles` — 12-slice build complete, `/dod` green (backend 32, frontend 8), inline + independent appsec review done (findings fixed), PR opened.
+**Open PRs:** M1 auth-roles (see the PR).
 
 ## ▶ NEXT ACTION
-Start M1:
-**`/run-milestone auth-roles --pause-after-spec`**
+Review the M1 PR, then **"close the feature"** (`/close-feature <pr#>`) to squash-merge + sync `main`. Then M2:
+**`/run-milestone listing-builder --pause-after-spec`**
 
 ## Carryover notes
 - M1 is **security-critical** → inline review **+** one diff-scoped `appsec` agent (Sonnet). See `docs/git_strategy.md` § Branch review.
