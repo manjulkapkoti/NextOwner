@@ -2,7 +2,7 @@
 
 > **Milestone:** M1 — Auth & roles ([`design_implementation.md`](../../docs/design_implementation.md) Part 4 → *Milestone 1*).
 > **Complies with:** [`specs/000-constitution.md`](../000-constitution.md). **Security is the owner's #1 priority** — the forbidden-path tests below are the crown jewels.
-> **Status:** awaiting approval (`--pause-after-spec`). Two decisions need the owner — see § Decisions.
+> **Status:** decisions resolved 2026-07-17 (§ Decisions). Spec awaiting final go-ahead to build (`--pause-after-spec`).
 
 ---
 
@@ -10,7 +10,7 @@
 
 | FR | What it requires | This milestone |
 |---|---|---|
-| **FR-1** | Register/sign in with **email + password**; sessions use short-lived tokens with refresh | Email+password **yes**. **Refresh → see § Decisions D1.** *Google OAuth is **(Post-MVP)** — excluded (`requirements.md` FR-1, 2026-07-17).* |
+| **FR-1** | Register/sign in with **email + password**; sessions use short-lived tokens with refresh | Email+password **yes**. **Refresh → deferred (owned), M1 is access-token-only** (D1). *Google OAuth is **(Post-MVP)** — excluded (`requirements.md` FR-1, 2026-07-17).* |
 | **FR-2** | A user selects a role (buyer/seller); **may hold both** under one account | Yes |
 | **FR-3** | Buyers complete a profile: budget, target industries, experience | **Minimal** subset — display name + those three fields. Proof-of-funds → M10 |
 | **F1** | MVP feature: email+password auth, buyer/seller roles | Yes |
@@ -22,14 +22,13 @@
 
 ---
 
-## Decisions needed from the owner
+## Decisions (resolved 2026-07-17)
 
-**D1 — Refresh tokens: implement, or amend FR-1?** The fold-in is explicit: *"FR-1 promises refresh: implement it, or amend FR-1 deliberately — don't drift."*
+**D1 — Refresh tokens: DEFER, to an owner (not to limbo).** M1 ships **access-token-only**. Refresh tokens + the httpOnly-cookie session they need are deferred to the **deploy-hardening pass** (`security.md` §9 — *Session hardening*), triggered by *a real deployment / real users* — recorded and owned, so it surfaces when actually needed instead of rotting in a `(Post-MVP)` tag. FR-1 amended deliberately (`requirements.md`), meeting the fold-in's *"amend, don't drift."* This is safe precisely because M1 states its token-storage approach (below): `get_current_user` trusts the JWT (not the auth method) and `api.ts` is the single frontend choke point, so refresh becomes a new table + endpoint + one interceptor later — not a rewrite.
 
-- **Implement:** a refresh-token table + rotation + revocation + a `/auth/refresh` endpoint. Real work, and a real security surface (rotation, reuse-detection, revocation on password change).
-- **Defer (recommended):** short-lived access token only; mark FR-1's refresh clause **(Post-MVP)** exactly like its OAuth clause. Rationale — refresh exists to keep sessions alive across a long-lived deployment; with **zero real users and no deploy**, it buys nothing today, while adding the second-largest security surface in the milestone. Access-token expiry alone teaches the JWT mechanics that motivated owning auth in the first place.
+**D2 — Accept the 12-slice Build order.** The error-contract foundation (`error_handling.md` §7) is **M1-mandated infrastructure** — the doc assigns it to "the first API milestone" — with no FR of its own; splitting it out would ship a featureless milestone and renumber M2–M12. Building **slice by slice** is itself the mitigation for milestone size, so 12 small, independently-verifiable slices is fine, not a red flag.
 
-**D2 — M1 is bigger than the nine slices we sketched.** Reading `error_handling.md` §7 during spec-writing surfaced a whole slice the sketch missed (the error-contract foundation). The Build order below is **11 slices**, not 9. Options: accept it, or split the error foundation into its own pre-M1 milestone. *Recommendation: accept.* The error contract is ~120 lines of infrastructure with no product logic, and every milestone after this one depends on it existing.
+**Token storage — stated per `security.md` § Frontend session (which requires the M1 spec to declare it):** M1 stores the **short-lived access token in `localStorage`** — acceptable for the 100%-local MVP with no real users; the XSS tradeoff is recorded here and in §9. **Production approach: httpOnly cookie (+ CSRF) + refresh**, deferred to §9 (D1). Because `api.ts` is the single choke point, that later switch is localized.
 
 ---
 
@@ -157,7 +156,7 @@
 ## Out of scope (deliberately deferred)
 
 - **Google OAuth** — FR-1 marks it (Post-MVP). Needs a cloud account, which Article 1's "100% local" rule excludes.
-- **Refresh tokens** — pending **D1**.
+- **Refresh tokens** — deferred to deploy-hardening (`security.md` §9), **owned + triggered** (D1). M1 is access-token-only; production token storage becomes httpOnly cookie + refresh at that trigger.
 - **Password reset + email verification** — moved to **M8** (2026-07-17), which owns the email channel. ⚠ M1–M7 therefore have no self-serve reset; fine while local with no real users.
 - **Proof-of-funds upload / verified badge** — M10.
 - **A real admin UI** — `is_admin` is set by hand in the DB at M1; the admin queue is M3.
