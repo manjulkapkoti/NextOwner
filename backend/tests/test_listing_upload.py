@@ -59,3 +59,12 @@ def test_d6_unauthenticated_upload_is_401(client, auth_headers, make_listing):
     listing_id = make_listing(auth_headers()).json()["id"]
     r = _upload(client, listing_id, {})              # no auth
     assert r.status_code == 401
+
+
+def test_d7_content_not_matching_declared_type_is_415(client, auth_headers, make_listing):
+    """A whitelisted content-type can't smuggle a different file — the bytes are
+    checked against the declared type (magic bytes)."""
+    h = auth_headers()
+    listing_id = make_listing(h).json()["id"]
+    r = _upload(client, listing_id, h, content=b"<html>not a pdf</html>", content_type="application/pdf")
+    assert r.status_code == 415

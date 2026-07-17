@@ -36,6 +36,16 @@ _storage = LocalDiskStorageBackend(settings.upload_dir)
 
 _ALLOWED_EXTS = {".pdf", ".png", ".jpg", ".jpeg"}
 _EDIT_LOCKED = {"closed", "sold"}     # terminal — can't edit or re-transition
+_UPLOAD_CHUNK = 1024 * 1024           # 1 MB read chunk
+
+# Magic bytes — the actual content must match its declared type, so a whitelisted
+# content-type can't smuggle a different file (defense that matters at M5, when a
+# buyer downloads a seller's doc).
+_MAGIC: dict[str, tuple[bytes, ...]] = {
+    "application/pdf": (b"%PDF",),
+    "image/png": (b"\x89PNG\r\n\x1a\n",),
+    "image/jpeg": (b"\xff\xd8\xff",),
+}
 
 
 def _to_read(listing: Listing, private: ListingPrivate | None) -> ListingRead:
@@ -194,9 +204,18 @@ async def upload_document(
     ext = os.path.splitext(file.filename or "")[1].lower()
     if file.content_type not in ALLOWED_UPLOAD_TYPES or ext not in _ALLOWED_EXTS:
         raise UnsupportedMediaType("Only PDF, PNG, or JPEG documents are allowed")
-    data = await file.read()
-    if len(data) > settings.max_upload_bytes:
-        raise PayloadTooLarge("File exceeds the maximum upload size")
+    # Stream with a hard ceiling — never materialize more than one chunk over the
+    # limit, so a huge upload can't exhaust memory (the DoS the appsec review
+    # caught). The Content-Length middleware is the pre-parse outer guard.
+    buf = bytearray()
+    while chunk := await file.read(_UPLOAD_CHUNK):
+        buf.extend(chunk)
+        if len(buf) > settings.max_upload_bytes:
+            raise PayloadTooLarge("File exceeds the maximum upload size")
+    data = bytes(buf)
+    # The bytes must actually match the declared type (not just its header).
+    if not any(data.startswith(sig) for sig in _MAGIC[file.content_type]):
+        raise UnsupportedMediaType("File content does not match its declared type")
     suffix = ALLOWED_UPLOAD_TYPES[file.content_type]
     key = _storage.save(listing.id, data, suffix)        # server-generated name; path confined
     doc = ListingDocument(

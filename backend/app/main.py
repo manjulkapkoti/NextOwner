@@ -46,6 +46,27 @@ async def request_id_middleware(request: Request, call_next):
     return response
 
 
+@app.middleware("http")
+async def limit_request_body(request: Request, call_next):
+    """Reject an over-cap body from its Content-Length **before** it's parsed, so
+    a huge upload can't be spooled to disk (`security.md` §1.1). Defense in depth
+    with the per-file streaming check in the upload route; a reverse proxy adds a
+    hard limit for chunked/absent-length bodies in production (§9).
+    """
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            too_big = int(content_length) > settings.max_request_bytes
+        except ValueError:
+            too_big = False
+        if too_big:
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "Request body too large", "code": "file_too_large"},
+            )
+    return await call_next(request)
+
+
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     """Render the 4xx business/permission contract (detail + machine code)."""

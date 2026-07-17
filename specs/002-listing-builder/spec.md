@@ -77,6 +77,9 @@
 - **D4** — GIVEN a file over the max size, WHEN uploaded, THEN **413**.
 - **D5** — GIVEN a client filename of `../../../etc/passwd`, WHEN uploaded, THEN the stored path stays **inside `uploads/{listing_id}/`** (the client name is never used in the path; traversal is neutralized).
 - **D6** — GIVEN no token, WHEN uploading, THEN **401**.
+- **D7** *(added from appsec review)* — GIVEN a whitelisted content-type (`application/pdf`) but bytes that aren't a PDF, WHEN uploaded, THEN **415** — the content is checked against its declared type (magic bytes), so a whitelisted header can't smuggle a different file.
+
+> **Upload DoS (fixed on the branch from the appsec review):** the size cap is enforced by **streaming** the read and aborting the moment it exceeds `max_upload_bytes` (never buffering an over-limit file), plus a **Content-Length request-body cap** that rejects an over-cap body *before* it's parsed to disk. D4 exercises the streaming abort; the middleware is the pre-parse guard (a reverse proxy is the production backstop for chunked/absent-length bodies — `security.md` §9).
 
 ### E. Download (owner-only in M2)
 - **E1** — GIVEN a seller's own document, WHEN `GET /listings/{id}/documents/{doc_id}`, THEN **200** with `Content-Disposition: attachment` (never inline).
