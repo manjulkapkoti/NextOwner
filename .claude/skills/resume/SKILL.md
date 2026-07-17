@@ -18,11 +18,13 @@ Rebuild the working state from **ground truth (git + tests)**, using the status 
 
 3. **Run the tests — the red tests are the to-do list.** `npm test` (or faster: `cd backend && .venv\Scripts\python -m pytest -q`). Failing tests = exactly what's left to implement in the current milestone.
 
+   **Then read the milestone's `specs/NNN-*/plan.md` § Build order** (if a spec exists) and pair the two: **the red tests say *what* is left; the Build order says *which slice is next*.** Match the red set against the slices — the first slice whose named tests are still red is where work resumes. That pairing is the whole resume point: "18 red" is a number, "next slice: #4 `get_current_user`, 3 tests" is an instruction. **`plan.md` has no checkboxes by design** — do not add any, and do not trust any that appear; the tests are the status, the Build order is only the order.
+
 4. **Reconcile & self-heal.** Compare the status files against git + tests. **Trust git + tests.** If `progress.md` says "implementing X" but git shows X committed and a *different* test is red, resume at the real point and note the drift.
 
 5. **Detect an interrupted session.** **Uncommitted changes** on a feature branch = crash residue → surface them (`git diff --stat`); that's where the last session was cut off. If a merge/rebase is in progress (the flight recorder flags it), report that first.
 
-6. **Report the resume point:** current milestone + phase, what's committed (done), what's uncommitted (in progress), the red tests (todo), and the reconstructed **▶ next action** with the exact command to run.
+6. **Report the resume point:** current milestone + phase, what's committed (done), what's uncommitted (in progress), the red tests (todo) **and the next Build-order slice they map to**, and the reconstructed **▶ next action** with the exact command to run.
 
 ## Guardrails
 - **Read-only reconstruction** — do NOT auto-commit, merge, or switch branches without saying so. Report the state + recommend the next command; let the human choose.
