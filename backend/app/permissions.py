@@ -31,16 +31,17 @@ def get_current_user(request: Request, session: Session = Depends(get_session)) 
     try:
         claims = decode_access_token(token)
     except jwt.ExpiredSignatureError:
-        raise Unauthorized("Token expired", code="token_expired")
+        raise Unauthorized("Token expired", code="token_expired") from None
     except jwt.InvalidTokenError:
-        # covers bad signature, alg:none / algorithm confusion, malformed tokens
-        raise Unauthorized("Invalid token")
+        # covers bad signature, alg:none / algorithm confusion, malformed tokens.
+        # `from None` so JWT internals never chain into a traceback.
+        raise Unauthorized("Invalid token") from None
 
     sub = claims.get("sub")
     try:
         user_id = int(sub)
     except (TypeError, ValueError):
-        raise Unauthorized("Invalid token")
+        raise Unauthorized("Invalid token") from None
 
     user = session.get(User, user_id)
     if user is None or user.deleted_at is not None:

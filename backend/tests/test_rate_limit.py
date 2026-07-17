@@ -1,7 +1,5 @@
 """M1 — Login abuse (spec 001 acceptance criteria F1–F2)."""
 
-from tests.conftest import VALID_PW
-
 
 def test_f1_repeated_failed_logins_get_rate_limited(client, register):
     register()

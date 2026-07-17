@@ -1,7 +1,8 @@
 """M1 — Login & tokens (spec 001 acceptance criteria B1–B4)."""
 
 import jwt
-from tests.conftest import TEST_JWT_SECRET, TEST_JWT_ALG, VALID_PW
+
+from tests.conftest import TEST_JWT_ALG, TEST_JWT_SECRET, VALID_PW
 
 
 def test_b1_login_returns_jwt_with_user_id_subject(client, register):

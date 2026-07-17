@@ -18,7 +18,7 @@ def test_g1_unhandled_error_returns_generic_500_with_no_internals(client):
 
 
 def test_g2_business_errors_carry_a_machine_code(client):
-    r = client.post(
+    client.post(
         "/api/auth/register",
         json={"email": "dup@example.com", "password": "correct horse battery staple", "role": "buyer"},
     )

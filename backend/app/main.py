@@ -10,10 +10,10 @@ catch-all that turns any unhandled exception into a generic 500 that leaks
 nothing.
 """
 
-from contextlib import asynccontextmanager
-from collections.abc import AsyncGenerator
-from uuid import uuid4
 import logging
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -49,7 +49,10 @@ async def request_id_middleware(request: Request, call_next):
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     """Render the 4xx business/permission contract (detail + machine code)."""
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.message, "code": exc.code})
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.message, "code": exc.code},
+    )
 
 
 @app.exception_handler(Exception)
@@ -60,7 +63,11 @@ async def unhandled_error_handler(request: Request, exc: Exception) -> JSONRespo
     gets only a safe message + the id (for support). Never leaks stack, SQL, or
     file paths (`security.md` §Info leakage).
     """
-    request_id = getattr(request.state, "request_id", None) or request.headers.get("X-Request-ID") or f"req_{uuid4().hex[:12]}"
+    request_id = (
+        getattr(request.state, "request_id", None)
+        or request.headers.get("X-Request-ID")
+        or f"req_{uuid4().hex[:12]}"
+    )
     logger.exception("unhandled error [request_id=%s]", request_id)
     return JSONResponse(
         status_code=500,

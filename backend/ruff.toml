@@ -1,0 +1,17 @@
+# Ruff — linter + import sorter for the backend (M1 slice 12).
+# Run: `ruff check app tests` (or `ruff check --fix`).
+target-version = "py312"
+line-length = 100
+
+[lint]
+# pycodestyle errors (E), pyflakes (F), isort (I), pyupgrade (UP), bugbear (B).
+select = ["E", "F", "I", "UP", "B"]
+
+[lint.flake8-bugbear]
+# `Depends()` / `Security()` in argument defaults is the FastAPI idiom, not a
+# bug — whitelist them so B008 doesn't flag every endpoint.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Security", "fastapi.Query"]
+
+[lint.per-file-ignores]
+# Tests forge tokens and craft odd inputs; line-length is noise there.
+"tests/*" = ["E501"]

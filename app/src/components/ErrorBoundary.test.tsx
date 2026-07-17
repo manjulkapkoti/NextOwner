@@ -1,10 +1,11 @@
 // M1 — ErrorBoundary catches a render crash (spec 001 acceptance criterion H4).
 // A render-time throw must show the fallback, never a white screen.
+import type { ReactElement } from 'react'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { ErrorBoundary } from './ErrorBoundary'
 
-function Boom(): JSX.Element {
+function Boom(): ReactElement {
   throw new Error('render exploded')
 }
 

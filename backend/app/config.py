@@ -16,8 +16,8 @@ class Settings(BaseSettings):
 
     # Auth / JWT
     jwt_secret: str = "dev-only-change-me"          # MUST be overridden in any real env
-    jwt_algorithm: str = "HS256"                     # pinned — the verifier rejects everything else
-    access_token_expire_minutes: int = 60           # short-lived; refresh is deferred (security.md §9)
+    jwt_algorithm: str = "HS256"                     # pinned — verifier rejects everything else
+    access_token_expire_minutes: int = 60           # short-lived; refresh deferred (security.md §9)
     tos_version: str = "2026-07-17"                  # which ToS text a registration accepted
 
     # Login rate limiting (brute-force / credential stuffing — security.md §6)

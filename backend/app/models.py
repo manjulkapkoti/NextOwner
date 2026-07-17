@@ -7,7 +7,7 @@ is post-MVP; only the schema support lands here.
 
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlmodel import Field, SQLModel
@@ -15,12 +15,12 @@ from sqlmodel import Field, SQLModel
 
 def _utcnow() -> datetime:
     """Timezone-aware UTC now (``datetime.utcnow`` is deprecated in 3.12)."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class User(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    email: str = Field(unique=True, index=True)          # PII — never on a public model, never logged
+    email: str = Field(unique=True, index=True)          # PII — never public, never logged
     password_hash: str                                    # bcrypt — never returned
 
     # Roles: two flags, not an enum — FR-2 allows holding *both* under one account.

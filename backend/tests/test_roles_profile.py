@@ -1,7 +1,5 @@
 """M1 — Roles & profile (spec 001 acceptance criteria E1–E3)."""
 
-from tests.conftest import VALID_PW
-
 
 def test_e1_buyer_can_add_seller_role(client, auth_headers):
     """FR-2: a user may hold both roles under one account."""

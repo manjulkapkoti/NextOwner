@@ -8,7 +8,8 @@ import datetime
 
 import jwt
 from sqlalchemy import text
-from tests.conftest import TEST_JWT_SECRET, TEST_JWT_ALG
+
+from tests.conftest import TEST_JWT_ALG, TEST_JWT_SECRET
 
 
 def test_c1_no_token_is_401(client):
@@ -17,7 +18,7 @@ def test_c1_no_token_is_401(client):
 
 def test_c2_expired_token_is_401(client, register):
     register()
-    past = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=1)
+    past = datetime.datetime.now(datetime.UTC) - datetime.timedelta(hours=1)
     token = jwt.encode({"sub": "1", "exp": past}, TEST_JWT_SECRET, algorithm=TEST_JWT_ALG)
     r = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 401
@@ -46,7 +47,7 @@ def test_c5_token_for_anonymized_user_is_401(client, session, auth_headers):
     # Soft-delete / anonymize the user out of band (a future erasure flow would do this).
     session.execute(
         text('UPDATE "user" SET deleted_at = :t WHERE email = :e'),
-        {"t": datetime.datetime.now(datetime.timezone.utc).isoformat(), "e": "alice@example.com"},
+        {"t": datetime.datetime.now(datetime.UTC).isoformat(), "e": "alice@example.com"},
     )
     session.commit()
     r = client.get("/api/auth/me", headers=headers)
