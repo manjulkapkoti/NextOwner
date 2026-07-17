@@ -30,7 +30,7 @@ Sub-agents run in isolation and hand work back to the main session. Having each 
 4. Build   →  backend/frontend implement → commit(s)       ("feat: auth endpoints + JWT")
 5. Green   →  /dod: full suite + security must-cover matrix + checklist must pass   (verifies green — does NOT open the PR)
 6. Review  →  INLINE by the orchestrator every milestone (architecture + §8 matrix)  ← ON THE BRANCH,
-              + 1 independent appsec agent on M1/M2/M5/M7/M10 (diff-scoped)             BEFORE the PR exists
+              + 1 independent appsec agent on M1/M2/M5/M7/M8/M10 (diff-scoped)             BEFORE the PR exists
               → fix findings, re-run tests, until clean
 7. PR      →  git push -u origin … → gh pr create → main                              ← opened only after sign-off;
               (body: FRs, security-matrix result, test summary, agent sign-off)         a PR = "ready for a human"
@@ -42,7 +42,7 @@ Sub-agents run in isolation and hand work back to the main session. Having each 
 
 The pre-PR review is **inline by default**: the orchestrator (in the `tech-lead` role) reviews every milestone's diff itself — architecture + the constitution's invariants + the `docs/security.md` §8 must-cover matrix — reusing warm context (cheap). Cold-spawning review agents re-reads the whole repo and burns the session budget, so we don't do it every milestone.
 
-**One independent `appsec-engineer` agent is added only on the security-critical milestones** — **M1** (auth), **M2** (uploads), **M5 ⭐** (NDA gate), **M7** (offers/money), **M10** (verification) — for cold, blind-spot-free security eyes. Even then: a **single** agent (no separate `tech-lead` agent), **scoped to the diff** (`git diff main...<branch>` + the relevant §8 rows, not a full-repo read), run **async in the background** (transcript stays out of the main context), on **Sonnet** (Opus only for M5). The `/dod` forbidden-path tests are the always-on security floor on *every* milestone regardless.
+**One independent `appsec-engineer` agent is added only on the security-critical milestones** — **M1** (auth), **M2** (uploads), **M5 ⭐** (NDA gate), **M7** (offers/money), **M8** (password-reset tokens), **M10** (verification) — for cold, blind-spot-free security eyes. Even then: a **single** agent (no separate `tech-lead` agent), **scoped to the diff** (`git diff main...<branch>` + the relevant §8 rows, not a full-repo read), run **async in the background** (transcript stays out of the main context), on **Sonnet** (Opus only for M5). The `/dod` forbidden-path tests are the always-on security floor on *every* milestone regardless.
 
 ---
 
