@@ -108,3 +108,46 @@ def auth_headers(register, login):
         token = login(email=email, password=password).json()["access_token"]
         return {"Authorization": f"Bearer {token}"}
     return _auth
+
+
+# ── M2 listing helpers ───────────────────────────────────────────────────────
+
+# A complete, valid create body (public + private fields). Money as strings —
+# the server parses Decimal. Reuse via `make_listing`, override per test.
+VALID_LISTING = {
+    "type": "saas",
+    "headline": "Profitable B2B scheduling SaaS",
+    "description": "A small, profitable scheduling tool for clinics.",
+    "asking_price": "500000.00",
+    "ttm_revenue": "200000.00",
+    "ttm_profit": "120000.00",
+    "mrr": "18000.00",
+    "churn_pct": "2.50",
+    "customers": 340,
+    "company_name": "Acme Internal Tools LLC",
+    "website_url": "https://acme.example.com",
+    "detailed_financials": "{\"note\": \"see attached\"}",
+}
+
+
+@pytest.fixture
+def make_listing(client):
+    """POST a valid listing with the given auth headers; returns the response."""
+    def _make(headers, **overrides):
+        return client.post("/api/listings", json={**VALID_LISTING, **overrides}, headers=headers)
+    return _make
+
+
+@pytest.fixture
+def force_status(session):
+    """Force a listing's status directly in the DB (seeding a state a seller
+    can't reach alone — e.g. `live`, which needs admin approval at M3)."""
+    from sqlalchemy import text
+
+    def _force(listing_id, status):
+        session.execute(
+            text("UPDATE listing SET status = :s WHERE id = :i"),
+            {"s": status, "i": listing_id},
+        )
+        session.commit()
+    return _force
