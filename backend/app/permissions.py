@@ -17,8 +17,8 @@ from fastapi import Depends, Request
 from sqlmodel import Session
 
 from .db import get_session
-from .errors import Forbidden, Unauthorized
-from .models import User
+from .errors import Forbidden, NotFound, Unauthorized
+from .models import Listing, User
 from .security import decode_access_token
 
 
@@ -55,3 +55,20 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
     if not user.is_admin:                       # read from the DB row, not the token
         raise Forbidden("Admin access required")
     return user
+
+
+def get_owned_listing(
+    listing_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Listing:
+    """Trust boundary for owner-scoped listing routes.
+
+    Returns **404** for both "doesn't exist" and "exists but not yours" — the two
+    are deliberately indistinguishable, so an unpublished draft's existence is
+    never confirmed to a non-owner (no enumeration; spec 002 decision).
+    """
+    listing = session.get(Listing, listing_id)
+    if listing is None or listing.owner_id != user.id:
+        raise NotFound("Listing not found")
+    return listing

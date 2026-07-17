@@ -37,5 +37,5 @@ def test_e3_open_rejects_a_key_that_escapes_the_base(tmp_path):
     from app.storage import LocalDiskStorageBackend
 
     backend = LocalDiskStorageBackend(base_dir=str(tmp_path))
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         backend.open("../../../etc/passwd")              # traversal key rejected

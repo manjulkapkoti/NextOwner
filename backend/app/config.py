@@ -27,8 +27,20 @@ class Settings(BaseSettings):
     register_rate_limit_max: int = 10
     register_rate_limit_window_seconds: int = 60
 
+    # Uploads (M2 — treat as hostile: security.md §2)
+    upload_dir: str = "uploads"
+    max_upload_bytes: int = 10 * 1024 * 1024          # 10 MB
+
     # Test-only: mount the /_debug/boom route (500-contract tests). Off in prod.
     enable_debug_routes: bool = False
+
+
+# Allowed document types — content-type → extension. Whitelist, not blacklist.
+ALLOWED_UPLOAD_TYPES: dict[str, str] = {
+    "application/pdf": ".pdf",
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+}
 
 
 settings = Settings()

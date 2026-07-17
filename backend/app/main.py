@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse
 from .config import settings
 from .db import init_db
 from .errors import AppError
-from .routers import admin, auth, debug, health, profile
+from .routers import admin, auth, debug, health, listings, profile
 
 logger = logging.getLogger("nextowner")
 
@@ -80,6 +80,7 @@ app.include_router(health.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(profile.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(listings.router, prefix="/api")
 
 if settings.enable_debug_routes:            # test-only; off in production
     app.include_router(debug.router, prefix="/api")

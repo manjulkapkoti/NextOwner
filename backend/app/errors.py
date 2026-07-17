@@ -44,5 +44,13 @@ class InvalidTransition(AppError):
     status_code, code = 409, "invalid_transition"
 
 
+class UnsupportedMediaType(AppError):
+    status_code, code = 415, "unsupported_media_type"
+
+
+class PayloadTooLarge(AppError):
+    status_code, code = 413, "file_too_large"
+
+
 class RateLimited(AppError):
     status_code, code = 429, "rate_limited"

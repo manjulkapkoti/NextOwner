@@ -10,6 +10,7 @@ the token-forging tests (C2–C4) agree on signing key + algorithm.
 """
 
 import os
+import tempfile
 
 # Must precede `import app.main` — pydantic-settings reads the environment at
 # import time. A fixed test secret lets C3/C4 forge tokens the app will verify.
@@ -20,6 +21,10 @@ os.environ.setdefault("JWT_ALGORITHM", "HS256")
 # Enables the gated /_debug/boom route so the 500-contract tests (G1/G3) have a
 # route that raises. Off by default in the app → never mounted in production.
 os.environ.setdefault("ENABLE_DEBUG_ROUTES", "1")
+
+# Point uploads at a throwaway temp dir so tests never write into the repo's
+# uploads/ (must precede `import app.main` — the storage backend reads it at import).
+os.environ.setdefault("UPLOAD_DIR", tempfile.mkdtemp(prefix="nextowner-test-uploads-"))
 
 import pytest
 from fastapi.testclient import TestClient
