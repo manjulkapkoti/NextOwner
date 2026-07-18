@@ -78,16 +78,25 @@ describe('AppShell routing', () => {
     expect(screen.getByRole('link', { name: /log in/i })).toBeInTheDocument()
   })
 
-  // Account creation has exactly one door: the login page. The landing page
-  // (hero and nav alike) routes to /login, never straight to /register.
-  it('gives the landing page no direct route to /register', async () => {
+  // The landing page's only actions are the nav's two: Log in for returning
+  // visitors, Get started for new ones. The hero deliberately carries no CTA
+  // of its own, so there is one of each rather than duplicates.
+  it('offers exactly one Log in and one Get started on the landing page', async () => {
     renderShellAt('/')
     await waitFor(() =>
       expect(screen.getByText(/buying and selling small online businesses/i)).toBeInTheDocument(),
     )
-    for (const link of screen.getAllByRole('link')) {
-      expect(link).not.toHaveAttribute('href', '/register')
-    }
+    expect(screen.getByRole('link', { name: /get started/i })).toHaveAttribute('href', '/register')
+    expect(screen.getAllByRole('link', { name: /log in/i })).toHaveLength(1)
+  })
+
+  // Signup is a dedicated page: it brings its own header, so the app nav (and
+  // its competing wordmark and exits) must not render there.
+  it('hides the app nav on the signup page', async () => {
+    renderShellAt('/register')
+    await waitFor(() => expect(screen.getByRole('button', { name: /create account/i })).toBeInTheDocument())
+    expect(screen.queryByRole('link', { name: /get started/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /back/i })).toBeInTheDocument()
   })
 
   it('AS8: a logged-out visitor hitting /register sees the registration form', async () => {

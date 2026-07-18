@@ -162,19 +162,28 @@ export const NavBar = observer(function NavBar() {
               </Menu>
             </>
           ) : (
-            /* Logged out: one action. Account creation is deliberately NOT
-               offered here — /register is reached only from the login page,
-               so there is a single way in rather than three doors to the
-               same form. */
-            <Button
-              variant="contained"
-              size="small"
-              component={RouterLink}
-              to="/login"
-              sx={{ whiteSpace: 'nowrap' }}
+            /* Logged out: returning visitor (Log in) and new visitor (Get
+               started) each get their own action, top-right on every page.
+               Two short labels — these fit at 320px, so no collapse needed. */
+            <Stack
+              direction="row"
+              spacing={{ xs: 0.5, sm: 1 }}
+              alignItems="center"
+              sx={{ '& .MuiButton-root': { whiteSpace: 'nowrap' } }}
             >
-              Log in
-            </Button>
+              <Button
+                color="inherit"
+                size="small"
+                component={RouterLink}
+                to="/login"
+                sx={{ color: 'text.secondary' }}
+              >
+                Log in
+              </Button>
+              <Button variant="contained" size="small" component={RouterLink} to="/register">
+                Get started
+              </Button>
+            </Stack>
           )}
         </Toolbar>
       </Container>

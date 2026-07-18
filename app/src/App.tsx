@@ -2,7 +2,7 @@
 // (spec pre-003). Replaces the M0 health page.
 import { Fragment, useEffect } from 'react'
 import { Box, Button, Container, Stack, Typography } from '@mui/material'
-import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { brandTint } from './theme'
 import { ListingWizard } from './components/ListingWizard'
 import { LoginForm } from './components/LoginForm'
@@ -37,24 +37,55 @@ function LoginRoute() {
 
 // Public /register route — same already-authed treatment as /login (AS9):
 // nothing useful to show a signed-in visitor here either.
+//
+// Signup is a dedicated full-page flow with its own header (back + wordmark)
+// rather than the app nav: once someone has committed to signing up, the other
+// nav actions are only distractions. The way back to login is the link under
+// the submit button, not a corner button.
 function RegisterRoute() {
+  const navigate = useNavigate()
   const token = localStorage.getItem('token')
   if (token) {
     return <Navigate to="/my-listings" replace />
   }
+
+  function handleBack() {
+    // Deep-linked arrivals have nothing to go back to — fall back to home.
+    if (window.history.length > 1) navigate(-1)
+    else navigate('/')
+  }
+
   return (
-    <Container
-      maxWidth="sm"
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        minHeight: { xs: 'auto', sm: 'calc(100vh - 65px)' },
-        py: { xs: 6, sm: 8 },
-      }}
-    >
-      <RegisterForm />
-    </Container>
+    <Box sx={{ minHeight: '100vh' }}>
+      <Box
+        component="header"
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: '1fr auto 1fr',
+          alignItems: 'center',
+          px: { xs: 2, sm: 3 },
+          py: 2,
+        }}
+      >
+        <Box sx={{ justifySelf: 'start' }}>
+          <Button onClick={handleBack} sx={{ color: 'text.primary', fontWeight: 600, ml: -1 }}>
+            <Box aria-hidden component="span" sx={{ mr: 0.75, fontSize: '1.1em', lineHeight: 1 }}>
+              ←
+            </Box>
+            Back
+          </Button>
+        </Box>
+        <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
+          NextOwner
+        </Typography>
+        {/* Empty third column keeps the wordmark optically centered. */}
+        <Box />
+      </Box>
+
+      <Container maxWidth="sm" sx={{ py: { xs: 3, sm: 5 } }}>
+        <RegisterForm />
+      </Container>
+    </Box>
   )
 }
 
@@ -116,21 +147,8 @@ function LandingRoute() {
             listings, gated data rooms, and verified buyers on both sides of the deal.
           </Typography>
 
-          {/* Both ways in lead to /login: the login page is the only entrance
-              to /register, so there is exactly one account-creation door
-              rather than three. This CTA is not named "Log in" so it stays
-              distinct from the nav's log-in link. */}
-          <Box sx={{ width: { xs: '100%', sm: 'auto' }, pt: 1 }}>
-            <Button
-              variant="contained"
-              size="large"
-              component={Link}
-              to="/login"
-              sx={{ width: { xs: '100%', sm: 'auto' }, px: { sm: 4 } }}
-            >
-              Get started
-            </Button>
-          </Box>
+          {/* No CTA in the hero: both actions live top-right in the nav, which
+              is sticky, so they stay on screen the whole way down the page. */}
 
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
@@ -160,6 +178,10 @@ function LandingRoute() {
 
 export function AppShell() {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  // Signup owns its whole page, header included — the app nav would duplicate
+  // the wordmark and add exits from a flow the visitor just chose to enter.
+  const showNav = pathname !== '/register'
 
   // Global 401 handling (plan slice 2): api.ts emits this on ANY 401, so a
   // stale/expired token anywhere in the app sends the user back to login
@@ -175,7 +197,7 @@ export function AppShell() {
 
   return (
     <>
-      <NavBar />
+      {showNav && <NavBar />}
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
         <Route path="/register" element={<RegisterRoute />} />
