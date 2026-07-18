@@ -96,7 +96,7 @@ The spec's brighter hues are **not discarded** — they survive as the *light fi
 
 The product-specific core — a seller or admin reads these constantly:
 
-- **Listing status:** `draft` → neutral · `pending_review` → amber · `live` → green · `paused` → muted slate · `under_offer` → blue · `sold` → closed treatment · `rejected` → red. These map to a **`StatusChip`** so the status language is identical everywhere (lands with M3).
+- **Listing status:** `draft` → neutral · `pending_review` → amber · `live` → green · `paused` → muted slate · `under_offer` → blue · `sold` → closed treatment · `rejected` → red. These map to **`StatusChip`** so the status language is identical everywhere. **Built** — it was scheduled for M3, but the dashboard renders statuses today, so building it here means M3 and M4 inherit it rather than re-inventing chip colours. Unknown statuses degrade to a plain chip rather than crashing, so a new backend status is safe.
 - **Gated / locked data** (the NDA gate, M5): a consistent "blurred value + lock affordance + what unlocks it" treatment. The tokens are set now; the component lands with M5.
 - **Verified badges** (buyer/seller, M10): one treatment, reused.
 - **Anonymous public card vs. unlocked private view** (M4/M5): the public card deliberately *shows the shape of the deal* (metrics, ranges) while hiding identity — the tease, not a blank.
@@ -119,6 +119,6 @@ The positioning is **succession, not transaction**: a business existed before th
 
 ## 9. Scope
 
-- **Done:** `theme.ts` implementing the tokens, self-hosted fonts via `ThemeProvider`, and the front-door screens (landing, login, signup, nav) restyled to it.
-- **Next:** the remaining screens (dashboard, listing wizard) — then every M3+ screen is built to this bar, with `StatusChip` used the moment listing statuses render.
+- **Done:** `theme.ts` implementing the tokens, self-hosted fonts via `ThemeProvider`, `StatusChip`, and **all six screens** restyled — landing, login, signup, nav, seller dashboard, listing wizard.
+- **Next:** every M3+ screen is built to this bar, using `StatusChip` wherever a listing status renders.
 - **Deferred (with the production phase):** a component library / Storybook, an animation system, dark mode (the palette is ready, no screen uses it), and illustration.
