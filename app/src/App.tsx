@@ -10,6 +10,7 @@ import { MyListings } from './components/MyListings'
 import { NavBar } from './components/NavBar'
 import { RegisterForm } from './components/RegisterForm'
 import { RequireAuth } from './components/RequireAuth'
+import { Wordmark } from './components/Wordmark'
 import { authStore } from './stores/authStore'
 
 // Public /login route: if a session already exists, skip the form (AS3) —
@@ -75,9 +76,7 @@ function RegisterRoute() {
             Back
           </Button>
         </Box>
-        <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
-          NextOwner
-        </Typography>
+        <Wordmark height={22} />
         {/* Empty third column keeps the wordmark optically centered. */}
         <Box />
       </Box>

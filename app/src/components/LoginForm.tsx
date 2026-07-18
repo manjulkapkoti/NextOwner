@@ -8,6 +8,7 @@ import { useState, type FormEvent } from 'react'
 import { Alert, Box, Button, Card, Link as MuiLink, Stack, TextField, Typography } from '@mui/material'
 import { Link as RouterLink } from 'react-router-dom'
 import { authStore } from '../stores/authStore'
+import { Wordmark } from './Wordmark'
 
 export function LoginForm() {
   const [email, setEmail] = useState('')
@@ -55,10 +56,10 @@ export function LoginForm() {
 
   return (
     <Card sx={{ width: '100%', maxWidth: 440, mx: 'auto', p: { xs: 3, sm: 4 } }}>
-      <Stack spacing={0.75} sx={{ mb: 3, textAlign: 'center' }}>
-        <Typography variant="overline" sx={{ color: 'primary.main' }}>
-          NextOwner
-        </Typography>
+      <Stack spacing={0.75} alignItems="center" sx={{ mb: 3, textAlign: 'center' }}>
+        <Box sx={{ mb: 1 }}>
+          <Wordmark height={26} />
+        </Box>
         <Typography variant="h5" component="h1">
           Welcome back
         </Typography>

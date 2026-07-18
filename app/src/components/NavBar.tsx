@@ -23,11 +23,11 @@ import {
   MenuItem,
   Stack,
   Toolbar,
-  Typography,
 } from '@mui/material'
 import { observer } from 'mobx-react-lite'
 import { Link as RouterLink, useNavigate } from 'react-router-dom'
 import { authStore } from '../stores/authStore'
+import { Wordmark } from './Wordmark'
 
 // Three stacked bars — a hamburger without pulling in an icon package for one
 // glyph. aria-hidden because the IconButton itself carries the accessible name.
@@ -75,34 +75,15 @@ export const NavBar = observer(function NavBar() {
               color: 'inherit',
             }}
           >
-            <Box
-              aria-hidden
-              sx={{
-                width: 28,
-                height: 28,
-                flexShrink: 0,
-                borderRadius: 1,
-                bgcolor: 'primary.main',
-                color: 'primary.contrastText',
-                display: 'grid',
-                placeItems: 'center',
-                fontSize: 15,
-                fontWeight: 700,
-                lineHeight: 1,
-              }}
-            >
-              N
+            {/* The wordmark already contains the ring as its "O", so the two
+                forms are alternatives, never shown together: below sm there
+                isn't room for the wordmark, so the mark stands in for it. */}
+            <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+              <Wordmark height={22} />
             </Box>
-            <Typography
-              variant="h6"
-              sx={{
-                fontWeight: 700,
-                letterSpacing: '-0.02em',
-                display: { xs: 'none', sm: 'block' },
-              }}
-            >
-              NextOwner
-            </Typography>
+            <Box sx={{ display: { xs: 'block', sm: 'none' } }}>
+              <Wordmark height={26} variant="mark" />
+            </Box>
           </Stack>
 
           {authStore.isAuthenticated ? (

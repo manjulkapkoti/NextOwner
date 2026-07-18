@@ -38,6 +38,22 @@ export const brand = {
 export const brandTint = '#EEF2FF'
 
 /**
+ * The logo's own colours, sampled from the supplied artwork (`title.png`).
+ * Recorded here so nothing re-eyeballs them from a PNG.
+ *
+ * NOTE: these are *not* wired into the palette yet — `primary` is still
+ * indigo. Adopting navy as the primary is a separate, deliberate decision
+ * (it re-tones every screen), so the logo currently sits beside an indigo UI.
+ * Orange in particular should stay out of UI chrome whichever way that goes:
+ * it is one hue away from the `warning` amber below, and a brand accent that
+ * reads as "something needs attention" is worse than no accent at all.
+ */
+export const logoColors = {
+  navy: '#0C162B', // "Next" + the app-icon tile
+  orange: '#FF6600', // "Owner" + the ring mark
+} as const
+
+/**
  * Opt-in tabular figures so money/metrics columns align. Spread into `sx` on
  * any element that renders currency or KPIs, e.g. `sx={{ ...tabularNums }}`.
  * (Kept opt-in: Inter's proportional figures read better in prose.)
