@@ -116,18 +116,19 @@ function LandingRoute() {
             listings, gated data rooms, and verified buyers on both sides of the deal.
           </Typography>
 
-          {/* One hero CTA, not two: the nav owns "Log in" at every width
-              (top-right, always in the same place), so the hero is free to
-              point everyone at the single next step. */}
+          {/* Both ways in lead to /login: the login page is the only entrance
+              to /register, so there is exactly one account-creation door
+              rather than three. This CTA is not named "Log in" so it stays
+              distinct from the nav's log-in link. */}
           <Box sx={{ width: { xs: '100%', sm: 'auto' }, pt: 1 }}>
             <Button
               variant="contained"
               size="large"
               component={Link}
-              to="/register"
+              to="/login"
               sx={{ width: { xs: '100%', sm: 'auto' }, px: { sm: 4 } }}
             >
-              Create an account
+              Get started
             </Button>
           </Box>
 

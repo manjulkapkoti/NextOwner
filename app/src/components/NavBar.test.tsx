@@ -29,9 +29,10 @@ describe('NavBar', () => {
     expect(localStorage.getItem('token')).toBeNull()
   })
 
-  // The log-in affordance lives top-right in the nav on every page (not in the
-  // landing hero), so a visitor always finds it in the same place.
-  it('offers Log in and Get started to a logged-out visitor', () => {
+  // The log-in affordance lives top-right on every page, so a visitor always
+  // finds it in the same place. It is the ONLY logged-out action: /register is
+  // reached from the login page alone, so account creation has one door.
+  it('offers a logged-out visitor Log in, and no route to /register', () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <NavBar />
@@ -39,7 +40,9 @@ describe('NavBar', () => {
     )
 
     expect(screen.getByRole('link', { name: /log in/i })).toHaveAttribute('href', '/login')
-    expect(screen.getByRole('link', { name: /get started/i })).toHaveAttribute('href', '/register')
+    for (const link of screen.getAllByRole('link')) {
+      expect(link).not.toHaveAttribute('href', '/register')
+    }
     // Authed-only actions must not leak to anonymous visitors.
     expect(screen.queryByRole('button', { name: /logout/i })).not.toBeInTheDocument()
   })
