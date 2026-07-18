@@ -1,11 +1,13 @@
 // The app shell — routes the components M1/M2 built into a usable app
 // (spec pre-003). Replaces the M0 health page.
+import { useEffect } from 'react'
 import { Container } from '@mui/material'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { ListingWizard } from './components/ListingWizard'
 import { LoginForm } from './components/LoginForm'
 import { MyListings } from './components/MyListings'
 import { RequireAuth } from './components/RequireAuth'
+import { authStore } from './stores/authStore'
 
 // Public /login route: if a session already exists, skip the form (AS3) —
 // there is nothing useful to show an already-signed-in visitor here.
@@ -22,6 +24,20 @@ function LoginRoute() {
 }
 
 export function AppShell() {
+  const navigate = useNavigate()
+
+  // Global 401 handling (plan slice 2): api.ts emits this on ANY 401, so a
+  // stale/expired token anywhere in the app sends the user back to login
+  // instead of leaving them stuck on a dead page (AS4).
+  useEffect(() => {
+    function onUnauthorized() {
+      authStore.logout()
+      navigate('/login')
+    }
+    window.addEventListener('auth:unauthorized', onUnauthorized)
+    return () => window.removeEventListener('auth:unauthorized', onUnauthorized)
+  }, [navigate])
+
   return (
     <Routes>
       <Route path="/login" element={<LoginRoute />} />
