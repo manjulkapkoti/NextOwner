@@ -1,13 +1,16 @@
-// NextOwner MUI theme — implements docs/design_tokens_v1.md.
+// NextOwner MUI theme.
 //
-// This file is the single source of visual truth (`docs/design_system.md` is
-// the *why*, this is the *what*). Structured as `createAppTheme(mode)` so the
-// dark palette is a fill-in, not a rewrite.
+// This file holds every literal design value and is the single source of token
+// truth; `docs/design_system.md` holds the decisions and their reasons. One job
+// each — a value defined in both places is a value that will drift.
 //
-// Where this DEVIATES from the v1 token spec, it is deliberate and recorded
-// both here and in design_system.md § Deviations. Every deviation exists
-// because the spec's own "WCAG AA contrast" rule contradicted the literal
-// value it gave — measured, not guessed.
+// Structured as `createAppTheme(mode)` so the dark palette is a fill-in, not a
+// rewrite.
+//
+// Where this deviates from the authored v1 token spec, it is deliberate and
+// recorded in design_system.md § Deviations. Every deviation exists because the
+// spec's own "WCAG AA contrast" rule contradicted the literal value it gave —
+// measured, not guessed.
 import { createTheme, alpha } from '@mui/material/styles'
 import type { PaletteMode, Shadows, ThemeOptions } from '@mui/material/styles'
 

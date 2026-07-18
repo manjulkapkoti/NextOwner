@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { CssBaseline, ThemeProvider } from '@mui/material'
 // Self-hosted (@fontsource) — no external font request, so it's CSP-safe and
 // works offline. Inter carries the UI, Manrope the display headings (h1-h4),
-// per docs/design_tokens_v1.md § typography.
+// per docs/design_system.md §3 (values in theme.ts).
 import '@fontsource/inter/400.css'
 import '@fontsource/inter/500.css'
 import '@fontsource/inter/600.css'
