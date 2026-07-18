@@ -49,8 +49,12 @@ export const brandTint = '#EEF2FF'
  * reads as "something needs attention" is worse than no accent at all.
  */
 export const logoColors = {
-  navy: '#0C162B', // "Next" + the app-icon tile
-  orange: '#FF6600', // "Owner" + the ring mark
+  navy: '#0C162B', // the app-icon tile, and the browser theme-color
+  orange: '#FF6600', // "Owner" in the wordmark, and the ring mark
+  // "Next" is set to the design-token brand blue rather than the artwork's
+  // navy — so the wordmark shares a colour with the primary the token spec
+  // adopts, instead of introducing a third brand hue.
+  wordmarkNext: '#2563EB',
 } as const
 
 /**

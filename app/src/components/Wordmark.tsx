@@ -53,7 +53,7 @@ export function Wordmark({ height = 28, iconOnly = false }: Props) {
             userSelect: 'none',
           }}
         >
-          <Box component="span" sx={{ color: logoColors.navy }}>
+          <Box component="span" sx={{ color: logoColors.wordmarkNext }}>
             Next
           </Box>
           <Box component="span" sx={{ color: logoColors.orange }}>
