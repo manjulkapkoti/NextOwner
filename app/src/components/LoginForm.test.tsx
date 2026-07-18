@@ -1,6 +1,7 @@
 // M1 — login form shows inline 422 errors (spec 001 acceptance criterion H3).
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LoginForm } from './LoginForm'
 
@@ -23,7 +24,11 @@ describe('LoginForm', () => {
           ),
       ),
     )
-    render(<LoginForm />)
+    render(
+      <MemoryRouter>
+        <LoginForm />
+      </MemoryRouter>,
+    )
     await userEvent.type(screen.getByLabelText(/email/i), 'not-an-email')
     await userEvent.type(screen.getByLabelText(/password/i), 'whatever')
     await userEvent.click(screen.getByRole('button', { name: /log in/i }))

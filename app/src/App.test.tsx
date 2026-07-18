@@ -77,4 +77,17 @@ describe('AppShell routing', () => {
     expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: /log in/i })).toBeInTheDocument()
   })
+
+  it('AS8: a logged-out visitor hitting /register sees the registration form', async () => {
+    renderShellAt('/register')
+    await waitFor(() => expect(screen.getByRole('button', { name: /create account/i })).toBeInTheDocument())
+  })
+
+  it('AS9: an already-authed visitor hitting /register is redirected to the dashboard', async () => {
+    authStore.setToken('a.b.c')
+    stubEmptyListings()
+    renderShellAt('/register')
+    await waitFor(() => expect(screen.getByText(/no listings yet/i)).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /create account/i })).not.toBeInTheDocument()
+  })
 })

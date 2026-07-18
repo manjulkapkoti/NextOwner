@@ -7,6 +7,7 @@ import { ListingWizard } from './components/ListingWizard'
 import { LoginForm } from './components/LoginForm'
 import { MyListings } from './components/MyListings'
 import { NavBar } from './components/NavBar'
+import { RegisterForm } from './components/RegisterForm'
 import { RequireAuth } from './components/RequireAuth'
 import { authStore } from './stores/authStore'
 
@@ -20,6 +21,20 @@ function LoginRoute() {
   return (
     <Container maxWidth="sm" sx={{ mt: 8 }}>
       <LoginForm />
+    </Container>
+  )
+}
+
+// Public /register route — same already-authed treatment as /login (AS9):
+// nothing useful to show a signed-in visitor here either.
+function RegisterRoute() {
+  const token = localStorage.getItem('token')
+  if (token) {
+    return <Navigate to="/my-listings" replace />
+  }
+  return (
+    <Container maxWidth="sm" sx={{ mt: 8 }}>
+      <RegisterForm />
     </Container>
   )
 }
@@ -71,6 +86,7 @@ export function AppShell() {
       <NavBar />
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
+        <Route path="/register" element={<RegisterRoute />} />
         <Route path="/" element={<LandingRoute />} />
         <Route
           path="/my-listings"

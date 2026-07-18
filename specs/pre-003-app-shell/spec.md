@@ -39,6 +39,8 @@ Serves the client-side half of **FR-1/FR-2** (auth session + navigation) and **F
 - **AS5** — GIVEN a session, WHEN the shell renders, THEN a **Logout** control is visible; clicking it **clears the session** and returns to `/login`.
 - **AS6** — GIVEN a session, WHEN navigating to `/` (the landing), THEN the seller's **dashboard** (`MyListings`) renders.
 - **AS7** *(added post-merge, 2026-07-18)* — GIVEN **no** session, WHEN navigating to `/` (the landing), THEN a minimal public placeholder renders (brand, tagline, a link to `/login`) — **not** the login form itself. Added because the original scope (below) left `/` bouncing an unauthenticated visitor straight to `/login` with zero context; this is a stopgap ahead of M4's real public browse page.
+- **AS8** *(added post-merge, 2026-07-18)* — GIVEN no session, WHEN navigating to `/register`, THEN the **registration form** renders. New `RegisterForm` component (FR-1/FR-2: email, password, role) — the register *endpoint* existed since M1, but nothing let a visitor reach it.
+- **AS9** *(added post-merge, 2026-07-18)* — GIVEN a session, WHEN navigating to `/register`, THEN the visitor is **redirected to the dashboard** — same already-authed treatment as `/login` (AS3).
 
 ## Out of scope (deferred)
 
