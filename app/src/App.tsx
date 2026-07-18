@@ -107,7 +107,7 @@ function LandingRoute() {
         minHeight: { xs: 'auto', md: 'calc(100vh - 65px)' },
         display: 'flex',
         alignItems: 'center',
-        // Calm indigo wash at the top, fading into the app background.
+        // Calm brand-blue wash at the top, fading into the app background.
         background: `radial-gradient(1100px 520px at 50% -8%, ${brandTint}, transparent 62%)`,
       }}
     >
