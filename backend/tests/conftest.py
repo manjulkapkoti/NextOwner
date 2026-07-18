@@ -10,6 +10,7 @@ the token-forging tests (C2–C4) agree on signing key + algorithm.
 """
 
 import os
+import tempfile
 
 # Must precede `import app.main` — pydantic-settings reads the environment at
 # import time. A fixed test secret lets C3/C4 forge tokens the app will verify.
@@ -20,6 +21,10 @@ os.environ.setdefault("JWT_ALGORITHM", "HS256")
 # Enables the gated /_debug/boom route so the 500-contract tests (G1/G3) have a
 # route that raises. Off by default in the app → never mounted in production.
 os.environ.setdefault("ENABLE_DEBUG_ROUTES", "1")
+
+# Point uploads at a throwaway temp dir so tests never write into the repo's
+# uploads/ (must precede `import app.main` — the storage backend reads it at import).
+os.environ.setdefault("UPLOAD_DIR", tempfile.mkdtemp(prefix="nextowner-test-uploads-"))
 
 import pytest
 from fastapi.testclient import TestClient
@@ -108,3 +113,46 @@ def auth_headers(register, login):
         token = login(email=email, password=password).json()["access_token"]
         return {"Authorization": f"Bearer {token}"}
     return _auth
+
+
+# ── M2 listing helpers ───────────────────────────────────────────────────────
+
+# A complete, valid create body (public + private fields). Money as strings —
+# the server parses Decimal. Reuse via `make_listing`, override per test.
+VALID_LISTING = {
+    "type": "saas",
+    "headline": "Profitable B2B scheduling SaaS",
+    "description": "A small, profitable scheduling tool for clinics.",
+    "asking_price": "500000.00",
+    "ttm_revenue": "200000.00",
+    "ttm_profit": "120000.00",
+    "mrr": "18000.00",
+    "churn_pct": "2.50",
+    "customers": 340,
+    "company_name": "Acme Internal Tools LLC",
+    "website_url": "https://acme.example.com",
+    "detailed_financials": "{\"note\": \"see attached\"}",
+}
+
+
+@pytest.fixture
+def make_listing(client):
+    """POST a valid listing with the given auth headers; returns the response."""
+    def _make(headers, **overrides):
+        return client.post("/api/listings", json={**VALID_LISTING, **overrides}, headers=headers)
+    return _make
+
+
+@pytest.fixture
+def force_status(session):
+    """Force a listing's status directly in the DB (seeding a state a seller
+    can't reach alone — e.g. `live`, which needs admin approval at M3)."""
+    from sqlalchemy import text
+
+    def _force(listing_id, status):
+        session.execute(
+            text("UPDATE listing SET status = :s WHERE id = :i"),
+            {"s": status, "i": listing_id},
+        )
+        session.commit()
+    return _force

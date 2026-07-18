@@ -10,10 +10,11 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import EmailStr, Field
+from pydantic import EmailStr, Field, field_serializer
 from sqlmodel import SQLModel
 
 Role = Literal["buyer", "seller"]
+_MONEY_FIELDS = ("asking_price", "ttm_revenue", "ttm_profit", "mrr", "churn_pct")
 
 
 # ── Auth (M1) ────────────────────────────────────────────────────────────────
@@ -65,3 +66,91 @@ class UserRead(SQLModel):
 class LoginResponse(SQLModel):
     access_token: str
     token_type: str = "bearer"
+
+
+# ── Listings (M2) ────────────────────────────────────────────────────────────
+
+class ListingCreate(SQLModel):
+    """Create body — public + private fields. **No** `owner_id`, `status`, or
+    `id`: those are server-controlled, so mass-assignment is impossible by
+    schema, not by runtime filtering."""
+
+    type: str
+    headline: str
+    description: str
+    asking_price: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
+    ttm_revenue: Decimal = Field(ge=0, max_digits=14, decimal_places=2)
+    ttm_profit: Decimal = Field(max_digits=14, decimal_places=2)          # may be negative
+    mrr: Decimal = Field(ge=0, max_digits=14, decimal_places=2)
+    churn_pct: Decimal = Field(ge=0, max_digits=6, decimal_places=2)
+    customers: int = Field(ge=0)
+    company_name: str
+    website_url: str
+    detailed_financials: str | None = None
+
+
+class ListingUpdate(SQLModel):
+    """Partial edit — every field optional, and again no `owner_id`/`status`."""
+
+    type: str | None = None
+    headline: str | None = None
+    description: str | None = None
+    asking_price: Decimal | None = Field(default=None, gt=0, max_digits=14, decimal_places=2)
+    ttm_revenue: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=2)
+    ttm_profit: Decimal | None = Field(default=None, max_digits=14, decimal_places=2)
+    mrr: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=2)
+    churn_pct: Decimal | None = Field(default=None, ge=0, max_digits=6, decimal_places=2)
+    customers: int | None = Field(default=None, ge=0)
+    company_name: str | None = None
+    website_url: str | None = None
+    detailed_financials: str | None = None
+
+
+class ListingRead(SQLModel):
+    """The owner's full view (public + private + status). Money serialized as
+    strings so precision is exact over the wire (A7)."""
+
+    id: int
+    owner_id: int
+    status: str
+    type: str
+    headline: str
+    description: str
+    asking_price: Decimal
+    ttm_revenue: Decimal
+    ttm_profit: Decimal
+    mrr: Decimal
+    churn_pct: Decimal
+    customers: int
+    created_at: datetime
+    published_at: datetime | None = None
+    company_name: str | None = None
+    website_url: str | None = None
+    detailed_financials: str | None = None
+
+    @field_serializer(*_MONEY_FIELDS, when_used="json")
+    def _ser_money(self, v: Decimal) -> str:
+        return str(v)
+
+
+class ListingSummary(SQLModel):
+    """Dashboard row (`GET /my/listings`)."""
+
+    id: int
+    headline: str
+    status: str
+    asking_price: Decimal
+    created_at: datetime
+
+    @field_serializer("asking_price", when_used="json")
+    def _ser_price(self, v: Decimal) -> str:
+        return str(v)
+
+
+class DocumentRead(SQLModel):
+    id: int
+    listing_id: int
+    original_filename: str
+    content_type: str
+    size_bytes: int
+    uploaded_at: datetime
