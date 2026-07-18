@@ -8,12 +8,14 @@
 > `docs/session_recovery.md`.
 
 **Milestone status:** M0–M2 ✅ merged. **App-shell (`pre-003`)** ✅ merged (#25), plus the public landing page (#26) and the register page (#27).
-**In flight:** branch `feat/pre-003-design-system` — the design-system pass (owner-directed; no spec folder). Done: `theme.ts` implementing the v1 tokens, brand assets + `Wordmark`, and the front-door screens (landing, login, signup, nav) restyled. **Remaining: the dashboard and listing wizard are still on the old styling.** No PR opened yet.
-**Open PRs:** none.
+**In flight:** branch `feat/pre-003-design-system` — the design-system pass (owner-directed; no spec folder) is **complete**: `theme.ts` implementing the v1 tokens, brand assets + `Wordmark`, `StatusChip`, and all six screens restyled. Full suite green, inline review clean (frontend-only, backend untouched, so no appsec pass). PR open — awaiting human approval.
+**Open PRs:** design system (see the PR).
 
 ## ▶ NEXT ACTION
-Finish the design-system pass on `feat/pre-003-design-system`: **restyle the dashboard (`MyListings`) and the listing wizard**, the last two screens still on the old styling. Then `/dod` → inline review → open the PR. Then M3:
+Review the design-system PR, then **"close the feature"** (`/close-feature <pr#>`) to squash-merge + sync `main`. Then M3:
 **`/run-milestone admin-curation --pause-after-spec`**
+
+*Before M3, worth doing:* move the status-refresh trigger off `/dod` onto the **merge** — the 2026-07-18 fix bound it to the milestone-close command, and PRs #26/#27 merged without running it, so the status drifted again anyway. A trigger only holds on a step that cannot be skipped.
 
 ## Carryover notes
 - **App-shell shipped:** `/login`, `/`, `/my-listings`, `/sell`, `/register` routed and guarded; the already-authed-visitor redirects; the global-401 (`auth:unauthorized`) listener; a nav bar with logout. Replaced the M0 health page + its test. **25 frontend + 65 backend tests.**
