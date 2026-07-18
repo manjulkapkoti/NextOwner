@@ -1,8 +1,8 @@
 // The app shell — routes the components M1/M2 built into a usable app
 // (spec pre-003). Replaces the M0 health page.
 import { useEffect } from 'react'
-import { Container } from '@mui/material'
-import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { Button, Container, Typography } from '@mui/material'
+import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { ListingWizard } from './components/ListingWizard'
 import { LoginForm } from './components/LoginForm'
 import { MyListings } from './components/MyListings'
@@ -20,6 +20,33 @@ function LoginRoute() {
   return (
     <Container maxWidth="sm" sx={{ mt: 8 }}>
       <LoginForm />
+    </Container>
+  )
+}
+
+// The landing route (/): an authed visitor is sent straight to their
+// dashboard (AS6, unchanged). A logged-out visitor gets a minimal public
+// placeholder instead of an unexplained bounce to the login form (AS7) —
+// the real anonymous browse experience is M4; this is a stopgap until then.
+function LandingRoute() {
+  const token = localStorage.getItem('token')
+  if (token) {
+    return <Navigate to="/my-listings" replace />
+  }
+  return (
+    <Container maxWidth="sm" sx={{ mt: 12, textAlign: 'center' }}>
+      <Typography variant="h3" gutterBottom>
+        NextOwner
+      </Typography>
+      <Typography variant="h6" color="text.secondary" gutterBottom>
+        A marketplace for buying and selling small online businesses.
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
+        The public listings page is coming soon — sign in to get started.
+      </Typography>
+      <Button variant="contained" component={Link} to="/login">
+        Log in
+      </Button>
     </Container>
   )
 }
@@ -44,7 +71,7 @@ export function AppShell() {
       <NavBar />
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
-        <Route path="/" element={<RequireAuth><Navigate to="/my-listings" replace /></RequireAuth>} />
+        <Route path="/" element={<LandingRoute />} />
         <Route
           path="/my-listings"
           element={
