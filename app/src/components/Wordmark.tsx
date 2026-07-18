@@ -11,12 +11,19 @@ import iconSrc from '../assets/logo-icon.png'
 import ringSrc from '../assets/ring.png'
 import { logoColors } from '../theme'
 
-const RING_RATIO = 88 / 87
-
-// The ring stands in for a capital O, so it is sized against cap height
-// (~0.73em in Inter) and set fractionally larger, the way a round glyph is
-// optically overshot so it doesn't read as small next to flat-topped letters.
-const RING_EM = 0.8
+// Ring geometry, measured from the master artwork (docs/brand/title.png)
+// rather than eyeballed: there, cap height is 68px and the ring is 78px, so
+// the ring runs 1.15x cap height — the overshoot that stops a round glyph
+// reading small beside flat-topped letters like N and W.
+//
+// The asset is cropped to the ring's exact bounds, which matters: CSS sizes
+// the canvas, not the ink, so padding baked into the image would silently
+// shrink the mark (it did — the previous asset was 38% padding, rendering
+// the ring at about half the size it should have been).
+const RING_TO_CAP = 78 / 68
+const INTER_CAP_HEIGHT_EM = 0.727
+const RING_EM = INTER_CAP_HEIGHT_EM * RING_TO_CAP // ≈ 0.834em
+const RING_RATIO = 78 / 78
 
 type Props = {
   /** Height of the icon tile in px; the wordmark is sized to match. */
@@ -81,9 +88,12 @@ export function Wordmark({ height = 28, iconOnly = false }: Props) {
               height: ringSize,
               width: ringSize * RING_RATIO,
               flexShrink: 0,
-              // Side bearings, so the ring sits in the word like a letter
-              // rather than being jammed against its neighbours.
-              mx: `${fontSize * 0.03}px`,
+              // Side bearings, so the ring sits in the word like a letter.
+              // Asymmetric because the artwork is: 10px before the ring, 6px
+              // after, against a 68px cap. The adjacent glyphs carry some of
+              // that in their own bearings, so only the remainder is added.
+              ml: `${fontSize * 0.05}px`,
+              mr: `${fontSize * 0.02}px`,
             }}
           />
           <Box component="span" sx={{ color: logoColors.orange }}>

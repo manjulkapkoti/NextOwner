@@ -38,19 +38,26 @@ function encodeRGBA(w,h,px){
 }
 // Artwork is solid ink composited over white. Recover alpha from how far a
 // pixel is from white, then un-premultiply so edges stay clean on any surface.
-function unwhite(file,out){
+// `rect` (optional) crops to {x0,y0,x1,y1} inclusive. Cropping matters for
+// artwork that goes inline with text: padding baked into the canvas would
+// silently shrink the visible mark, since CSS sizes the canvas, not the ink.
+function unwhite(file,out,rect){
   const {w,h,ch,out:src}=decode(file);
-  const px=Buffer.alloc(w*h*4);
-  for(let i=0;i<w*h;i++){
-    const r=src[i*ch],g=src[i*ch+1],b=src[i*ch+2];
+  const x0=rect?rect.x0:0, y0=rect?rect.y0:0;
+  const x1=rect?rect.x1:w-1, y1=rect?rect.y1:h-1;
+  const cw=x1-x0+1, chh=y1-y0+1;
+  const px=Buffer.alloc(cw*chh*4);
+  for(let y=0;y<chh;y++)for(let x=0;x<cw;x++){
+    const s=((y+y0)*w+(x+x0))*ch, d=(y*cw+x)*4;
+    const r=src[s],g=src[s+1],b=src[s+2];
     const a=255-Math.min(r,g,b);
-    if(a===0){px.writeUInt32BE(0,i*4);continue;}
+    if(a===0){px.writeUInt32BE(0,d);continue;}
     const f=a/255;
     const un=(c)=>Math.max(0,Math.min(255,Math.round((c-(1-f)*255)/f)));
-    px[i*4]=un(r);px[i*4+1]=un(g);px[i*4+2]=un(b);px[i*4+3]=a;
+    px[d]=un(r);px[d+1]=un(g);px[d+2]=un(b);px[d+3]=a;
   }
-  fs.writeFileSync(out,encodeRGBA(w,h,px));
-  console.log('wrote',out,w+'x'+h);
+  fs.writeFileSync(out,encodeRGBA(cw,chh,px));
+  console.log('wrote',out,cw+'x'+chh);
 }
 // Favicon keeps its navy tile (high contrast in a tab) — just padded to square.
 function square(file,out){
@@ -78,4 +85,9 @@ const A='app/src/assets/';
 fs.mkdirSync(A,{recursive:true});
 square('docs/brand/logo-icon.png',A+'logo-icon.png');
 square('docs/brand/logo-icon.png','app/public/favicon.png');
-unwhite('docs/brand/logo_1.png',A+'ring.png');
+// The ring is cropped straight out of the master lockup rather than taken
+// from logo_1.png: title.png's "O" carries the navy arc that logo_1.png (all
+// orange) does not, and cropping to the glyph's exact bounds means the CSS
+// height is the ring's real diameter. Bounds measured from the artwork —
+// the "O" occupies x224-301, y14-91.
+unwhite('docs/brand/title.png',A+'ring.png',{x0:224,y0:14,x1:301,y1:91});
