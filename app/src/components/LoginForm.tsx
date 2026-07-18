@@ -2,7 +2,8 @@
 // (spec H3, error_handling.md §3). A 422 maps each field-level error onto its
 // field; anything else becomes a form-level message.
 import { useState, type FormEvent } from 'react'
-import { Alert, Box, Button, TextField } from '@mui/material'
+import { Alert, Box, Button, Link as MuiLink, TextField } from '@mui/material'
+import { Link as RouterLink } from 'react-router-dom'
 import { authStore } from '../stores/authStore'
 
 export function LoginForm() {
@@ -76,6 +77,9 @@ export function LoginForm() {
       <Button type="submit" variant="contained" disabled={loading}>
         {loading ? 'Logging in…' : 'Log in'}
       </Button>
+      <MuiLink component={RouterLink} to="/register" variant="body2">
+        New here? Create an account
+      </MuiLink>
     </Box>
   )
 }

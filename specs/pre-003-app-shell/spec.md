@@ -38,6 +38,8 @@ Serves the client-side half of **FR-1/FR-2** (auth session + navigation) and **F
 - **AS4** — GIVEN the app is mounted, WHEN an `auth:unauthorized` event fires (what `api.ts` emits on any 401), THEN the app **navigates to `/login`** and the token is cleared.
 - **AS5** — GIVEN a session, WHEN the shell renders, THEN a **Logout** control is visible; clicking it **clears the session** and returns to `/login`.
 - **AS6** — GIVEN a session, WHEN navigating to `/` (the landing), THEN the seller's **dashboard** (`MyListings`) renders.
+- **AS8** *(added post-merge, 2026-07-18)* — GIVEN no session, WHEN navigating to `/register`, THEN the **registration form** renders. New `RegisterForm` component (FR-1/FR-2: email, password, role) — the register *endpoint* existed since M1, but nothing let a visitor reach it.
+- **AS9** *(added post-merge, 2026-07-18)* — GIVEN a session, WHEN navigating to `/register`, THEN the visitor is **redirected to the dashboard** — same already-authed treatment as `/login` (AS3).
 
 ## Out of scope (deferred)
 
