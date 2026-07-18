@@ -3,7 +3,7 @@
 // This is chrome, not a security boundary — RequireAuth + the server gates
 // the actual routes and data.
 //
-// Layout (design_system.md): actions sit top-right at every width.
+// Layout (design_system_spec.md): actions sit top-right at every width.
 //  - Logged out: "Log in" + "Get started" — the log-in affordance lives here,
 //    not in the landing hero, so it is in the same place on every page.
 //  - Logged in:  the three actions inline on >=sm; below sm they collapse into

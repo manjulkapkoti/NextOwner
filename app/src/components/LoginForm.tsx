@@ -2,7 +2,7 @@
 // (spec H3, error_handling.md §3). A 422 maps each field-level error onto its
 // field; anything else becomes a form-level message.
 //
-// Presentation is a centered auth card (design_system.md); all behaviour —
+// Presentation is a centered auth card (design_system_spec.md); all behaviour —
 // the 422 mapping, loading state, noValidate, the register link — is unchanged.
 import { useState, type FormEvent } from 'react'
 import { Alert, Box, Button, Card, Link as MuiLink, Stack, TextField, Typography } from '@mui/material'

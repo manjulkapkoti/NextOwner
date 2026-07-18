@@ -2,7 +2,7 @@
 // loading / error / inline-422 states. Register returns no token (unlike
 // login), so success sends the visitor to /login to sign in.
 //
-// Layout follows a dedicated full-page signup (design_system.md): its own
+// Layout follows a dedicated full-page signup (design_system_spec.md): its own
 // header (back + wordmark) instead of the app nav, a security reassurance
 // panel up front, then the shortest possible form. Only the three fields the
 // API actually accepts are asked for — email, password, role. All behaviour
