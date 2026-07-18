@@ -47,7 +47,7 @@ Serves the client-side half of **FR-1/FR-2** (auth session + navigation) and **F
 - **A real public/marketing experience** — the anonymous browse page (listings, filters, search) is **M4**; AS7 above is a minimal placeholder only, not that page.
 - **Buyer-specific navigation / data room** — M5+.
 - **Admin routes** — added by **M3** onto this shell.
-- **A polished nav/design system** — minimal MUI `AppBar` here; the design system is a later concern.
+- ~~**A polished nav/design system** — minimal MUI `AppBar` here; the design system is a later concern.~~ — **retired 2026-07-18.** The production pivot made a world-class, responsive UI a first-class requirement, so the design system was built immediately after this milestone rather than deferred: `app/src/theme.ts` (tokens) + `docs/design_system_spec.md` (decisions), with the nav and the other front-door screens restyled to it. The deferral above is kept struck through rather than deleted, so the spec still reads as what was decided *at the time*.
 
 ## Note: the M0 health page is replaced
 

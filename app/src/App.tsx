@@ -1,14 +1,16 @@
 // The app shell — routes the components M1/M2 built into a usable app
 // (spec pre-003). Replaces the M0 health page.
-import { useEffect } from 'react'
-import { Button, Container, Typography } from '@mui/material'
-import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { Fragment, useEffect } from 'react'
+import { Box, Button, Container, Stack, Typography } from '@mui/material'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { brandTint } from './theme'
 import { ListingWizard } from './components/ListingWizard'
 import { LoginForm } from './components/LoginForm'
 import { MyListings } from './components/MyListings'
 import { NavBar } from './components/NavBar'
 import { RegisterForm } from './components/RegisterForm'
 import { RequireAuth } from './components/RequireAuth'
+import { Wordmark } from './components/Wordmark'
 import { authStore } from './stores/authStore'
 
 // Public /login route: if a session already exists, skip the form (AS3) —
@@ -19,7 +21,16 @@ function LoginRoute() {
     return <Navigate to="/my-listings" replace />
   }
   return (
-    <Container maxWidth="sm" sx={{ mt: 8 }}>
+    <Container
+      maxWidth="sm"
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        minHeight: { xs: 'auto', sm: 'calc(100vh - 65px)' },
+        py: { xs: 6, sm: 8 },
+      }}
+    >
       <LoginForm />
     </Container>
   )
@@ -27,15 +38,53 @@ function LoginRoute() {
 
 // Public /register route — same already-authed treatment as /login (AS9):
 // nothing useful to show a signed-in visitor here either.
+//
+// Signup is a dedicated full-page flow with its own header (back + wordmark)
+// rather than the app nav: once someone has committed to signing up, the other
+// nav actions are only distractions. The way back to login is the link under
+// the submit button, not a corner button.
 function RegisterRoute() {
+  const navigate = useNavigate()
   const token = localStorage.getItem('token')
   if (token) {
     return <Navigate to="/my-listings" replace />
   }
+
+  function handleBack() {
+    // Deep-linked arrivals have nothing to go back to — fall back to home.
+    if (window.history.length > 1) navigate(-1)
+    else navigate('/')
+  }
+
   return (
-    <Container maxWidth="sm" sx={{ mt: 8 }}>
-      <RegisterForm />
-    </Container>
+    <Box sx={{ minHeight: '100vh' }}>
+      <Box
+        component="header"
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: '1fr auto 1fr',
+          alignItems: 'center',
+          px: { xs: 2, sm: 3 },
+          py: 2,
+        }}
+      >
+        <Box sx={{ justifySelf: 'start' }}>
+          <Button onClick={handleBack} sx={{ color: 'text.primary', fontWeight: 600, ml: -1 }}>
+            <Box aria-hidden component="span" sx={{ mr: 0.75, fontSize: '1.1em', lineHeight: 1 }}>
+              ←
+            </Box>
+            Back
+          </Button>
+        </Box>
+        <Wordmark height={28} />
+        {/* Empty third column keeps the wordmark optically centered. */}
+        <Box />
+      </Box>
+
+      <Container maxWidth="sm" sx={{ py: { xs: 3, sm: 5 } }}>
+        <RegisterForm />
+      </Container>
+    </Box>
   )
 }
 
@@ -48,26 +97,90 @@ function LandingRoute() {
   if (token) {
     return <Navigate to="/my-listings" replace />
   }
+  // The public front door. The real anonymous browse experience is M4; until
+  // then this is a credibility-first hero, not a placeholder — brand, value
+  // prop, and the two clear paths in (sign in / create an account).
+  const trustPoints = ['Curated listings', 'NDA-gated data rooms', 'Verified buyers']
   return (
-    <Container maxWidth="sm" sx={{ mt: 12, textAlign: 'center' }}>
-      <Typography variant="h3" gutterBottom>
-        NextOwner
-      </Typography>
-      <Typography variant="h6" color="text.secondary" gutterBottom>
-        A marketplace for buying and selling small online businesses.
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-        The public listings page is coming soon — sign in to get started.
-      </Typography>
-      <Button variant="contained" component={Link} to="/login">
-        Log in
-      </Button>
-    </Container>
+    <Box
+      sx={{
+        minHeight: { xs: 'auto', md: 'calc(100vh - 65px)' },
+        display: 'flex',
+        alignItems: 'center',
+        // Calm brand-blue wash at the top, fading into the app background.
+        background: `radial-gradient(1100px 520px at 50% -8%, ${brandTint}, transparent 62%)`,
+      }}
+    >
+      <Container maxWidth="md" sx={{ py: { xs: 8, sm: 10, md: 12 }, textAlign: 'center' }}>
+        <Stack spacing={{ xs: 3, md: 3.5 }} alignItems="center">
+          <Box
+            sx={{
+              px: 1.5,
+              py: 0.5,
+              borderRadius: 999,
+              bgcolor: 'background.paper',
+              border: '1px solid',
+              borderColor: 'divider',
+              boxShadow: 1,
+            }}
+          >
+            <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600, letterSpacing: '0.02em' }}>
+              The marketplace for online business acquisitions
+            </Typography>
+          </Box>
+
+          <Typography
+            variant="h2"
+            component="h1"
+            sx={{ fontSize: { xs: '2.15rem', sm: '2.75rem', md: '3.4rem' }, maxWidth: 780 }}
+          >
+            Buy and sell online businesses with confidence
+          </Typography>
+
+          <Typography
+            variant="h6"
+            component="p"
+            sx={{ color: 'text.secondary', fontWeight: 400, maxWidth: 620 }}
+          >
+            The trusted marketplace for buying and selling small online businesses — vetted
+            listings, gated data rooms, and verified buyers on both sides of the deal.
+          </Typography>
+
+          {/* No CTA in the hero: both actions live top-right in the nav, which
+              is sticky, so they stay on screen the whole way down the page. */}
+
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={{ xs: 0.75, sm: 1.75 }}
+            alignItems="center"
+            justifyContent="center"
+            sx={{ pt: { xs: 2, md: 3 }, color: 'text.secondary' }}
+          >
+            {trustPoints.map((point, i) => (
+              <Fragment key={point}>
+                {i > 0 && (
+                  <Box
+                    sx={{ display: { xs: 'none', sm: 'block' }, width: 4, height: 4, borderRadius: '50%', bgcolor: 'text.disabled' }}
+                  />
+                )}
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {point}
+                </Typography>
+              </Fragment>
+            ))}
+          </Stack>
+        </Stack>
+      </Container>
+    </Box>
   )
 }
 
 export function AppShell() {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  // Signup owns its whole page, header included — the app nav would duplicate
+  // the wordmark and add exits from a flow the visitor just chose to enter.
+  const showNav = pathname !== '/register'
 
   // Global 401 handling (plan slice 2): api.ts emits this on ANY 401, so a
   // stale/expired token anywhere in the app sends the user back to login
@@ -83,7 +196,7 @@ export function AppShell() {
 
   return (
     <>
-      <NavBar />
+      {showNav && <NavBar />}
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
         <Route path="/register" element={<RegisterRoute />} />

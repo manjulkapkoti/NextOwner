@@ -7,16 +7,20 @@
 > file is the human-readable "you are here + ▶ next". Full design:
 > `docs/session_recovery.md`.
 
-**Milestone status:** M0–M2 ✅ merged. **App-shell (`pre-003`)** built, `/dod` green, PR open — awaiting human approval.
-**In flight:** branch `feat/pre-003-app-shell` — 3-slice build complete (router+guards, global-401 listener, nav+logout), inline review only (not security-critical, no appsec pass), PR opened.
-**Open PRs:** app-shell (see the PR).
+**Milestone status:** M0–M2 ✅ merged. **App-shell (`pre-003`)** ✅ merged (#25), plus the public landing page (#26) and the register page (#27).
+**In flight:** branch `feat/pre-003-design-system` — the design-system pass (owner-directed; no spec folder) is **complete**: `theme.ts` implementing the v1 tokens, brand assets + `Wordmark`, `StatusChip`, and all six screens restyled. Full suite green, inline review clean (frontend-only, backend untouched, so no appsec pass). PR open — awaiting human approval.
+**Open PRs:** design system (see the PR).
 
 ## ▶ NEXT ACTION
-Review the app-shell PR, then **"close the feature"** (`/close-feature <pr#>`) to squash-merge + sync `main`. Then M3:
+Review the design-system PR, then **"close the feature"** (`/close-feature <pr#>`) to squash-merge + sync `main`. Then M3:
 **`/run-milestone admin-curation --pause-after-spec`**
 
+*Before M3, worth doing:* move the status-refresh trigger off `/dod` onto the **merge** — the 2026-07-18 fix bound it to the milestone-close command, and PRs #26/#27 merged without running it, so the status drifted again anyway. A trigger only holds on a step that cannot be skipped.
+
 ## Carryover notes
-- **App-shell shipped:** `/login`, `/`, `/my-listings`, `/sell` routed and guarded; the already-authed-visitor-at-`/login` redirect; the global-401 (`auth:unauthorized`) listener; a nav bar with logout. Replaced the M0 health page + its test. 15 frontend tests total (was 11).
+- **App-shell shipped:** `/login`, `/`, `/my-listings`, `/sell`, `/register` routed and guarded; the already-authed-visitor redirects; the global-401 (`auth:unauthorized`) listener; a nav bar with logout. Replaced the M0 health page + its test. **25 frontend + 65 backend tests.**
+- **Design system (in flight):** `app/src/theme.ts` holds every literal value (single source of token truth); `docs/design_system_spec.md` holds the decisions and reasons — one job each, nothing defined twice. Primary is brand blue `#2563EB`; **orange is brand-only, never an action colour**. Semantic colours deviate from the authored v1 spec because its literal values failed its own WCAG AA rule (focus ring measured 1.80:1) — every deviation is recorded with its measurement in § Deviations. Brand artwork lives in `docs/brand/` (no SVG exists, so those PNGs are the masters) and `docs/brand/regenerate-assets.js` rebuilds the app assets from them.
+- **Brand voice deferred to M4** (owner's call): positioning is *succession, not transaction*. Scope in `milestones.md` § Scope fold-ins → M4. Navigation labels stay literal regardless.
 - **Numbering convention (2026-07-18):** a foundation milestone inserted mid-sequence is `pre-NNN-<slug>` and claims no number, so the M-numbers **and** the M3–M12 spec numbers are unchanged (M3 = spec 003). Recorded in the constitution amendment log + `/new-spec`.
 - **M2 decisions to remember:** owner-scoped routes return **404** (not 403); document serving is **owner-only** (buyer NDA access is M5); a `ListingDocument` table (not the JSON blob); money via a `Money` TypeDecorator (lossless Decimal); the upload-DoS was fixed with a streamed size cap + a Content-Length middleware.
 - **M3 is security-critical** (admin curation → `require_admin`, the publish transition): gets the independent appsec pass.
