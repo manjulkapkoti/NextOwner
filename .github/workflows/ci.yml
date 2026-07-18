@@ -43,6 +43,22 @@ jobs:
           npm audit --audit-level=high
           npm audit || true
 
+  # The constitution's central rule (Article 3 §2) — every GIVEN/WHEN/THEN
+  # criterion becomes exactly one test — made mechanical. A dropped criterion
+  # is the one failure a test suite structurally cannot catch by itself: the
+  # missing test is invisible to the tests that exist, so everything stays
+  # green while the milestone quietly does less than it promised.
+  spec-coverage:
+    name: Spec coverage (criteria cited by tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Every acceptance criterion is cited by a test
+        run: python scripts/check_spec_coverage.py
+
   # Bound to the merge, not to the milestone-close ceremony. `main` contains
   # only merged work, so nothing on it may still claim to be in flight — the
   # check enforces exactly that. It runs on push to main (the one step no
