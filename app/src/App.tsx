@@ -1,34 +1,80 @@
-import { useEffect, useState } from 'react'
-import { Alert, Box, CircularProgress, Container, Typography } from '@mui/material'
-import { api } from './lib/api'
+// The app shell — routes the components M1/M2 built into a usable app
+// (spec pre-003). Replaces the M0 health page.
+import { useEffect } from 'react'
+import { Container } from '@mui/material'
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { ListingWizard } from './components/ListingWizard'
+import { LoginForm } from './components/LoginForm'
+import { MyListings } from './components/MyListings'
+import { NavBar } from './components/NavBar'
+import { RequireAuth } from './components/RequireAuth'
+import { authStore } from './stores/authStore'
 
-// Milestone 0 page — calls GET /api/health and shows the result, proving the
-// React → Vite proxy → FastAPI round trip end to end.
-export default function App() {
-  const [status, setStatus] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+// Public /login route: if a session already exists, skip the form (AS3) —
+// there is nothing useful to show an already-signed-in visitor here.
+function LoginRoute() {
+  const token = localStorage.getItem('token')
+  if (token) {
+    return <Navigate to="/my-listings" replace />
+  }
+  return (
+    <Container maxWidth="sm" sx={{ mt: 8 }}>
+      <LoginForm />
+    </Container>
+  )
+}
 
+export function AppShell() {
+  const navigate = useNavigate()
+
+  // Global 401 handling (plan slice 2): api.ts emits this on ANY 401, so a
+  // stale/expired token anywhere in the app sends the user back to login
+  // instead of leaving them stuck on a dead page (AS4).
   useEffect(() => {
-    api('/health')
-      .then((data) => setStatus(data.status))
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
-  }, [])
+    function onUnauthorized() {
+      authStore.logout()
+      navigate('/login')
+    }
+    window.addEventListener('auth:unauthorized', onUnauthorized)
+    return () => window.removeEventListener('auth:unauthorized', onUnauthorized)
+  }, [navigate])
 
   return (
-    <Container maxWidth="sm">
-      <Box sx={{ mt: 8, textAlign: 'center' }}>
-        <Typography variant="h3" gutterBottom>
-          NextOwner
-        </Typography>
-        <Typography variant="body1" color="text.secondary" gutterBottom>
-          Marketplace scaffold — Milestone 0
-        </Typography>
-        <Box sx={{ mt: 3 }}>
-          {status && <Alert severity="success">API health: {status}</Alert>}
-          {error && <Alert severity="error">API unreachable: {error}</Alert>}
-          {!status && !error && <CircularProgress aria-label="checking API health" />}
-        </Box>
-      </Box>
-    </Container>
+    <>
+      <NavBar />
+      <Routes>
+        <Route path="/login" element={<LoginRoute />} />
+        <Route path="/" element={<RequireAuth><Navigate to="/my-listings" replace /></RequireAuth>} />
+        <Route
+          path="/my-listings"
+          element={
+            <RequireAuth>
+              <Container maxWidth="md" sx={{ mt: 4 }}>
+                <MyListings />
+              </Container>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/sell"
+          element={
+            <RequireAuth>
+              <Container maxWidth="md" sx={{ mt: 4 }}>
+                <ListingWizard />
+              </Container>
+            </RequireAuth>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppShell />
+    </BrowserRouter>
   )
 }

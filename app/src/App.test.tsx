@@ -1,45 +1,69 @@
+// App shell routing + auth integration (spec pre-003 acceptance criteria
+// AS1-AS4, AS6). Replaces the M0 health-page test — the DB/API round trip is
+// now proven by the M1/M2 backend tests; this proves the shell wires the
+// already-built components into a navigable app.
 import { render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import App from './App'
+import { AppShell } from './App'
+import { authStore } from './stores/authStore'
 
-// Milestone 0 — proves the component harness works and the health page renders
-// the API result. fetch is stubbed so the test never needs a live backend.
-describe('App health page', () => {
-  beforeEach(() => {
-    localStorage.clear()
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ status: 'ok' }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          }),
-      ),
-    )
-  })
+function stubEmptyListings() {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    ),
+  )
+}
 
+function renderShellAt(path: string) {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <AppShell />
+    </MemoryRouter>,
+  )
+}
+
+describe('AppShell routing', () => {
+  beforeEach(() => authStore.logout())
   afterEach(() => vi.unstubAllGlobals())
 
-  it('shows the health status returned by GET /api/health', async () => {
-    render(<App />)
-    await waitFor(() =>
-      expect(screen.getByText(/API health: ok/i)).toBeInTheDocument(),
-    )
-    // Relative, same-origin URL — the /api prefix is always present in code.
-    expect(fetch).toHaveBeenCalledWith('/api/health', expect.any(Object))
+  it('AS1: a logged-out visitor hitting /sell sees the login page', async () => {
+    renderShellAt('/sell')
+    await waitFor(() => expect(screen.getByLabelText(/email/i)).toBeInTheDocument())
   })
 
-  it('shows an error banner when the API is unreachable', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        throw new Error('network down')
-      }),
-    )
-    render(<App />)
-    await waitFor(() =>
-      expect(screen.getByText(/API unreachable/i)).toBeInTheDocument(),
-    )
+  it('AS2: a logged-out visitor hitting /my-listings sees the login page', async () => {
+    renderShellAt('/my-listings')
+    await waitFor(() => expect(screen.getByLabelText(/email/i)).toBeInTheDocument())
+  })
+
+  it('AS3: an already-authed visitor hitting /login is redirected to the dashboard', async () => {
+    authStore.setToken('a.b.c')
+    stubEmptyListings()
+    renderShellAt('/login')
+    await waitFor(() => expect(screen.getByText(/no listings yet/i)).toBeInTheDocument())
+    expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument()
+  })
+
+  it('AS4: an auth:unauthorized event clears the session and returns to login', async () => {
+    authStore.setToken('a.b.c')
+    stubEmptyListings()
+    renderShellAt('/my-listings')
+    await waitFor(() => expect(screen.getByText(/no listings yet/i)).toBeInTheDocument())
+
+    window.dispatchEvent(new Event('auth:unauthorized'))
+
+    await waitFor(() => expect(screen.getByLabelText(/email/i)).toBeInTheDocument())
+    expect(localStorage.getItem('token')).toBeNull()
+  })
+
+  it('AS6: an authed visitor hitting the landing page sees their dashboard', async () => {
+    authStore.setToken('a.b.c')
+    stubEmptyListings()
+    renderShellAt('/')
+    await waitFor(() => expect(screen.getByText(/no listings yet/i)).toBeInTheDocument())
   })
 })
