@@ -438,6 +438,11 @@ Scaffold per Part 3. Prove the loop end to end: a `GET /health` endpoint returni
 - `POST /listings/{id}/documents` accepts multipart uploads into `uploads/{listing_id}/`, storing paths in `ListingPrivate`.
 - _Business lesson:_ structured metric fields (not free text) are what makes listings comparable and searchable — the marketplace's real product is standardized data.
 
+### App Shell (`pre-003`) — frontend foundation *(inserted between M2 and M3, 2026-07-18)*
+
+- Not a backend milestone — it assembles the React components M1/M2 shipped-but-never-wired (`LoginForm`, `RequireAuth`, `ListingWizard`, `MyListings`) into a routed, usable app: router (`/login`, `/my-listings`, `/sell`), a nav bar with logout, and the global-401→login redirect. Replaces the M0 health page.
+- Spec: `specs/pre-003-app-shell/`. Frontend-only, not security-critical. The `pre-003` prefix keeps it out of the numeric spec sequence — **M3 remains spec 003**.
+
 ### Milestone 3 — Admin curation queue (F3)
 
 - `GET /admin/listings?status=pending_review` behind `require_admin`; `/admin` page renders the queue.

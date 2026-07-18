@@ -1,6 +1,6 @@
 # NextOwner
 
-A marketplace for buying and selling small online businesses — an online M&A marketplace MVP, a two-sided platform where founders sell their profitable online businesses (SaaS, ecommerce, agencies, etc.) and buyers (solo entrepreneurs, PE firms, strategics) take over them. It is built for learning, **entirely local** (no cloud account needed). Planning is complete and **Milestone 0** (scaffold + health check) has shipped; development continues at **Milestone 1** (auth & roles) — see [`docs/milestones.md`](./docs/milestones.md) and [`docs/progress.md`](./docs/progress.md).
+A marketplace for buying and selling small online businesses — an online M&A marketplace MVP, a two-sided platform where founders sell their profitable online businesses (SaaS, ecommerce, agencies, etc.) and buyers (solo entrepreneurs, PE firms, strategics) take over them. It is built for learning, **entirely local** (no cloud account needed). Planning is complete and **M0–M2 have shipped** (scaffold + health check · auth & roles · seller listing builder + uploads); next is the **app-shell** foundation milestone, then **M3** (admin curation). For the live status see [`docs/milestones.md`](./docs/milestones.md) § Progress tracker and [`docs/progress.md`](./docs/progress.md).
 
 ## Project structure
 
