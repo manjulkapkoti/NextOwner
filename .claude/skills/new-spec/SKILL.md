@@ -19,7 +19,7 @@ Create `specs/NNN-<name>/spec.md` and `specs/NNN-<name>/plan.md` for the milesto
    - `docs/error_handling.md` — the failure contract + this milestone's error/failure paths (for the **Errors & failure modes** section).
    - `docs/data_protection.md` — if this milestone adds a PII field or a person-referencing table (record its erasure/anonymization behavior in `plan.md`).
 
-2. **Pick the number `NNN`.** Scan `specs/` for the highest existing `NNN-*` folder and add 1 (constitution: `000` is the constitution, `001+` follow milestone build order). Zero-pad to 3 digits. If `$ARGUMENTS` is empty, ask which milestone.
+2. **Pick the number `NNN`.** Scan `specs/` for the highest existing `NNN-*` folder and add 1 (constitution: `000` is the constitution, `001+` follow milestone build order). Zero-pad to 3 digits. If `$ARGUMENTS` is empty, ask which milestone. *(A small **foundation** milestone inserted mid-sequence uses a `pre-NNN-<slug>` folder — e.g. `pre-003-app-shell`, inserted before spec 003 — so it claims **no** number and the scan skips it; the numeric sequence stays consistent. Constitution amendment 2026-07-18.)*
 
 3. **Create `specs/NNN-<name>/spec.md`** with this structure:
    - **Milestone** — name + link to its section in `docs/design_implementation.md` Part 4.

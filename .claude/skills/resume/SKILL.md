@@ -22,6 +22,8 @@ Rebuild the working state from **ground truth (git + tests)**, using the status 
 
 4. **Reconcile & self-heal.** Compare the status files against git + tests. **Trust git + tests.** If `progress.md` says "implementing X" but git shows X committed and a *different* test is red, resume at the real point and note the drift.
 
+   **Also cross-check the two status *claims* against the tracker and flag a mismatch** (cheap drift detection — this is exactly what silently rotted for two milestones before 2026-07-18): does `CLAUDE.md`'s `## Project status:` line, and `progress.md`'s **Milestone status**, agree with `docs/milestones.md` § Progress tracker (the ticked `- [x]` boxes) and the merged-PR history? If a status line names an older milestone than the tracker's last `[x]`, say so — the tracker + git are the truth; the prose line is stale and should be corrected at the next `/dod` close (they're refreshed together there).
+
 5. **Detect an interrupted session.** **Uncommitted changes** on a feature branch = crash residue → surface them (`git diff --stat`); that's where the last session was cut off. If a merge/rebase is in progress (the flight recorder flags it), report that first.
 
 6. **Report the resume point:** current milestone + phase, what's committed (done), what's uncommitted (in progress), the red tests (todo) **and the next Build-order slice they map to**, and the reconstructed **▶ next action** with the exact command to run.

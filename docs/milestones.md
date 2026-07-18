@@ -37,6 +37,7 @@ For example:
 | **M0**    | `/start-milestone m0-scaffold` → `/scaffold-m0` | Scaffold `app/` + `backend/` + the test harness; prove `GET /health` | —    | `.gitignore` in place, no secrets in code, `/docs` leaks nothing                                                                                    |
 | **M1**    | `/start-milestone auth-roles`                   | Register / login / JWT; `get_current_user`, `require_admin`          | 001  | bcrypt, JWT secret from env, pinned alg + expiry, role re-read from DB, login rate-limit, no user-enumeration                                       |
 | **M2**    | `/start-milestone listing-builder`              | Seller listing builder (multi-step) + document uploads               | 002  | `owner_id` from JWT, no client self-publish, PUT on another's listing → 403, upload type/size + path confinement                                    |
+| **Shell** | *(small frontend milestone; no backend)*        | App shell — router, nav, login→app flow, global-401 redirect (wires the M1/M2 components into a usable app) | pre-003 | *(frontend-only, **not** security-critical — client routing is UX; the server gate is the boundary; the `pre-003` prefix keeps it out of the number sequence so M3 stays 003)* |
 | **M3**    | `/start-milestone admin-curation`               | Admin curation queue (approve / reject)                              | 003  | `require_admin` (from DB), 409 on illegal transition, no seller path to self-publish                                                                |
 | **M4**    | `/start-milestone marketplace-browse`           | Marketplace browse + anonymous cards (filters)                       | 004  | public `response_model` — no identity leak by schema, only `live` listings, pagination cap                                                          |
 | **M5** ⭐ | `/start-milestone nda-gate`                     | Platform NDA + access gate (**the trust core**)                      | 005  | every gate state tested (unsigned/none/requested/approved/owner/denied/revoked), unique constraint, seller-only approve, same gate on doc downloads |
@@ -107,6 +108,7 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
 - [x] **M0** — scaffold + `GET /health`
 - [x] **M1** — auth & roles *(+ profiles, ToS stamp, error contract, rate-limit; account lifecycle moved to M8 — § Scope fold-ins)*
 - [x] **M2** — listing builder + uploads *(+ lifecycle transitions, `Decimal` money, storage port — § Scope fold-ins)*
+- [ ] **App-shell** — router + nav + login→app flow + global-401 redirect *(frontend foundation; spec `pre-003`, before M3)*
 - [ ] **M3** — admin curation *(+ `listing_event` audit — § Scope fold-ins)*
 - [ ] **M4** — marketplace browse *(+ keyword search, seed data — § Scope fold-ins)*
 - [ ] **M5** ⭐ — NDA + access gate *(+ revocation endpoint, `nda_version` — § Scope fold-ins)*

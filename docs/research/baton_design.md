@@ -114,7 +114,7 @@ Notable architectural contrasts with Acquire: **no BaaS** (custom API on AWS vs 
 ### Adopt now (cheap, affects current specs)
 | Idea | Impact on NextOwner |
 |---|---|
-| **One platform NDA + per-listing access approval** | Simplify Milestone 5: buyer signs the NDA once (a `users.nda_signed_at` field); each listing still needs the seller's access approval. Keeps the trust gate, kills repeat friction. Worth an update to spec 005 when written. |
+| **One platform NDA + per-listing access approval** | Simplify Milestone 5: buyer signs the NDA once (a `users.nda_signed_at` field); each listing still needs the seller's access approval. Keeps the trust gate, kills repeat friction. Worth an update to spec 005 (M5) when written. |
 | **Owner walkthrough video** | Add an optional `video_url` / upload to the listing builder (M2) — trivial cost, big differentiation. |
 | **Path-based deploy layout** | Note for post-MVP deploy: serve SPA + FastAPI under **one domain** (e.g. `/api/*` proxied) like Baton's `/market/*` — eliminates CORS entirely. Local dev keeps two ports. |
 
