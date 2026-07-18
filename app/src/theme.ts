@@ -44,6 +44,15 @@ export const brandTint = '#EEF2FF'
  */
 export const tabularNums = { fontVariantNumeric: 'tabular-nums' } as const
 
+/**
+ * The narrowest viewport the layout is designed to hold together at (px).
+ * Applied as `body { min-width }`, so narrower viewports scroll horizontally
+ * rather than wrapping the nav and squeezing form controls. 360px is the
+ * narrowest mainstream phone width — below it we would be designing for
+ * devices nobody uses.
+ */
+export const LAYOUT_MIN_WIDTH = 360
+
 // ---------------------------------------------------------------------------
 // Soft, restrained elevation set (depth signals interactivity, not decoration)
 // ---------------------------------------------------------------------------
@@ -133,6 +142,13 @@ export function createAppTheme(mode: PaletteMode = 'light') {
             WebkitFontSmoothing: 'antialiased',
             MozOsxFontSmoothing: 'grayscale',
             textRendering: 'optimizeLegibility',
+            // Layout floor. Below this the nav's brand + two actions can no
+            // longer sit on one line and the layout starts breaking, so we
+            // stop shrinking and let the viewport scroll horizontally
+            // instead — a scrollbar is a better failure than wrapped chrome.
+            // 360px is the narrowest mainstream phone; every real device is
+            // at or above it, so the scrollbar should never actually appear.
+            minWidth: LAYOUT_MIN_WIDTH,
           },
           '::selection': { backgroundColor: alpha(brand.main, 0.16) },
         },
