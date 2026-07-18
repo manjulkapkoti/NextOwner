@@ -6,6 +6,7 @@ import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-route
 import { ListingWizard } from './components/ListingWizard'
 import { LoginForm } from './components/LoginForm'
 import { MyListings } from './components/MyListings'
+import { NavBar } from './components/NavBar'
 import { RequireAuth } from './components/RequireAuth'
 import { authStore } from './stores/authStore'
 
@@ -39,31 +40,34 @@ export function AppShell() {
   }, [navigate])
 
   return (
-    <Routes>
-      <Route path="/login" element={<LoginRoute />} />
-      <Route path="/" element={<RequireAuth><Navigate to="/my-listings" replace /></RequireAuth>} />
-      <Route
-        path="/my-listings"
-        element={
-          <RequireAuth>
-            <Container maxWidth="md" sx={{ mt: 4 }}>
-              <MyListings />
-            </Container>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/sell"
-        element={
-          <RequireAuth>
-            <Container maxWidth="md" sx={{ mt: 4 }}>
-              <ListingWizard />
-            </Container>
-          </RequireAuth>
-        }
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <NavBar />
+      <Routes>
+        <Route path="/login" element={<LoginRoute />} />
+        <Route path="/" element={<RequireAuth><Navigate to="/my-listings" replace /></RequireAuth>} />
+        <Route
+          path="/my-listings"
+          element={
+            <RequireAuth>
+              <Container maxWidth="md" sx={{ mt: 4 }}>
+                <MyListings />
+              </Container>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/sell"
+          element={
+            <RequireAuth>
+              <Container maxWidth="md" sx={{ mt: 4 }}>
+                <ListingWizard />
+              </Container>
+            </RequireAuth>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   )
 }
 
