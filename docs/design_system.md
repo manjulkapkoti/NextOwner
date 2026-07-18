@@ -46,6 +46,14 @@ Decided here so it's coherent when the milestones that need it arrive:
 - **Verified badges** (buyer/seller, M10): one badge treatment, reused.
 - **Anonymous public card vs. unlocked private view** (M4/M5): the public card deliberately *shows the shape of the deal* (metrics, ranges) while hiding identity — the tease, not a blank.
 
+## 4b. Voice — deferred to M4 (recorded so it isn't re-litigated)
+
+The positioning is **succession, not transaction**: a business existed before the sale and continues after it, and the seller **chooses who carries it forward**. That is a description of `access_request` (`requested → approved|denied`), not a slogan — the brand promise and the architecture are the same sentence, which is why we can claim it and a public-listing competitor can't.
+
+**The copy lands in M4** (owner's call, 2026-07-18), when the public browse surfaces and the buyer-side story exist to carry it; today's landing hero is a stopgap. Full scope in `milestones.md` § Scope fold-ins → M4.
+
+**Binding on every surface, starting now:** the story lives in **headlines and prose only**. **Navigation and control labels stay literal** — "My listings", "Create account", "Log in". A label a user has to decode trades usability for poetry, which inverts this product's stated UI bar (§2). Write the hero with voice; write the buttons plain.
+
 ## 5. Scope of the current pass
 
 - **Now:** `theme.ts` + `@fontsource/inter`, wired via `ThemeProvider`; restyle the **6 existing screens** (landing, login, register, dashboard, listing wizard, nav) to this system; verify responsive + all tests green.

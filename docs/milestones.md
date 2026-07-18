@@ -83,6 +83,7 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
   - **Emit notification events** (listing approved / rejected) — delivered when M8 lands.
   - **FR-4 gets an owner:** seller-legitimacy review is folded into curation — record it in the spec so FR-4 stops being unmapped.
 - **M4 — marketplace browse:** **keyword search** (FR-10 — SQL `LIKE` is fine at MVP) alongside the filters; `seed/seed.py` (~30 listings) arrives here (research synthesis risk #1: seeded supply is not optional polish).
+  - **Brand voice + landing copy** *(deferred here 2026-07-18, owner's call)*. The product's positioning is **succession, not transaction**: a business existed before the sale and continues after it, and the seller **chooses who carries it forward**. This is not a slogan — it is a plain description of `access_request` (`requested → approved|denied`), so the promise and the architecture are the same sentence. Competitors all say "buy and sell", which frames a business as inventory; NextOwner's differentiator is *seller-controlled succession*, which only a platform with the NDA gate can honestly claim. Lands in M4 because that is when the public browse surfaces and the buyer-side story exist to carry it — the current landing hero is a stopgap until then. Scope when it arrives: **(a)** hero + trust-point copy in the succession voice (the seller is the lead audience — supply is the scarce side); **(b)** the **buyer** counter-story ("take over something real rather than starting from zero"), which the seller-led framing otherwise leaves cold; **(c)** a short **voice section in `design_system.md`** so M8's emails and later surfaces inherit it instead of drifting back to "buy and sell". **Binding constraint:** the story lives in headlines and prose only — **navigation labels stay literal** ("My listings", "Create account"). A label someone has to decode trades usability for poetry, which is the opposite of this product's stated UI bar. Note when scoping: the landing tagline string is asserted by an app-shell test (`App.test.tsx`, AS7), so copy changes update that test with them.
 - **M5 — NDA + access gate**
   - **Revocation endpoint** (`approved → revoked`, seller-only) — security.md §7 already requires "revocation re-denies"; this is the endpoint that makes that test possible.
   - **`nda_version`** recorded at signature (know *which* NDA text was signed — it is a retained legal record).
@@ -110,7 +111,7 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
 - [x] **M2** — listing builder + uploads *(+ lifecycle transitions, `Decimal` money, storage port — § Scope fold-ins)*
 - [x] **App-shell** — router + nav + login→app flow + global-401 redirect *(frontend foundation; spec `pre-003`, before M3)*
 - [ ] **M3** — admin curation *(+ `listing_event` audit — § Scope fold-ins)*
-- [ ] **M4** — marketplace browse *(+ keyword search, seed data — § Scope fold-ins)*
+- [ ] **M4** — marketplace browse *(+ keyword search, seed data, brand voice & landing copy — § Scope fold-ins)*
 - [ ] **M5** ⭐ — NDA + access gate *(+ revocation endpoint, `nda_version` — § Scope fold-ins)*
 - [ ] **M6** — realtime chat *(+ unread counts, WS error contract — § Scope fold-ins)*
 - [ ] **M7** — offers / LOI *(+ counter model, sibling policy — § Scope fold-ins)*
