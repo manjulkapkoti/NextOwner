@@ -1,6 +1,6 @@
-# Spec 003 — App Shell (frontend foundation)
+# Spec pre-003 — App Shell (frontend foundation)
 
-> **Milestone:** App Shell — a small **foundation** milestone inserted between M2 and M3 (not renumbering M3–M12; see the milestones runbook + constitution amendment 2026-07-18).
+> **Milestone:** App Shell — a small **foundation** milestone inserted between M2 and M3. Its folder is `specs/pre-003-app-shell/`: the `pre-003` prefix keeps it out of the `NNN` spec sequence, so **M3 stays spec 003** and nothing renumbers (see the milestones runbook + constitution amendment 2026-07-18).
 > **Complies with:** [`specs/000-constitution.md`](../000-constitution.md).
 > **Not security-critical:** frontend-only, no new backend trust boundary. Client routing is **UX only** — the server permission gates remain the real boundary (`security.md` §Frontend session). No appsec pass needed.
 > **Status:** awaiting approval.

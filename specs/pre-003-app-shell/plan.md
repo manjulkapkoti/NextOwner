@@ -1,4 +1,4 @@
-# Plan 003 — App Shell
+# Plan pre-003 — App Shell
 
 > The *how* for [`spec.md`](./spec.md). Frontend-only; no backend, no schema, no new API.
 
