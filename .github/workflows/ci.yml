@@ -10,6 +10,24 @@ on:
     branches: [main]
 
 jobs:
+  # Bound to the merge, not to the milestone-close ceremony. `main` contains
+  # only merged work, so nothing on it may still claim to be in flight — the
+  # check enforces exactly that. It runs on push to main (the one step no
+  # change can route around) and is a no-op on PRs, where in-flight language
+  # is correct. See scripts/check_status_freshness.py for the two prior
+  # failures that motivated it.
+  status-freshness:
+    name: Status freshness (main only)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check the status surfaces match reality
+        run: python scripts/check_status_freshness.py
+
   backend:
     name: Backend (pytest)
     runs-on: ubuntu-latest

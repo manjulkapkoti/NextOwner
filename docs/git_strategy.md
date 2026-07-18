@@ -65,6 +65,14 @@ Milestones are built **one at a time**, so each branch is cut from fresh `main` 
 
 `.github/workflows/ci.yml` runs the full suite — backend pytest + frontend tsc/vitest, the same gate as the root `npm test` — on **every PR** and on every push to `main`, so the "merge only when green" rule is machine-checked, not just convention. **`main` is branch-protected** (applied 2026-07-16, when the repo went public): merging requires a PR with **both checks green** and the branch **up to date with `main`** (strict mode — machine-enforces the § Two open PRs re-sync rule), direct pushes / force-pushes / deletion are blocked, and it's **enforced for admins** too. Formal GitHub approvals aren't required (GitHub forbids approving your own PR — solo repo); the human review stays the `/close-feature` discipline. `/dod` remains the richer local gate (checklist + security matrix); CI + protection are the floor that can't be skipped, and the `.git/hooks/pre-commit` guard stays as the local backstop.
 
+### Status freshness — the third check (added 2026-07-19)
+
+A third job, **Status freshness**, runs `scripts/check_status_freshness.py` on **push to `main` only** (a no-op on PRs, where in-flight language is correct). It fails the build if any status surface still describes work as unfinished — in-flight/awaiting-review wording, a named branch that has merged and been deleted, or an unticked tracker row for landed work.
+
+**Why it is mounted here and not on `/dod`.** The refresh was originally bound to the milestone-close command, and drifted stale twice regardless: **#26/#27** merged as small follow-ups that never ran `/dod`, and **#28** ran it but recorded *"PR open — awaiting approval"* — true when committed, false the moment it merged. A trigger only holds if it sits on a step nothing can route around, and it cannot ask a branch to assert something that only becomes true later. **The merge is that step**, and it is where the check now lives. The single fact it enforces needs no judgement: ***`main` contains only merged work.***
+
+It **detects rather than prevents** — auto-fixing would require a bot committing to protected `main`. That is the accepted trade: drift surfaces as a red build within a minute of landing, instead of surviving milestones in silence. `/dod` step 6 stays the first line; this is the backstop. Run it locally before opening a PR with `python scripts/check_status_freshness.py --force`.
+
 ## Conventions
 
 - **Branches:** `feat|fix|chore/NNN-slug` (e.g. `feat/001-auth-roles`).
