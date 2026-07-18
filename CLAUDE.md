@@ -2,11 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project status: M0–M2 shipped · next: app-shell (`pre-003`), then M3
+## Project status: M0–M2 + app-shell shipped · next: M3 (admin curation)
 
 > *Snapshot as of 2026-07-18 — the **live** status is `docs/milestones.md` § Progress tracker + `docs/progress.md` (or run `/resume`). Update this line at a milestone close so it doesn't rot.*
 
-M0 scaffolded the app (`app/` React + Vite + TS SPA, `backend/` FastAPI + SQLModel, the root `package.json` + pytest/Vitest harness). **M1** shipped auth — register/login/JWT, `get_current_user` + `require_admin`, and the error contract (`errors.py` + handlers + request-id). **M2** shipped the seller listing builder + document uploads — the public/private table split (`Listing` vs `ListingPrivate`/`ListingDocument`), owner-scoped writes, the listing state machine, and the storage port. The throwaway M0 `SandboxItem`/`/api/sandbox` pair is **deleted**. **Next: the app-shell foundation milestone** (`specs/pre-003-app-shell/` — wires the built-but-unwired M1/M2 frontend components into a running, routed app), then **M3** (admin curation). Not yet built: `seed/` (M4), the NDA gate (M5), chat (M6), and everything after; Playwright E2E (Phase D). `nextowner.db` is created on first run (gitignored).
+M0 scaffolded the app (`app/` React + Vite + TS SPA, `backend/` FastAPI + SQLModel, the root `package.json` + pytest/Vitest harness). **M1** shipped auth — register/login/JWT, `get_current_user` + `require_admin`, and the error contract (`errors.py` + handlers + request-id). **M2** shipped the seller listing builder + document uploads — the public/private table split (`Listing` vs `ListingPrivate`/`ListingDocument`), owner-scoped writes, the listing state machine, and the storage port. The throwaway M0 `SandboxItem`/`/api/sandbox` pair is **deleted**. **The app-shell foundation milestone** (`specs/pre-003-app-shell/`) wired the M1/M2 frontend components into a running, routed app — `/login`, `/my-listings`, `/sell`, a nav bar, and the global-401 redirect; `App.tsx` is no longer the M0 health page. **Next: M3** (admin curation). Not yet built: `seed/` (M4), the NDA gate (M5), chat (M6), and everything after; Playwright E2E (Phase D). `nextowner.db` is created on first run (gitignored).
 
 Also runnable: the diagram generator under `docs/diagrams/diagGenerator/` (see `/gen-diagrams`).
 

@@ -108,7 +108,7 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
 - [x] **M0** — scaffold + `GET /health`
 - [x] **M1** — auth & roles *(+ profiles, ToS stamp, error contract, rate-limit; account lifecycle moved to M8 — § Scope fold-ins)*
 - [x] **M2** — listing builder + uploads *(+ lifecycle transitions, `Decimal` money, storage port — § Scope fold-ins)*
-- [ ] **App-shell** — router + nav + login→app flow + global-401 redirect *(frontend foundation; spec `pre-003`, before M3)*
+- [x] **App-shell** — router + nav + login→app flow + global-401 redirect *(frontend foundation; spec `pre-003`, before M3)*
 - [ ] **M3** — admin curation *(+ `listing_event` audit — § Scope fold-ins)*
 - [ ] **M4** — marketplace browse *(+ keyword search, seed data — § Scope fold-ins)*
 - [ ] **M5** ⭐ — NDA + access gate *(+ revocation endpoint, `nda_version` — § Scope fold-ins)*
