@@ -58,7 +58,7 @@ export function LoginForm() {
     <Card sx={{ width: '100%', maxWidth: 440, mx: 'auto', p: { xs: 3, sm: 4 } }}>
       <Stack spacing={0.75} alignItems="center" sx={{ mb: 3, textAlign: 'center' }}>
         <Box sx={{ mb: 1 }}>
-          <Wordmark height={32} />
+          <Wordmark fontSize={32} />
         </Box>
         <Typography variant="h5" component="h1">
           Welcome back

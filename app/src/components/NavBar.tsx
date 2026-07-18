@@ -75,13 +75,16 @@ export const NavBar = observer(function NavBar() {
               color: 'inherit',
             }}
           >
-            {/* Below sm the wordmark text is dropped and the icon stands
-                alone, so the brand never competes with the actions for room. */}
+            {/* Wordmark on wide screens, the tile alone below sm (768px).
+                At 360px the bar has ~328px, and the two auth buttons take
+                ~176px of it — not enough for 30px of wordmark, but ample for
+                a 30px tile. They are never both shown, so the ring cannot
+                appear twice. */}
             <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-              <Wordmark height={28} />
+              <Wordmark fontSize={30} />
             </Box>
             <Box sx={{ display: { xs: 'block', sm: 'none' } }}>
-              <Wordmark height={28} iconOnly />
+              <Wordmark iconSize={30} iconOnly />
             </Box>
           </Stack>
 
@@ -97,23 +100,13 @@ export const NavBar = observer(function NavBar() {
                   '& .MuiButton-root': { whiteSpace: 'nowrap' },
                 }}
               >
-                <Button variant="contained" size="small" onClick={() => go('/sell')}>
+                <Button variant="contained" onClick={() => go('/sell')}>
                   List a business
                 </Button>
-                <Button
-                  color="inherit"
-                  size="small"
-                  onClick={() => go('/my-listings')}
-                  sx={{ color: 'text.secondary' }}
-                >
+                <Button color="inherit" onClick={() => go('/my-listings')} sx={{ color: 'text.secondary' }}>
                   My listings
                 </Button>
-                <Button
-                  color="inherit"
-                  size="small"
-                  onClick={handleLogout}
-                  sx={{ color: 'text.secondary' }}
-                >
+                <Button color="inherit" onClick={handleLogout} sx={{ color: 'text.secondary' }}>
                   Logout
                 </Button>
               </Stack>
@@ -151,16 +144,10 @@ export const NavBar = observer(function NavBar() {
               alignItems="center"
               sx={{ '& .MuiButton-root': { whiteSpace: 'nowrap' } }}
             >
-              <Button
-                color="inherit"
-                size="small"
-                component={RouterLink}
-                to="/login"
-                sx={{ color: 'text.secondary' }}
-              >
+              <Button color="inherit" component={RouterLink} to="/login" sx={{ color: 'text.secondary' }}>
                 Log in
               </Button>
-              <Button variant="contained" size="small" component={RouterLink} to="/register">
+              <Button variant="contained" component={RouterLink} to="/register">
                 Get started
               </Button>
             </Stack>
