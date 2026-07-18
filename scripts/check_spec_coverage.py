@@ -59,16 +59,55 @@ CRITERION_RE = re.compile(
 STRUCK_RE = re.compile(r"~~.*?\*\*(?P<id>[A-Z]{1,3}\d+)\*\*.*?~~", re.DOTALL)
 
 
-def load_tests() -> str:
-    """All test source concatenated — we only need to ask 'is this ID cited'."""
-    chunks = []
+# Criterion IDs are unique only *within* a spec — `A1` exists in 001, 002 and
+# 003 alike — so a global search reports false coverage for every spec after the
+# first. Tests are therefore attributed to a spec first, using the milestone tag
+# each test file already declares in its header (`M2`, `spec pre-003`).
+HEADER_LINES = 6
+TAG_RE = re.compile(r"\bM(\d+)\b|\bspec\s+(pre-)?(\d+)", re.IGNORECASE)
+
+
+def tags_for_spec(spec_dir: str) -> set[str]:
+    """Tags a test file may use to claim this spec — e.g. '003' -> {003, M3}."""
+    prefix = spec_dir.split("-", 1)[0]          # '003' or 'pre'
+    if spec_dir.startswith("pre-"):
+        prefix = "-".join(spec_dir.split("-", 2)[:2])   # 'pre-003'
+        return {prefix.lower()}
+    tags = {prefix.lstrip("0") or "0", prefix}
+    if prefix.isdigit():
+        tags.add(f"m{int(prefix)}")
+    return {t.lower() for t in tags}
+
+
+def tags_in_header(path: Path) -> set[str]:
+    head = "\n".join(path.read_text(encoding="utf-8", errors="replace").splitlines()[:HEADER_LINES])
+    found: set[str] = set()
+    for m_num, pre, spec_num in TAG_RE.findall(head):
+        if m_num:
+            found.add(f"m{int(m_num)}")
+        if spec_num:
+            found.add(f"pre-{spec_num}" if pre else str(int(spec_num)))
+            found.add(spec_num)
+    return {t.lower() for t in found}
+
+
+def attribute_tests() -> tuple[dict[str, str], list[str]]:
+    """(tag -> concatenated source, files declaring no milestone)."""
+    by_tag: dict[str, list[str]] = {}
+    orphans: list[str] = []
     for directory, pattern in TEST_GLOBS:
         base = ROOT / directory
         if not base.exists():
             continue
         for path in base.rglob(pattern):
-            chunks.append(path.read_text(encoding="utf-8", errors="replace"))
-    return "\n".join(chunks)
+            tags = tags_in_header(path)
+            if not tags:
+                orphans.append(str(path.relative_to(ROOT)))
+                continue
+            body = path.read_text(encoding="utf-8", errors="replace")
+            for tag in tags:
+                by_tag.setdefault(tag, []).append(body)
+    return {tag: "\n".join(chunks) for tag, chunks in by_tag.items()}, orphans
 
 
 def criteria_in(spec: Path) -> tuple[list[str], set[str]]:
@@ -90,10 +129,19 @@ def main() -> int:
         print("No specs/ directory — nothing to check.")
         return 0
 
-    tests = load_tests()
-    if not tests.strip():
+    by_tag, orphans = attribute_tests()
+    if not by_tag:
         print("No test files found — cannot verify coverage.", file=sys.stderr)
         return 1
+    if orphans:
+        print(
+            "Note — these test files declare no milestone in their first "
+            f"{HEADER_LINES} lines, so their tests count for no spec:",
+            file=sys.stderr,
+        )
+        for orphan in orphans:
+            print(f"  ? {orphan}", file=sys.stderr)
+        print(file=sys.stderr)
 
     total = 0
     gaps: list[tuple[str, str]] = []
@@ -106,6 +154,9 @@ def main() -> int:
         found, struck = criteria_in(spec)
         if not found:
             continue
+
+        # Only this spec's own tests may satisfy this spec's criteria.
+        tests = "\n".join(by_tag.get(tag, "") for tag in tags_for_spec(milestone))
 
         covered = []
         for cid in found:
