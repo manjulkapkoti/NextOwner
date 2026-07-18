@@ -116,30 +116,20 @@ function LandingRoute() {
             listings, gated data rooms, and verified buyers on both sides of the deal.
           </Typography>
 
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={1.5}
-            sx={{ width: { xs: '100%', sm: 'auto' }, pt: 1 }}
-          >
+          {/* One hero CTA, not two: the nav owns "Log in" at every width
+              (top-right, always in the same place), so the hero is free to
+              point everyone at the single next step. */}
+          <Box sx={{ width: { xs: '100%', sm: 'auto' }, pt: 1 }}>
             <Button
               variant="contained"
               size="large"
               component={Link}
-              to="/login"
-              sx={{ width: { xs: '100%', sm: 'auto' } }}
-            >
-              Log in
-            </Button>
-            <Button
-              variant="outlined"
-              size="large"
-              component={Link}
               to="/register"
-              sx={{ width: { xs: '100%', sm: 'auto' } }}
+              sx={{ width: { xs: '100%', sm: 'auto' }, px: { sm: 4 } }}
             >
               Create an account
             </Button>
-          </Stack>
+          </Box>
 
           <Stack
             direction={{ xs: 'column', sm: 'row' }}

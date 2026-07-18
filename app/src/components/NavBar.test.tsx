@@ -28,4 +28,35 @@ describe('NavBar', () => {
     expect(screen.getByText('Login page')).toBeInTheDocument()
     expect(localStorage.getItem('token')).toBeNull()
   })
+
+  // The log-in affordance lives top-right in the nav on every page (not in the
+  // landing hero), so a visitor always finds it in the same place.
+  it('offers Log in and Get started to a logged-out visitor', () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <NavBar />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('link', { name: /log in/i })).toHaveAttribute('href', '/login')
+    expect(screen.getByRole('link', { name: /get started/i })).toHaveAttribute('href', '/register')
+    // Authed-only actions must not leak to anonymous visitors.
+    expect(screen.queryByRole('button', { name: /logout/i })).not.toBeInTheDocument()
+  })
+
+  // Below `sm` the three authed actions collapse behind one control; the menu
+  // renders nothing while closed, so "Logout" is never ambiguous in the DOM.
+  it('collapses the authed actions into a menu control on narrow widths', async () => {
+    authStore.setToken('a.b.c')
+    render(
+      <MemoryRouter initialEntries={['/my-listings']}>
+        <NavBar />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getAllByRole('button', { name: /logout/i })).toHaveLength(1)
+
+    await userEvent.click(screen.getByRole('button', { name: /open menu/i }))
+    expect(screen.getByRole('menuitem', { name: /list a business/i })).toBeInTheDocument()
+  })
 })

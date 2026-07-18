@@ -1,29 +1,80 @@
-// Top nav — brand + (when authed) navigation and a Logout control (spec AS5).
+// Top nav — brand + auth-aware actions on the right (spec AS5).
 // Auth-aware via authStore (MobX observer) so it re-renders on login/logout.
 // This is chrome, not a security boundary — RequireAuth + the server gates
 // the actual routes and data.
 //
-// Presentation only (design_system.md): the AppBar's white/translucent surface
-// and hairline border come from the theme. Below `sm` the wordmark collapses
-// to the brand mark so the authed action row never overflows a 375px phone.
-import { AppBar, Box, Button, Container, Stack, Toolbar, Typography } from '@mui/material'
+// Layout (design_system.md): actions sit top-right at every width.
+//  - Logged out: "Log in" + "Get started" — the log-in affordance lives here,
+//    not in the landing hero, so it is in the same place on every page.
+//  - Logged in:  the three actions inline on >=sm; below sm they collapse into
+//    a menu, because three labelled buttons plus the brand wrap on a phone.
+//
+// The breakpoint is CSS (`display`), not a JS media query: both branches stay
+// in the DOM so tests (and any non-matchMedia environment) see the inline row,
+// while the closed Menu renders nothing — so "Logout" is never ambiguous.
+import { useState, type MouseEvent } from 'react'
+import {
+  AppBar,
+  Box,
+  Button,
+  Container,
+  IconButton,
+  Menu,
+  MenuItem,
+  Stack,
+  Toolbar,
+  Typography,
+} from '@mui/material'
 import { observer } from 'mobx-react-lite'
-import { useNavigate } from 'react-router-dom'
+import { Link as RouterLink, useNavigate } from 'react-router-dom'
 import { authStore } from '../stores/authStore'
+
+// Three stacked bars — a hamburger without pulling in an icon package for one
+// glyph. aria-hidden because the IconButton itself carries the accessible name.
+function MenuGlyph() {
+  return (
+    <Box aria-hidden sx={{ display: 'grid', gap: '4px', width: 18 }}>
+      {[0, 1, 2].map((i) => (
+        <Box key={i} sx={{ height: 2, borderRadius: 1, bgcolor: 'currentColor' }} />
+      ))}
+    </Box>
+  )
+}
 
 export const NavBar = observer(function NavBar() {
   const navigate = useNavigate()
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
+  const menuOpen = Boolean(anchorEl)
 
   function handleLogout() {
+    setAnchorEl(null)
     authStore.logout()
     navigate('/login')
+  }
+
+  function go(path: string) {
+    setAnchorEl(null)
+    navigate(path)
   }
 
   return (
     <AppBar position="sticky">
       <Container maxWidth="lg">
         <Toolbar disableGutters sx={{ minHeight: 64, gap: 1 }}>
-          <Stack direction="row" alignItems="center" spacing={1} sx={{ flexGrow: 1, minWidth: 0 }}>
+          {/* Brand — also the way home from anywhere in the app. */}
+          <Stack
+            component={RouterLink}
+            to="/"
+            direction="row"
+            alignItems="center"
+            spacing={1}
+            sx={{
+              flexGrow: 1,
+              minWidth: 0,
+              textDecoration: 'none',
+              color: 'inherit',
+            }}
+          >
             <Box
               aria-hidden
               sx={{
@@ -54,7 +105,65 @@ export const NavBar = observer(function NavBar() {
             </Typography>
           </Stack>
 
-          {authStore.isAuthenticated && (
+          {authStore.isAuthenticated ? (
+            <>
+              {/* >=sm: the actions inline. */}
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                sx={{
+                  display: { xs: 'none', sm: 'flex' },
+                  '& .MuiButton-root': { whiteSpace: 'nowrap' },
+                }}
+              >
+                <Button variant="contained" size="small" onClick={() => go('/sell')}>
+                  List a business
+                </Button>
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => go('/my-listings')}
+                  sx={{ color: 'text.secondary' }}
+                >
+                  My listings
+                </Button>
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={handleLogout}
+                  sx={{ color: 'text.secondary' }}
+                >
+                  Logout
+                </Button>
+              </Stack>
+
+              {/* <sm: one control instead of three. */}
+              <IconButton
+                aria-label="Open menu"
+                aria-haspopup="true"
+                aria-expanded={menuOpen || undefined}
+                onClick={(e: MouseEvent<HTMLElement>) => setAnchorEl(e.currentTarget)}
+                sx={{ display: { xs: 'inline-flex', sm: 'none' }, color: 'text.secondary' }}
+              >
+                <MenuGlyph />
+              </IconButton>
+              <Menu
+                anchorEl={anchorEl}
+                open={menuOpen}
+                onClose={() => setAnchorEl(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                slotProps={{ paper: { sx: { minWidth: 180, mt: 1 } } }}
+              >
+                <MenuItem onClick={() => go('/sell')}>List a business</MenuItem>
+                <MenuItem onClick={() => go('/my-listings')}>My listings</MenuItem>
+                <MenuItem onClick={handleLogout}>Logout</MenuItem>
+              </Menu>
+            </>
+          ) : (
+            /* Logged out: two short actions — these fit at 320px, so no
+               collapse is needed here. */
             <Stack
               direction="row"
               spacing={{ xs: 0.5, sm: 1 }}
@@ -62,28 +171,16 @@ export const NavBar = observer(function NavBar() {
               sx={{ '& .MuiButton-root': { whiteSpace: 'nowrap' } }}
             >
               <Button
-                variant="contained"
-                size="small"
-                onClick={() => navigate('/sell')}
-                sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
-              >
-                List a business
-              </Button>
-              <Button
                 color="inherit"
                 size="small"
-                onClick={() => navigate('/my-listings')}
-                sx={{ color: 'text.secondary', fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
+                component={RouterLink}
+                to="/login"
+                sx={{ color: 'text.secondary' }}
               >
-                My listings
+                Log in
               </Button>
-              <Button
-                color="inherit"
-                size="small"
-                onClick={handleLogout}
-                sx={{ color: 'text.secondary', fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
-              >
-                Logout
+              <Button variant="contained" size="small" component={RouterLink} to="/register">
+                Get started
               </Button>
             </Stack>
           )}
