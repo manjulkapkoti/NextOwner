@@ -1,106 +1,117 @@
 // The NextOwner logo, in one place so every surface renders it identically.
 //
-// The lockup is: [icon tile] Next(blue) (ring)wner(orange) — matching the
-// supplied artwork, where the "O" of "Owner" is the ring mark.
+// TWO EXPRESSIONS, NEVER BOTH AT ONCE:
+//   default    — the wordmark: "Next" in blue, the ring as the "O", "wner" in
+//                orange. This is the artwork as drawn (docs/brand/title.png),
+//                where the ring *is* the O.
+//   iconOnly   — the app-icon tile, for widths too narrow for the wordmark.
 //
-// "Next" and "wner" are live text, not an image of text, so the wordmark
-// stays crisp at any size, scales with the type system, and can be recoloured
-// for dark mode. Only the tile and the ring are artwork.
+// The tile used to sit beside the wordmark, which put the ring on screen twice
+// — once in the tile, once as the O — so the mark competed with itself. They
+// are alternatives now, which is also why the tile can return on small screens
+// without reintroducing that duplication.
+//
+// "Next" and "wner" are live text, not an image of text, so the wordmark stays
+// crisp at any size, scales with the type system, and can be recoloured for
+// dark mode. Only the ring and the tile are artwork.
 import { Box, Typography } from '@mui/material'
 import iconSrc from '../assets/logo-icon.png'
 import ringSrc from '../assets/ring.png'
 import { logoColors } from '../theme'
 
-// Ring geometry, measured from the master artwork (docs/brand/title.png)
-// rather than eyeballed: there, cap height is 68px and the ring is 78px, so
-// the ring runs 1.15x cap height — the overshoot that stops a round glyph
-// reading small beside flat-topped letters like N and W.
-//
-// The asset is cropped to the ring's exact bounds, which matters: CSS sizes
-// the canvas, not the ink, so padding baked into the image would silently
-// shrink the mark (it did — the previous asset was 38% padding, rendering
-// the ring at about half the size it should have been).
+// The wordmark is set in Manrope — the display face — not Inter, which runs
+// the UI. A logo in the same face as the surrounding buttons reads as a
+// heading rather than a mark, and Manrope's rounder, more geometric bowls are
+// closer kin to the ring that replaces the O.
+const WORDMARK_FONT = '"Manrope", "Inter", sans-serif'
+
+// The ring stands in for a capital O, so it is sized against cap height and
+// overshot slightly, the way a round glyph is, so it doesn't read small beside
+// flat-topped letters. The 1.147x overshoot is measured from the artwork
+// (cap 68px, ring 78px); Manrope's cap height is ~0.70em, against Inter's
+// 0.727em — so the em multiplier differs by face and is derived, not copied.
 const RING_TO_CAP = 78 / 68
-const INTER_CAP_HEIGHT_EM = 0.727
-const RING_EM = INTER_CAP_HEIGHT_EM * RING_TO_CAP // ≈ 0.834em
-const RING_RATIO = 78 / 78
+const MANROPE_CAP_HEIGHT_EM = 0.7
+const RING_EM = MANROPE_CAP_HEIGHT_EM * RING_TO_CAP // ~0.803em
 
 type Props = {
-  /** Height of the icon tile in px; the wordmark is sized to match. */
-  height?: number
-  /** Icon only — for widths too narrow to fit the wordmark beside it. */
+  /** Wordmark type size in px; the ring is sized from it. */
+  fontSize?: number
+  /** Tile size in px, used only by `iconOnly`. */
+  iconSize?: number
+  /** Show the tile instead of the wordmark — for narrow widths. */
   iconOnly?: boolean
 }
 
-export function Wordmark({ height = 28, iconOnly = false }: Props) {
-  const fontSize = height * 0.82
-  const ringSize = fontSize * RING_EM
-
-  return (
-    <Box
-      // One accessible name for the whole lockup: without this a screen reader
-      // announces the tile, "Next", the ring and "wner" as four separate
-      // things — and "wner" is not a word.
-      role="img"
-      aria-label="NextOwner"
-      sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}
-    >
+export function Wordmark({ fontSize = 30, iconSize = 30, iconOnly = false }: Props) {
+  if (iconOnly) {
+    return (
       <Box
-        aria-hidden
+        role="img"
+        aria-label="NextOwner"
         component="img"
         src={iconSrc}
         alt=""
         sx={{
           display: 'block',
-          width: height,
-          height,
+          width: iconSize,
+          height: iconSize,
           flexShrink: 0,
-          borderRadius: `${Math.round(height * 0.24)}px`,
+          // The tile artwork is a full square; the corners are rounded here.
+          borderRadius: `${Math.round(iconSize * 0.24)}px`,
         }}
       />
-      {!iconOnly && (
-        <Typography
-          aria-hidden
-          component="span"
-          sx={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            fontWeight: 700,
-            letterSpacing: '-0.02em',
-            // lineHeight 1 makes the line box exactly 1em, which centres cap
-            // height in it — so aligning the ring to centre lines it up with
-            // the capitals either side of it.
-            lineHeight: 1,
-            fontSize,
-            whiteSpace: 'nowrap',
-            userSelect: 'none',
-          }}
-        >
-          <Box component="span" sx={{ color: logoColors.wordmarkNext }}>
-            Next
-          </Box>
-          <Box
-            component="img"
-            src={ringSrc}
-            alt=""
-            sx={{
-              display: 'block',
-              height: ringSize,
-              width: ringSize * RING_RATIO,
-              flexShrink: 0,
-              // Side bearings, so the ring sits in the word like a letter.
-              // Asymmetric because the artwork is: 10px before the ring, 6px
-              // after, against a 68px cap. The adjacent glyphs carry some of
-              // that in their own bearings, so only the remainder is added.
-              ml: `${fontSize * 0.05}px`,
-              mr: `${fontSize * 0.02}px`,
-            }}
-          />
-          <Box component="span" sx={{ color: logoColors.orange }}>
-            wner
-          </Box>
-        </Typography>
-      )}
-    </Box>
+    )
+  }
+
+  const ringSize = fontSize * RING_EM
+
+  return (
+    <Typography
+      // One accessible name for the lockup: unlabelled it would announce as
+      // "Next", an image, then "wner" — and "wner" is not a word.
+      role="img"
+      aria-label="NextOwner"
+      component="span"
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        fontFamily: WORDMARK_FONT,
+        fontWeight: 800,
+        letterSpacing: '-0.022em',
+        // lineHeight 1 makes the line box exactly 1em, which centres cap
+        // height within it — so centring the ring aligns it with the
+        // capitals either side.
+        lineHeight: 1,
+        fontSize,
+        whiteSpace: 'nowrap',
+        userSelect: 'none',
+        flexShrink: 0,
+      }}
+    >
+      <Box aria-hidden component="span" sx={{ color: logoColors.wordmarkNext }}>
+        Next
+      </Box>
+      <Box
+        aria-hidden
+        component="img"
+        src={ringSrc}
+        alt=""
+        sx={{
+          display: 'block',
+          height: ringSize,
+          width: ringSize,
+          flexShrink: 0,
+          // Side bearings measured from the artwork (10px before the ring,
+          // 6px after, against a 68px cap), less what the neighbouring glyphs
+          // already carry in their own bearings.
+          ml: `${fontSize * 0.05}px`,
+          mr: `${fontSize * 0.02}px`,
+        }}
+      />
+      <Box aria-hidden component="span" sx={{ color: logoColors.orange }}>
+        wner
+      </Box>
+    </Typography>
   )
 }
