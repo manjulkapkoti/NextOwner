@@ -85,6 +85,13 @@ export function Wordmark({ fontSize = 30, iconSize = 30, iconOnly = false }: Pro
       // "Next", an image, then "wner" — and "wner" is not a word.
       role="img"
       aria-label="NextOwner"
+      // Marks this as a logotype. WCAG 1.4.3 exempts "text that is part of a
+      // logo or brand name" from the contrast minimum — the brand orange is
+      // 2.94:1 on white, which is correct for a mark and would be a real
+      // failure anywhere else. The a11y suite excludes this attribute so the
+      // exemption is narrow and explicit, rather than the contrast rule being
+      // switched off globally.
+      data-logotype="true"
       component="span"
       sx={{
         display: 'inline-flex',

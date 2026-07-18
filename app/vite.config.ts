@@ -23,5 +23,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/setupTests.ts',
+    // Unit tests only. Vitest's default glob would also match `e2e/*.spec.ts`,
+    // which are Playwright specs — they need a real browser and would fail
+    // under jsdom.
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
   },
 } as UserConfig & Pick<ViteUserConfig, 'test'>)

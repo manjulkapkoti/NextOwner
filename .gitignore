@@ -45,3 +45,6 @@ docs/temp_readme.md
 Thumbs.db
 .idea/
 .vscode/
+
+# Playwright screen captures — artefacts for looking at, not for review
+app/e2e/__screens__/
