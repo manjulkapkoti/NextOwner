@@ -100,23 +100,13 @@ export const NavBar = observer(function NavBar() {
                   '& .MuiButton-root': { whiteSpace: 'nowrap' },
                 }}
               >
-                <Button variant="contained" size="small" onClick={() => go('/sell')}>
+                <Button variant="contained" onClick={() => go('/sell')}>
                   List a business
                 </Button>
-                <Button
-                  color="inherit"
-                  size="small"
-                  onClick={() => go('/my-listings')}
-                  sx={{ color: 'text.secondary' }}
-                >
+                <Button color="inherit" onClick={() => go('/my-listings')} sx={{ color: 'text.secondary' }}>
                   My listings
                 </Button>
-                <Button
-                  color="inherit"
-                  size="small"
-                  onClick={handleLogout}
-                  sx={{ color: 'text.secondary' }}
-                >
+                <Button color="inherit" onClick={handleLogout} sx={{ color: 'text.secondary' }}>
                   Logout
                 </Button>
               </Stack>
@@ -154,16 +144,10 @@ export const NavBar = observer(function NavBar() {
               alignItems="center"
               sx={{ '& .MuiButton-root': { whiteSpace: 'nowrap' } }}
             >
-              <Button
-                color="inherit"
-                size="small"
-                component={RouterLink}
-                to="/login"
-                sx={{ color: 'text.secondary' }}
-              >
+              <Button color="inherit" component={RouterLink} to="/login" sx={{ color: 'text.secondary' }}>
                 Log in
               </Button>
-              <Button variant="contained" size="small" component={RouterLink} to="/register">
+              <Button variant="contained" component={RouterLink} to="/register">
                 Get started
               </Button>
             </Stack>
