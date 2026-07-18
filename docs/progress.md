@@ -7,9 +7,9 @@
 > file is the human-readable "you are here + ▶ next". Full design:
 > `docs/session_recovery.md`.
 
-**Milestone status:** M0–M2 ✅ merged. **App-shell (`pre-003`)** ✅ merged (#25), plus the public landing page (#26) and the register page (#27).
-**In flight:** branch `feat/pre-003-design-system` — the design-system pass (owner-directed; no spec folder) is **complete**: `theme.ts` implementing the v1 tokens, brand assets + `Wordmark`, `StatusChip`, and all six screens restyled. Full suite green, inline review clean (frontend-only, backend untouched, so no appsec pass). PR open — awaiting human approval.
-**Open PRs:** design system (see the PR).
+**Milestone status:** M0–M2 ✅ merged. **App-shell (`pre-003`)** ✅ merged (#25), plus the public landing page (#26) and the register page (#27). **Design system** ✅ merged (#28) — tokens, brand, `StatusChip`, all six screens.
+**In flight:** nothing — `main` is clean and green (65 backend + 28 frontend). Next up is M3.
+**Open PRs:** none.
 
 ## ▶ NEXT ACTION
 Review the design-system PR, then **"close the feature"** (`/close-feature <pr#>`) to squash-merge + sync `main`. Then M3:
