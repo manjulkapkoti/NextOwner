@@ -38,10 +38,11 @@ Serves the client-side half of **FR-1/FR-2** (auth session + navigation) and **F
 - **AS4** — GIVEN the app is mounted, WHEN an `auth:unauthorized` event fires (what `api.ts` emits on any 401), THEN the app **navigates to `/login`** and the token is cleared.
 - **AS5** — GIVEN a session, WHEN the shell renders, THEN a **Logout** control is visible; clicking it **clears the session** and returns to `/login`.
 - **AS6** — GIVEN a session, WHEN navigating to `/` (the landing), THEN the seller's **dashboard** (`MyListings`) renders.
+- **AS7** *(added post-merge, 2026-07-18)* — GIVEN **no** session, WHEN navigating to `/` (the landing), THEN a minimal public placeholder renders (brand, tagline, a link to `/login`) — **not** the login form itself. Added because the original scope (below) left `/` bouncing an unauthenticated visitor straight to `/login` with zero context; this is a stopgap ahead of M4's real public browse page.
 
 ## Out of scope (deferred)
 
-- **Public/marketing pages** — the anonymous browse experience is **M4**; this shell only routes the authed app + login.
+- **A real public/marketing experience** — the anonymous browse page (listings, filters, search) is **M4**; AS7 above is a minimal placeholder only, not that page.
 - **Buyer-specific navigation / data room** — M5+.
 - **Admin routes** — added by **M3** onto this shell.
 - **A polished nav/design system** — minimal MUI `AppBar` here; the design system is a later concern.
