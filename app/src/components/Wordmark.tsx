@@ -25,14 +25,26 @@ import { logoColors } from '../theme'
 // closer kin to the ring that replaces the O.
 const WORDMARK_FONT = '"Manrope", "Inter", sans-serif'
 
-// The ring stands in for a capital O, so it is sized against cap height and
-// overshot slightly, the way a round glyph is, so it doesn't read small beside
-// flat-topped letters. The 1.147x overshoot is measured from the artwork
-// (cap 68px, ring 78px); Manrope's cap height is ~0.70em, against Inter's
-// 0.727em — so the em multiplier differs by face and is derived, not copied.
+// The ring stands in for a capital O, so its geometry is derived from two
+// measured facts rather than eyeballed:
+//
+//   RING_TO_CAP   from the artwork (docs/brand/title.png): cap 68px, ring
+//                 78px. Round glyphs are overshot so they don't read small
+//                 beside flat-topped letters like N and W.
+//   CAP_HEIGHT_EM from the font binary's OS/2 table (Manrope 800: capHeight
+//                 1440 / unitsPerEm 2000). It is face-specific — Inter is
+//                 0.7275em — so it must be re-read, never carried across.
+//
+// ALIGNMENT: the ring is anchored to the BASELINE, not centred in the line
+// box. Line-box centring depends on half-leading, which varies with every
+// face's ascent/descent, and it left the ring sitting ~1px high in Manrope.
+// The baseline is also the thing the eye actually compares against. A real
+// capital O sits on the baseline and overshoots below it by half the total
+// overshoot, so the ring does the same.
 const RING_TO_CAP = 78 / 68
-const MANROPE_CAP_HEIGHT_EM = 0.7
-const RING_EM = MANROPE_CAP_HEIGHT_EM * RING_TO_CAP // ~0.803em
+const CAP_HEIGHT_EM = 0.72
+const RING_EM = CAP_HEIGHT_EM * RING_TO_CAP // ~0.826em
+const OVERSHOOT_EM = ((RING_TO_CAP - 1) / 2) * CAP_HEIGHT_EM // ~0.053em below baseline
 
 type Props = {
   /** Wordmark type size in px; the ring is sized from it. */
@@ -65,6 +77,7 @@ export function Wordmark({ fontSize = 30, iconSize = 30, iconOnly = false }: Pro
   }
 
   const ringSize = fontSize * RING_EM
+  const overshoot = fontSize * OVERSHOOT_EM
 
   return (
     <Typography
@@ -75,7 +88,8 @@ export function Wordmark({ fontSize = 30, iconSize = 30, iconOnly = false }: Pro
       component="span"
       sx={{
         display: 'inline-flex',
-        alignItems: 'center',
+        // Baseline, not centre — see the alignment note above.
+        alignItems: 'baseline',
         fontFamily: WORDMARK_FONT,
         fontWeight: 800,
         letterSpacing: '-0.022em',
@@ -102,6 +116,12 @@ export function Wordmark({ fontSize = 30, iconSize = 30, iconOnly = false }: Pro
           height: ringSize,
           width: ringSize,
           flexShrink: 0,
+          // `align-items: baseline` puts an image's bottom edge on the
+          // baseline; this nudges it down by the overshoot, so it sits exactly
+          // where a real capital O would. Relative offset, so it shifts
+          // visually without changing the lockup's layout height.
+          position: 'relative',
+          top: `${overshoot}px`,
           // Side bearings measured from the artwork (10px before the ring,
           // 6px after, against a 68px cap), less what the neighbouring glyphs
           // already carry in their own bearings.
