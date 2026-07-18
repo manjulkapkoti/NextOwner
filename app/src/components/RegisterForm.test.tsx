@@ -18,10 +18,17 @@ function renderForm() {
   )
 }
 
+// `delay: null` removes user-event's per-keystroke pause. That pause exists to
+// simulate human typing speed, which nothing here asserts on — and at ~28
+// characters of password it pushed these tests past the 5s default timeout,
+// which is why they failed intermittently rather than consistently.
+const typist = () => userEvent.setup({ delay: null })
+
 async function fillAndSubmit(email = 'alice@example.com', password = 'correct horse battery staple') {
-  await userEvent.type(screen.getByLabelText(/email/i), email)
-  await userEvent.type(screen.getByLabelText(/password/i), password)
-  await userEvent.click(screen.getByRole('button', { name: /create account/i }))
+  const user = typist()
+  await user.type(screen.getByLabelText(/email/i), email)
+  await user.type(screen.getByLabelText(/password/i), password)
+  await user.click(screen.getByRole('button', { name: /create account/i }))
 }
 
 describe('RegisterForm', () => {

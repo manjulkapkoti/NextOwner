@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/guard_main_commit.py"
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_main_commit.py\""
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/lint_edited_file.py"
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/lint_edited_file.py\""
           }
         ]
       }
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/flight_recorder.py"
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/flight_recorder.py\""
           }
         ]
       }

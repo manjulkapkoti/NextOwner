@@ -10,6 +10,39 @@ on:
     branches: [main]
 
 jobs:
+  # Supply chain. Security is the project's stated #1 priority, and until
+  # 2026-07-19 nothing checked our dependencies at all — the first run found 5
+  # advisories in the frontend toolchain, one of them critical. Runs on PRs and
+  # on main, because a new advisory can land against code that has not changed:
+  # this needs to fail on the world's schedule, not only on ours.
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Audit Python dependencies (pip-audit)
+        working-directory: backend
+        run: |
+          python -m pip install --quiet pip-audit
+          python -m pip_audit -r requirements.txt --progress-spinner off
+      - name: Audit npm dependencies
+        working-directory: app
+        # Fails on high/critical only. Moderate advisories in dev-only tooling
+        # are printed but do not block a merge — blocking on those trains people
+        # to ignore the job, which is worse than not having it. Review the
+        # moderates at each dependency bump.
+        run: |
+          npm audit --audit-level=high
+          npm audit || true
+
   # Bound to the merge, not to the milestone-close ceremony. `main` contains
   # only merged work, so nothing on it may still claim to be in flight — the
   # check enforces exactly that. It runs on push to main (the one step no

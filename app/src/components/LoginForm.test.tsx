@@ -29,9 +29,12 @@ describe('LoginForm', () => {
         <LoginForm />
       </MemoryRouter>,
     )
-    await userEvent.type(screen.getByLabelText(/email/i), 'not-an-email')
-    await userEvent.type(screen.getByLabelText(/password/i), 'whatever')
-    await userEvent.click(screen.getByRole('button', { name: /log in/i }))
+    // `delay: null` — no per-keystroke pause; nothing here asserts on typing
+    // speed, and the pause is what pushes these past the 5s default timeout.
+    const user = userEvent.setup({ delay: null })
+    await user.type(screen.getByLabelText(/email/i), 'not-an-email')
+    await user.type(screen.getByLabelText(/password/i), 'whatever')
+    await user.click(screen.getByRole('button', { name: /log in/i }))
     await waitFor(() =>
       expect(screen.getByText(/not a valid email address/i)).toBeInTheDocument(),
     )
