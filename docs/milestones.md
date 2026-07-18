@@ -109,7 +109,8 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
 - [x] **M0** — scaffold + `GET /health`
 - [x] **M1** — auth & roles *(+ profiles, ToS stamp, error contract, rate-limit; account lifecycle moved to M8 — § Scope fold-ins)*
 - [x] **M2** — listing builder + uploads *(+ lifecycle transitions, `Decimal` money, storage port — § Scope fold-ins)*
-- [x] **App-shell** — router + nav + login→app flow + global-401 redirect *(frontend foundation; spec `pre-003`, before M3)*
+- [x] **App-shell** — router + nav + login→app flow + global-401 redirect *(frontend foundation; spec `pre-003`, before M3)* · *(+ public landing page #26, register page #27)*
+- [ ] **Design system** — tokens (`theme.ts`) + brand assets + front-door screens restyled *(frontend foundation, branch `feat/pre-003-design-system`; **no spec folder** — an owner-directed design pass, not an FR-bearing milestone. Decisions live in `docs/design_system_spec.md`.)*
 - [ ] **M3** — admin curation *(+ `listing_event` audit — § Scope fold-ins)*
 - [ ] **M4** — marketplace browse *(+ keyword search, seed data, brand voice & landing copy — § Scope fold-ins)*
 - [ ] **M5** ⭐ — NDA + access gate *(+ revocation endpoint, `nda_version` — § Scope fold-ins)*
