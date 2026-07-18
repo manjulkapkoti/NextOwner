@@ -67,6 +67,17 @@ describe('AppShell routing', () => {
     await waitFor(() => expect(screen.getByText(/no listings yet/i)).toBeInTheDocument())
   })
 
+  it('AS7: a logged-out visitor hitting the landing page sees public content, not the login form', async () => {
+    // "NextOwner" alone would also match the nav bar brand — assert on the
+    // page's own tagline instead, which is unique to the landing content.
+    renderShellAt('/')
+    await waitFor(() =>
+      expect(screen.getByText(/buying and selling small online businesses/i)).toBeInTheDocument(),
+    )
+    expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /log in/i })).toBeInTheDocument()
+  })
+
   it('AS8: a logged-out visitor hitting /register sees the registration form', async () => {
     renderShellAt('/register')
     await waitFor(() => expect(screen.getByRole('button', { name: /create account/i })).toBeInTheDocument())
