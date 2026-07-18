@@ -75,14 +75,13 @@ export const NavBar = observer(function NavBar() {
               color: 'inherit',
             }}
           >
-            {/* The wordmark already contains the ring as its "O", so the two
-                forms are alternatives, never shown together: below sm there
-                isn't room for the wordmark, so the mark stands in for it. */}
+            {/* Below sm the wordmark text is dropped and the icon stands
+                alone, so the brand never competes with the actions for room. */}
             <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-              <Wordmark height={22} />
+              <Wordmark height={28} />
             </Box>
             <Box sx={{ display: { xs: 'block', sm: 'none' } }}>
-              <Wordmark height={26} variant="mark" />
+              <Wordmark height={28} iconOnly />
             </Box>
           </Stack>
 

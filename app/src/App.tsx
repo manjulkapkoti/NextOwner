@@ -76,7 +76,7 @@ function RegisterRoute() {
             Back
           </Button>
         </Box>
-        <Wordmark height={22} />
+        <Wordmark height={28} />
         {/* Empty third column keeps the wordmark optically centered. */}
         <Box />
       </Box>

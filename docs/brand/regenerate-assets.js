@@ -66,8 +66,16 @@ function square(file,out){
   fs.writeFileSync(out,encodeRGBA(s,s,px));
   console.log('wrote',out,s+'x'+s);
 }
+// The app uses the icon tile only — "NextOwner" is rendered as live text
+// (navy "Next" + orange "Owner"), so it stays crisp at any size and can be
+// recoloured for dark mode. The artwork is a full square; the rounded corners
+// are applied in CSS.
 const A='app/src/assets/';
 fs.mkdirSync(A,{recursive:true});
-unwhite('docs/brand/title.png',A+'wordmark.png');
-unwhite('docs/brand/logo_1.png',A+'mark.png');
+square('docs/brand/logo-icon.png',A+'logo-icon.png');
 square('docs/brand/logo-icon.png','app/public/favicon.png');
+
+// `unwhite` is kept for the full-lockup artwork (docs/brand/title.png,
+// logo_1.png), which ships on white and would need transparency if a surface
+// ever renders the lockup as an image instead of as text.
+void unwhite;

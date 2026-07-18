@@ -1,43 +1,66 @@
 // The NextOwner logo, in one place so every surface renders it identically.
 //
-// Two forms of the same identity:
-//   "full" — the wordmark ("Next" navy + "Owner" orange, the O being the mark)
-//   "mark" — the ring alone, for widths too narrow for the wordmark
+// The icon tile is artwork; "NextOwner" is live text — navy "Next" + orange
+// "Owner", matching the supplied lockup. Text rather than an image of text so
+// it stays crisp at any size, scales with the type system, can be recoloured
+// for dark mode, and is selectable and translatable.
 //
-// Raster, not vector: no SVG source exists yet. Both assets are ~5x the size
-// they render at, so they stay sharp on high-DPI screens, and the white
-// backgrounds of the originals have been converted to real transparency so
-// they sit on any surface. Swap these two imports for SVGs when vector
-// artwork arrives — nothing else needs to change.
-import { Box } from '@mui/material'
-import markSrc from '../assets/mark.png'
-import wordmarkSrc from '../assets/wordmark.png'
-
-// Intrinsic aspect ratios, so a height is all a caller ever has to pass.
-const WORDMARK_RATIO = 552 / 100
-const MARK_RATIO = 88 / 87
+// The tile is a full square (no baked-in corner rounding), so the radius is
+// applied here in CSS.
+import { Box, Typography } from '@mui/material'
+import iconSrc from '../assets/logo-icon.png'
+import { logoColors } from '../theme'
 
 type Props = {
-  /** Rendered height in px. Width follows from the artwork's aspect ratio. */
+  /** Height of the icon tile in px; the wordmark is sized to match. */
   height?: number
-  variant?: 'full' | 'mark'
+  /** Icon only — for widths too narrow to fit the wordmark beside it. */
+  iconOnly?: boolean
 }
 
-export function Wordmark({ height = 24, variant = 'full' }: Props) {
-  const isMark = variant === 'mark'
+export function Wordmark({ height = 28, iconOnly = false }: Props) {
   return (
     <Box
-      component="img"
-      src={isMark ? markSrc : wordmarkSrc}
-      alt="NextOwner"
-      sx={{
-        display: 'block',
-        height,
-        width: height * (isMark ? MARK_RATIO : WORDMARK_RATIO),
-        // Never let a flex parent squash the logo out of proportion.
-        flexShrink: 0,
-        userSelect: 'none',
-      }}
-    />
+      // One accessible name for the whole lockup: without this, a screen
+      // reader would announce the icon and the two text halves separately.
+      role="img"
+      aria-label="NextOwner"
+      sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}
+    >
+      <Box
+        aria-hidden
+        component="img"
+        src={iconSrc}
+        alt=""
+        sx={{
+          display: 'block',
+          width: height,
+          height,
+          flexShrink: 0,
+          borderRadius: `${Math.round(height * 0.24)}px`,
+        }}
+      />
+      {!iconOnly && (
+        <Typography
+          aria-hidden
+          component="span"
+          sx={{
+            fontWeight: 700,
+            letterSpacing: '-0.02em',
+            lineHeight: 1,
+            fontSize: height * 0.82,
+            whiteSpace: 'nowrap',
+            userSelect: 'none',
+          }}
+        >
+          <Box component="span" sx={{ color: logoColors.navy }}>
+            Next
+          </Box>
+          <Box component="span" sx={{ color: logoColors.orange }}>
+            Owner
+          </Box>
+        </Typography>
+      )}
+    </Box>
   )
 }
