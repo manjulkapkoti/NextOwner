@@ -46,6 +46,16 @@ The pre-PR review is **inline by default**: the orchestrator (in the `tech-lead`
 
 ---
 
+### The docs audit (added 2026-07-19)
+
+Code has a compiler and a test suite. Prose has neither, and every documentation defect this project has hit was a defect of **fact** written in fluent English: a `progress.md` contradicting the constitution on which milestones get a security pass, three documents each defining the design tokens, a spec still calling a shipped design system "a later concern", a `CLAUDE.md` claiming a guarantee its trigger did not provide, and a constitution amendment reporting "six paths" when there were 11.
+
+None of those needed better writing. They needed a reader who was not the author — the same argument as the independent appsec pass, applied to prose.
+
+`scripts/check_docs_trigger.py` decides when: **any change to a binding document** (constitution, `CLAUDE.md`, `security.md`, `requirements.md`), or **more than 40 changed lines** of other prose. Below that it stays quiet, deliberately — a typo fix does not need an auditor, and a check that fires on everything is one people learn to skip.
+
+The **`docs-auditor`** agent audits, it does not edit: contradictions (quoting both sides), duplicated truth, stale references, over-claiming, unverifiable numbers, untestable acceptance criteria, and absence claims with no stated search. Explicitly **no style, tone or restructuring** — volume is how a review becomes noise. Hand it the diff *and* the binding documents, since the contradiction it needs to find usually spans both.
+
 ### The bounded re-verification round (added 2026-07-19)
 
 A review that only runs **before** the fix leaves the fix itself unchecked — and a fix is exactly where a new bug enters. On M3 the independent pass found a blocking curation bypass, the orchestrator patched it, and nothing verified the patch: it happened to be sound, but only because a mechanical reachability test existed to prove it, not because the process demanded proof.
