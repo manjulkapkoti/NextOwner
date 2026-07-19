@@ -69,6 +69,38 @@ test('a11y: dashboard with listings', async ({ page }) => {
   ).toEqual([])
 })
 
+// M3's curation queue. An admin-only screen still gets scanned — "only staff
+// see it" is not an accessibility exemption, and it is the screen with the
+// densest controls in the product so far.
+test('a11y: admin curation queue', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('token', 'e2e.fake.token'))
+  await page.route('**/api/auth/me', (route) =>
+    route.fulfill({ json: { id: 1, email: 'admin@example.com', is_admin: true } }),
+  )
+  await page.route('**/api/admin/listings**', (route) =>
+    route.fulfill({
+      json: [
+        {
+          id: 7,
+          headline: 'Profitable B2B scheduling SaaS',
+          type: 'saas',
+          asking_price: '500000.00',
+          status: 'pending_review',
+          created_at: '2026-07-19T10:00:00Z',
+          company_name: 'Acme Internal Tools LLC',
+          website_url: 'https://acme.example.com',
+        },
+      ],
+    }),
+  )
+  await page.goto('/admin')
+  const results = await scan(page)
+  expect(
+    results.violations,
+    results.violations.map((v) => `${v.id}: ${v.help} (${v.nodes.length} nodes)`).join('\n'),
+  ).toEqual([])
+})
+
 test('a11y: listing wizard', async ({ page }) => {
   await stubSeller(page, [])
   await page.goto('/sell')
