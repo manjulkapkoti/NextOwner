@@ -2,7 +2,15 @@
 // (spec pre-003). Replaces the M0 health page.
 import { Fragment, useEffect } from 'react'
 import { Box, Button, Container, Stack, Typography } from '@mui/material'
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import {
+  BrowserRouter,
+  Link as RouterLink,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom'
 import { brandTint } from './theme'
 import { AdminQueue } from './components/AdminQueue'
 import { BrowseListings } from './components/BrowseListings'
@@ -101,9 +109,16 @@ function LandingRoute() {
   if (token) {
     return <Navigate to="/my-listings" replace />
   }
-  // The public front door. The real anonymous browse experience is M4; until
-  // then this is a credibility-first hero, not a placeholder — brand, value
-  // prop, and the two clear paths in (sign in / create an account).
+  // The public front door, in the succession voice (M4, spec 004 F7;
+  // milestones.md § Scope fold-ins → M4). The positioning is *succession, not
+  // transaction*: a business existed before the sale and continues after it,
+  // and the seller chooses who carries it forward. That is not a slogan — it is
+  // a plain description of `access_request` (requested → approved|denied), so
+  // the promise and the architecture are the same sentence.
+  //
+  // The seller is the lead audience because supply is the scarce side, but a
+  // seller-led framing leaves buyers cold, so the counter-story gets equal
+  // billing rather than a footnote.
   const trustPoints = ['Curated listings', 'NDA-gated data rooms', 'Verified buyers']
   return (
     <Box
@@ -129,7 +144,7 @@ function LandingRoute() {
             }}
           >
             <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600, letterSpacing: '0.02em' }}>
-              The marketplace for online business acquisitions
+              Succession, not transaction
             </Typography>
           </Box>
 
@@ -138,7 +153,7 @@ function LandingRoute() {
             component="h1"
             sx={{ fontSize: { xs: '2.15rem', sm: '2.75rem', md: '3.4rem' }, maxWidth: 780 }}
           >
-            Buy and sell online businesses with confidence
+            Every business deserves a next owner
           </Typography>
 
           <Typography
@@ -146,12 +161,27 @@ function LandingRoute() {
             component="p"
             sx={{ color: 'text.secondary', fontWeight: 400, maxWidth: 620 }}
           >
-            The trusted marketplace for buying and selling small online businesses — vetted
-            listings, gated data rooms, and verified buyers on both sides of the deal.
+            You built it. You choose who carries it forward — and you decide who gets to look
+            inside before they do.
           </Typography>
 
-          {/* No CTA in the hero: both actions live top-right in the nav, which
-              is sticky, so they stay on screen the whole way down the page. */}
+          {/* The buyer's half of the story. The seller-led framing above is
+              deliberate (supply is the scarce side), but on its own it gives a
+              buyer no reason to be here. */}
+          <Typography
+            variant="body1"
+            sx={{ color: 'text.secondary', maxWidth: 560, pt: { xs: 0.5, md: 1 } }}
+          >
+            Buying? Take over something real — with customers, revenue and a history — instead of
+            starting from zero.
+          </Typography>
+
+          {/* One CTA in the hero: the marketplace is the thing worth seeing
+              first, and it is the only action the nav does not already carry
+              (Log in and Get started live top-right, sticky, on every page). */}
+          <Button component={RouterLink} to="/browse" variant="contained" size="large">
+            Browse listings
+          </Button>
 
           <Stack
             direction={{ xs: 'column', sm: 'row' }}

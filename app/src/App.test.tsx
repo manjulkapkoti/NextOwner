@@ -95,8 +95,11 @@ describe('AppShell routing', () => {
   // lives in headlines and prose, never in navigation (fold-in constraint).
   it('F8: the nav offers a Browse link to the public marketplace', async () => {
     renderShellAt('/')
+    // Exact name: the hero also links to /browse ("Browse listings"), and a
+    // /browse/i matcher would fail on the match count rather than on whether
+    // the nav carries the link.
     await waitFor(() =>
-      expect(screen.getByRole('link', { name: /browse/i })).toHaveAttribute('href', '/browse'),
+      expect(screen.getByRole('link', { name: 'Browse' })).toHaveAttribute('href', '/browse'),
     )
   })
 
