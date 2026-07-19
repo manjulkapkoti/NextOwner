@@ -141,6 +141,10 @@ class ListingSummary(SQLModel):
     status: str
     asking_price: Decimal
     created_at: datetime
+    # Derived from the latest rejection event, not stored on the listing —
+    # a column would be a second copy that goes stale the moment a listing is
+    # rejected twice (spec C6, plan.md § Schema delta).
+    rejection_reason: str | None = None
 
     @field_serializer("asking_price", when_used="json")
     def _ser_price(self, v: Decimal) -> str:

@@ -110,8 +110,36 @@ def create_listing(
 def my_listings(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
-) -> list[Listing]:
-    return list(session.exec(select(Listing).where(Listing.owner_id == user.id)).all())
+) -> list[ListingSummary]:
+    """The seller's dashboard. A rejected listing carries the admin's reason
+    (spec C6), read from the latest rejection event rather than a column on the
+    listing — one home per fact."""
+    listings = list(session.exec(select(Listing).where(Listing.owner_id == user.id)).all())
+
+    reasons: dict[int, str] = {}
+    rejected = [listing.id for listing in listings if listing.status == "rejected"]
+    if rejected:
+        events = session.exec(
+            select(ListingEvent)
+            .where(ListingEvent.listing_id.in_(rejected))    # noqa: E501
+            .where(ListingEvent.action == "rejected")
+            .order_by(ListingEvent.id)
+        ).all()
+        for event in events:            # ordered by id, so the last write wins
+            if event.reason is not None:
+                reasons[event.listing_id] = event.reason
+
+    return [
+        ListingSummary(
+            id=listing.id,
+            headline=listing.headline,
+            status=listing.status,
+            asking_price=listing.asking_price,
+            created_at=listing.created_at,
+            rejection_reason=reasons.get(listing.id),
+        )
+        for listing in listings
+    ]
 
 
 @router.get("/listings/{listing_id}", response_model=ListingRead)
