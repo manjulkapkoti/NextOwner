@@ -28,9 +28,25 @@ before any UI can depend on it.
 what makes B3's 409 a database guarantee rather than a check someone can forget. Declared via
 `__table_args__ = (UniqueConstraint(...),)`.
 
-*Erasure note (`data_protection.md`):* `AccessRequest` references a person but stores no PII
-of its own — anonymizing a `User` in place leaves these rows intact and meaningless, which is
-the intended behaviour. No new PII field is introduced by this milestone.
+**`AccessRequestEvent`** — new table (D6), a direct mirror of M3's `ListingEvent`:
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `int` PK | |
+| `access_request_id` | FK, indexed | |
+| `actor_id` | FK `user.id` | **Server-derived from the JWT** (C9). |
+| `action` | `str` | `requested \| approved \| denied \| revoked` |
+| `from_status` / `to_status` | `str` | Self-contained: a reader knows what changed without replaying history. |
+| `created_at` | `datetime` | |
+
+One row per **completed** transition, never per attempt — M3's rule, so the log records what
+happened rather than what was tried. Append-only by discipline (nothing updates or deletes a
+row; C11 asserts it). `decided_at` / `decided_by_id` stay on `AccessRequest` as the convenient
+denormalized "current" answer; the event table is the history that revocation cannot overwrite.
+
+*Erasure note (`data_protection.md`):* both tables reference a person but store no PII of their
+own — anonymizing a `User` in place leaves the rows intact and meaningless, which is the
+intended behaviour. No new PII field is introduced by this milestone.
 
 **Config** (`backend/app/config.py`): `nda_version: str = "1.0"` — server-owned, so the client
 can never influence what was signed.
@@ -47,7 +63,7 @@ can never influence what was signed.
 | `GET /api/listings/{id}/private` | **`require_private_access`** ⭐ | — |
 | `GET /api/listings/{id}/documents/{doc_id}` | **`require_private_access`** (was `get_owned_listing`) | — |
 | `GET /api/my/access-requests` | `get_current_user` (caller-scoped) | — |
-| `GET /api/access-requests?listing_id=` | `get_owned_listing` via the query param | — |
+| `GET /api/my/listings/{id}/access-requests` | `get_owned_listing` *(existing — D7)* | — |
 
 ## Permission gates (`backend/app/permissions.py`)
 
@@ -81,8 +97,8 @@ Three new functions — **one per trust boundary**, matching the file's existing
 - **`AccessRequestRead`** — id, listing_id, status, created_at, decided_at. **No buyer email**
   (S3).
 - **`AccessRequestWithBuyer`** — the seller's queue: the above plus a nested buyer **profile**
-  (display name, budget, target industries, experience, verification status) and explicitly
-  **not** email (G3). Verification status is a placeholder field until M10 fills it.
+  (display name, budget, target industries, experience) and explicitly **not** email (G3).
+  **No verification field** — M10 owns it and will add it here (D5).
 - `ListingPublic` (M4) is **unchanged** — S4 asserts M5 did not widen it.
 
 ## Errors (`backend/app/errors.py` — existing classes, new codes)
@@ -141,11 +157,13 @@ each one commit. No checkboxes: the red test list is the status (`pytest -q --lf
    milestone, and the one that creates the rows everything downstream decides on.*
    → **B1–B7**.
 
-4. **Seller decisions** + `require_request_decider` — approve / deny / revoke. *Before the
-   gate, because the gate reads the terminal state this slice produces; without it, D2–D5
-   could only be tested by writing rows directly, which would test the fixture rather than the
-   product.*
-   → **C1–C8, S1, S5, X1, X2**.
+4. **Seller decisions** + `require_request_decider` — approve / deny / revoke, each writing its
+   `accessrequestevent` row (D6). *Before the gate, because the gate reads the terminal state
+   this slice produces; without it, D2–D5 could only be tested by writing rows directly, which
+   would test the fixture rather than the product.* The audit rows land **in this slice, not a
+   later one** — an event written by the same commit that performs the transition cannot drift
+   from it, which is how M3's `listingevent` stayed honest.
+   → **C1–C11, S1, S5, X1, X2**.
 
 5. **`require_private_access` + `GET /api/listings/{id}/private`** ⭐ *The milestone. Everything
    above exists to make this checkable.*
@@ -158,9 +176,10 @@ each one commit. No checkboxes: the red test list is the status (`pytest -q --lf
    **unedited** (E5).
    → **E1–E5**.
 
-7. **The two list endpoints** — buyer's `/api/my/access-requests`, seller's queue with the
-   buyer profile. *Read-only and lowest-risk, so they come after the writes are proven; the
-   seller's queue also needs the profile shape settled by then.*
+7. **The two list endpoints** — buyer's `/api/my/access-requests`, seller's
+   `/api/my/listings/{id}/access-requests` (D7, guarded by the existing `get_owned_listing`).
+   *Read-only and lowest-risk, so they come after the writes are proven; the seller's queue
+   also needs the profile shape settled by then.*
    → **F1–F3, G1–G3, S3, S4**.
 
 8. **Frontend** — modal, panel, private section, seller queue, store. *Last, because a UI built

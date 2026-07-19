@@ -12,7 +12,7 @@
 |---|---|
 | **FR-6** | Listings are anonymous publicly; identifying details hidden until NDA acceptance. |
 | **FR-13** | A buyer signs the standardized platform NDA **once** (click-wrap, timestamped on their account); thereafter they request access **per listing**, each request timestamped per buyer-listing pair. |
-| **FR-14** | Sellers can approve/deny access requests and see buyer profile / verification status before approving. |
+| **FR-14** | Sellers can approve/deny access requests and see buyer profile / verification status before approving. **Partially satisfied — the profile half only** (D5). |
 | **F6** (MVP scope) | Click-to-sign NDA that unlocks private details. |
 
 **Scope fold-ins** (`docs/milestones.md` § Scope fold-ins → M5), each carried below as criteria:
@@ -61,19 +61,56 @@ else 403)"* — which only parses if approval survives the status change. A sell
 listing has not withdrawn a granted confidence; **`revoke` is the tool for that**, and it is
 the only one.
 
-**D3 — A decided request is terminal; re-requesting is `409`.**
+**D3 — A decided request is terminal; re-requesting is `409`. — OWNER-APPROVED 2026-07-20.**
 The unique constraint is one row per `(listing_id, buyer_id)` — required by FR-13 and
 `security.md` §6. So after `denied` or `revoked`, that buyer cannot re-request: the state
 machine is strictly forward (`requested → approved|denied`, `approved → revoked`). Re-granting
-after a revocation is **deferred** (§ Out of scope) rather than improvised here: it is a
-product question (does a revoked buyer get a second chance, and who initiates?) and inventing
-an answer inside the security milestone is how a gate grows a side door.
+is **deferred to post-MVP and recorded on FR-13** (`docs/requirements.md` — the durable home,
+so it outlives this spec folder) rather than improvised here: it is a product question (does a
+revoked buyer get a second chance, and who initiates?) and inventing an answer inside the
+security milestone is how a gate grows a side door. **The accepted cost is real:** a mistaken
+revocation is unrecoverable in-product until that work lands.
 
 **D4 — Signing is idempotent and the version is frozen at signature.**
 `nda_version` comes from server config, never the client. Re-signing does **not** re-stamp:
 the first signature is the legal record (`data_protection.md` — retained legal record, same
 class as `tos_accepted_at`). What happens when the NDA *text* changes and users hold v1
 signatures is **out of scope** — flagged, not solved (§ Out of scope).
+
+**D5 — FR-14 ships its profile half only; verification waits for M10. — OWNER-APPROVED 2026-07-20.**
+FR-14 wants the seller to see "profile **and** verification status." There is no `verified`
+field anywhere in the codebase — M10 owns buyer verification, and its fold-in already reads
+*"the badge surfaces on the M1 profile (**and in M5's request list**)"*, so M10 is scoped to
+come back for this. M5 therefore ships the profile and **no verification placeholder**. This
+is the M8 notification-table precedent applied to a column instead of a table: *a field
+designed five milestones before its only consumer is speculative, and one M5 writes but
+nobody reads until M10 could not be verified by any test writable at M5 time.*
+`security.md` §7 M8's own warning — *"an unenforced flag is decoration"* — is the same rule.
+**FR-14 is therefore partially satisfied by M5, deliberately and on the record**, rather than
+satisfied in appearance by a field that means nothing.
+
+**D6 — Decisions get an append-only `accessrequestevent` table. — OWNER-APPROVED 2026-07-20.**
+Constitution Article 2 #5 requires *"offers and access decisions get timestamped event rows"*,
+and `security.md` §106 reads that as already satisfied by `access_request.decided_at`. **That
+reading predates the revocation fold-in and no longer holds:** with `revoke` in the state
+machine a row travels `requested → approved → revoked`, and a single `decided_at`/`decided_by_id`
+pair holds only the **last** decision — so revoking silently overwrites the record of when the
+buyer gained access to the financials. On the product's trust core, *"when could this person
+read the P&L, and who let them"* must survive the access being withdrawn; that is precisely
+the question an audit trail exists to answer, and precisely the moment someone asks it.
+So M5 mirrors M3's `listingevent`: one append-only row per completed transition, carrying
+actor, action, `from_status`, `to_status` and a timestamp. This is also what M8 expects to
+find — its fold-in says *"start from `listing_event` and ask the same question of M5/M6/M7's
+events before inventing a schema."* `security.md` §106 is corrected as part of this milestone.
+
+**D7 — The seller's queue is `GET /api/my/listings/{id}/access-requests`. — OWNER-APPROVED 2026-07-20.**
+`design_implementation.md` M5 specifies `GET /access-requests?listing_id=…`, written before M4
+established the `/my/` prefix for owner-scoped views. Putting ownership **in the path** means
+the existing `get_owned_listing` dependency guards the route — a trust boundary that is already
+written, already tested, and already returns 404-not-403 so a draft's existence stays hidden.
+The query-param form would move that check into the handler by hand, which is the pattern
+Article 2 #1 ("one function per trust boundary") exists to prevent. The build guide's prose is
+amended to match, with a dated note.
 
 ---
 
@@ -108,6 +145,9 @@ Each GIVEN/WHEN/THEN below becomes **exactly one test** (constitution Article 3 
 - **C6** GIVEN a request already `approved`, WHEN the seller approves it again, THEN 409 (already decided).
 - **C7** GIVEN a request still `requested`, WHEN the seller revokes it, THEN 409 (`revoke` is legal only from `approved` — D3).
 - **C8** GIVEN an **admin** who does not own the listing, WHEN they approve the request, THEN 403 — admin is not special-cased on this boundary; the seller alone decides who sees their data.
+- **C9** GIVEN the seller approves a request, WHEN the audit table is read, THEN one `accessrequestevent` row exists carrying the deciding seller as `actor_id`, `action: "approved"`, `from_status: "requested"`, `to_status: "approved"` and a timestamp — with `actor_id` derived from the JWT, never the body (D6).
+- **C10** GIVEN a request that was approved at time T and is later revoked, WHEN the audit table is read, THEN **both** rows survive and the approval's timestamp T is still readable — revocation must not erase when access was granted. *This is D6's whole reason to exist; it fails against a design that only stores the last decision.*
+- **C11** GIVEN any sequence of decisions on a request, WHEN the audit table is read, THEN no row has ever been updated or deleted — the trail is append-only (mirrors M3's `listingevent` discipline, spec 003 D4).
 
 ### D — The gate: `require_private_access` on private data ⭐
 
@@ -138,10 +178,10 @@ Each GIVEN/WHEN/THEN below becomes **exactly one test** (constitution Article 3 
 - **F2** GIVEN two buyers with requests, WHEN buyer A fetches, THEN buyer B's rows never appear (caller-scoped).
 - **F3** GIVEN no credentials, THEN 401.
 
-### G — The seller's queue (`GET /api/access-requests?listing_id=…`, FR-14)
+### G — The seller's queue (`GET /api/my/listings/{id}/access-requests`, FR-14 — D7)
 
-- **G1** GIVEN a seller with a listing that has two requests, WHEN they fetch for that listing, THEN both are returned with each buyer's **profile** (display name, budget, target industries, experience) and verification status.
-- **G2** GIVEN a user who does not own that listing, WHEN they fetch its requests, THEN 404 (never-published) / 403 (published) per D1 — a seller's queue is not readable by anyone else.
+- **G1** GIVEN a seller with a listing that has two requests, WHEN they fetch that listing's queue, THEN both are returned with each buyer's **profile** — display name, budget, target industries, experience. **No verification status: that half of FR-14 lands with M10** (D5).
+- **G2** GIVEN a user who does not own that listing, WHEN they fetch its queue, THEN **404** — the route is guarded by the existing `get_owned_listing`, so "not yours" and "doesn't exist" stay indistinguishable (D7; spec 002's existence rule, inherited rather than re-decided).
 - **G3** GIVEN a request from a buyer, WHEN the seller fetches the queue, THEN the response contains **no buyer email** — the seller sees a profile, not contact details (PII minimization, `data_protection.md`).
 
 ### Security & abuse
@@ -178,7 +218,7 @@ Per `docs/error_handling.md` (§7 contract: `{detail, code, request_id}`).
 
 ## Out of scope (deliberately deferred)
 
-- **Re-granting access after a revocation** (D3). The unique constraint makes a decided request terminal. Reversing that is a product decision — deferred rather than improvised inside the security milestone.
+- **Re-requesting after a decision** (D3) — **owner-approved 2026-07-20 and recorded as (Post-MVP) on FR-13** (`docs/requirements.md`), which is its durable home; this spec is not it. The unique constraint makes a decided request terminal, so a seller who revokes by mistake has no in-product way back. FR-13 names the three things whoever picks it up owns: the new transition + its forbidden-path twin, whether the unique constraint survives, and a rate limit on the request endpoint if buyers can re-ask.
 - **NDA re-signature on a version bump** (D4). Users holding a v1 signature keep access when the text moves to v2. Needs a legal answer before a technical one.
 - **Notification rows.** M5 emits **no** `notification` table writes — that table is M8's to design (`milestones.md` § Scope fold-ins → M8, owner-approved 2026-07-19: *a table designed five milestones before its only consumer is speculative*). M5's `accessrequest` rows already carry actor, status and timestamps, which is what M8 will project from — the same relationship M3's `listingevent` has to M8.
 - **Chat on approval.** `design_implementation.md` M6 says approving access also creates a `conversation` row — that belongs to M6, with the conversation model.
