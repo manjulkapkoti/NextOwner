@@ -13,6 +13,7 @@ import os
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import Response
+from sqlalchemy import Numeric, cast, func, or_
 from sqlmodel import Session, select
 
 from ..config import ALLOWED_UPLOAD_TYPES, settings
@@ -23,6 +24,9 @@ from ..permissions import get_current_user, get_owned_listing, require_admin
 from ..schemas import (
     DocumentRead,
     ListingCreate,
+    ListingPage,
+    ListingPublic,
+    ListingQuery,
     ListingRead,
     ListingSummary,
     ListingUpdate,
@@ -68,6 +72,110 @@ def _to_read(listing: Listing, private: ListingPrivate | None) -> ListingRead:
         company_name=private.company_name if private else None,
         website_url=private.website_url if private else None,
         detailed_financials=private.detailed_financials if private else None,
+    )
+
+
+# ── Public marketplace (M4) ──────────────────────────────────────────────────
+#
+# The first routes in the project an anonymous stranger may call. They have no
+# permission dependency **by design** — and because there is no gate, two other
+# controls are the entire boundary:
+#
+#   1. `WHERE status = 'live'`  — nothing unapproved is ever public
+#   2. the `ListingPublic` schema — identity fields cannot leak
+#
+# `_to_public` takes a `Listing` and nothing else, so `ListingPrivate` is not
+# even in scope at the call site: there is no private row here to leak from.
+
+
+def _escape_like(term: str) -> str:
+    """Neutralize LIKE metacharacters in user input.
+
+    Parameterization stops SQL injection but says nothing about *wildcards*: a
+    bound parameter of `%` is still a valid LIKE pattern matching every row, and
+    `_` matches any single character. Escaping them (backslash first, or we'd
+    double-escape our own escapes) makes the search term literal, which is what
+    a user typing `%` means (spec B10).
+    """
+    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _to_public(listing: Listing) -> ListingPublic:
+    return ListingPublic(
+        id=listing.id,
+        type=listing.type,
+        headline=listing.headline,
+        description=listing.description,
+        asking_price=listing.asking_price,
+        ttm_revenue=listing.ttm_revenue,
+        ttm_profit=listing.ttm_profit,
+        mrr=listing.mrr,
+        churn_pct=listing.churn_pct,
+        customers=listing.customers,
+        published_at=listing.published_at,
+    )
+
+
+@router.get("/listings", response_model=ListingPage)
+def browse_listings(
+    query: ListingQuery = Depends(),
+    session: Session = Depends(get_session),
+) -> ListingPage:
+    """Public browse (spec 004 A1-A11, B1-B13). No auth — and no widening if a
+    token is present (S8): this function never reads the caller's identity at
+    all."""
+    conditions = [Listing.status == "live"]
+
+    # Truthiness, not `is not None`, so `?type=` (an empty value, which is how a
+    # cleared dropdown serializes) means "no filter" rather than "match the
+    # empty string" — matching `q`'s handling below.
+    if query.type:
+        conditions.append(Listing.type == query.type)
+
+    # Money is stored as TEXT (the `Money` TypeDecorator keeps Decimal lossless),
+    # so a bare SQL comparison would be **lexicographic**: '90000.00' > '200000.00'
+    # is true as strings and false as money. Cast for the comparison. Only the
+    # boundary check goes through NUMERIC — the stored and returned values are
+    # still exact Decimals, so this does not reintroduce float money.
+    if query.min_price is not None:
+        conditions.append(cast(Listing.asking_price, Numeric(14, 2)) >= query.min_price)
+    if query.max_price is not None:
+        conditions.append(cast(Listing.asking_price, Numeric(14, 2)) <= query.max_price)
+    if query.min_profit is not None:
+        conditions.append(cast(Listing.ttm_profit, Numeric(14, 2)) >= query.min_profit)
+
+    if query.q:
+        # Public text only (spec D4/B8). Reaching into `ListingPrivate` here
+        # would turn the search box into an identity oracle: a caller could
+        # confirm "SecretCo" exists without the field ever being rendered.
+        term = f"%{_escape_like(query.q)}%"
+        conditions.append(
+            or_(
+                Listing.headline.ilike(term, escape="\\"),
+                Listing.description.ilike(term, escape="\\"),
+            )
+        )
+
+    total = session.exec(
+        select(func.count()).select_from(Listing).where(*conditions)
+    ).one()
+
+    rows = session.exec(
+        select(Listing)
+        .where(*conditions)
+        # `id` breaks ties so the ordering is total, not just sorted — two
+        # listings approved in the same clock tick must not swap between pages
+        # and hide a row from a paginating caller.
+        .order_by(Listing.published_at.desc(), Listing.id.desc())
+        .limit(query.limit)
+        .offset(query.offset)
+    ).all()
+
+    return ListingPage(
+        items=[_to_public(row) for row in rows],
+        total=total,
+        limit=query.limit,
+        offset=query.offset,
     )
 
 
@@ -142,12 +250,37 @@ def my_listings(
     ]
 
 
-@router.get("/listings/{listing_id}", response_model=ListingRead)
-def get_listing(
+@router.get("/my/listings/{listing_id}", response_model=ListingRead)
+def get_my_listing(
     listing: Listing = Depends(get_owned_listing),
     session: Session = Depends(get_session),
 ) -> ListingRead:
+    """The owner's full view (spec 004 D1-D3).
+
+    **Moved** from `GET /listings/{listing_id}` at M4 so the public browse could
+    take the canonical path (spec 004 decision D1). Semantics are unchanged:
+    `get_owned_listing` still returns 404 — never 403 — for someone else's
+    listing, so a draft's existence is never confirmed.
+    """
     return _to_read(listing, session.get(ListingPrivate, listing.id))
+
+
+@router.get("/listings/{listing_id}", response_model=ListingPublic)
+def get_public_listing(
+    listing_id: int,
+    session: Session = Depends(get_session),
+) -> ListingPublic:
+    """The anonymous card (spec 004 C1-C4). Public — no auth.
+
+    A non-`live` listing and a missing one raise the **same** 404 with the same
+    message, so this route is not an existence oracle: an unapproved draft can't
+    be probed for (C3). The owner is not special-cased — the public route never
+    serves unapproved content, not even to the person who wrote it (C2).
+    """
+    listing = session.get(Listing, listing_id)
+    if listing is None or listing.status != "live":
+        raise NotFound("Listing not found")
+    return _to_public(listing)
 
 
 @router.put("/listings/{listing_id}", response_model=ListingRead)

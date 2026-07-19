@@ -61,7 +61,8 @@ NextOwner/
 ├── backend/tests/
 │   ├── conftest.py              # shared fixtures: db, client, as_user, seed  ← write once
 │   ├── test_auth.py             # M1
-│   ├── test_listings.py         # M2, M4
+│   ├── test_listing_*.py        # M2 (create, edit, lifecycle, upload, download)
+│   ├── test_browse.py           # M4 (public browse + filters + search)
 │   ├── test_curation.py         # M3
 │   ├── test_nda_gate.py         # M5  ← most important file in the project
 │   ├── test_chat.py             # M6

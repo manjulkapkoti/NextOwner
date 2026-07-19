@@ -295,6 +295,26 @@ export function createAppTheme(mode: PaletteMode = 'light') {
         },
       },
 
+      // A Select renders its value in a `div.MuiSelect-select`, not an `input`,
+      // and MUI's own rules for that slot beat the `height: 48` set on
+      // `MuiOutlinedInput.input` above. Combined with `paddingBlock: 0`, that
+      // left every select collapsed to its line-height (~23px) — a control
+      // visibly shorter than the text fields beside it, with no box.
+      // Restated here so a select matches the 48px input box by construction.
+      MuiSelect: {
+        styleOverrides: {
+          select: {
+            height: 48,
+            minHeight: 48,
+            boxSizing: 'border-box',
+            // The box is a fixed height with no vertical padding, so the value
+            // has to be centred rather than sitting on the top edge.
+            display: 'flex',
+            alignItems: 'center',
+          },
+        },
+      },
+
       MuiInputLabel: { styleOverrides: { root: { fontSize: '0.95rem' } } },
 
       MuiCard: {

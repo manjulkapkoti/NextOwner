@@ -101,13 +101,30 @@ The product-specific core — a seller or admin reads these constantly:
 - **Verified badges** (buyer/seller, M10): one treatment, reused.
 - **Anonymous public card vs. unlocked private view** (M4/M5): the public card deliberately *shows the shape of the deal* (metrics, ranges) while hiding identity — the tease, not a blank.
 
-## 7. Voice — copy lands in M4
+## 7. Voice — shipped in M4
 
 The positioning is **succession, not transaction**: a business existed before the sale and continues after it, and the seller **chooses who carries it forward**. That's a description of `access_request` (`requested → approved|denied`), not a slogan — the brand promise and the architecture are the same sentence, which is why we can claim it and a public-listing competitor can't.
 
-**The copy lands in M4** (owner's call, 2026-07-18), when the public browse surfaces and the buyer-side story exist to carry it; today's landing hero is a stopgap. Full scope in `milestones.md` § Scope fold-ins → M4.
+**Shipped in M4** (spec `004-marketplace-browse` criterion F7; deferred here by the owner 2026-07-18 and landed when the public browse and the buyer-side story existed to carry it).
 
-**Binding on every surface, starting now:** the story lives in **headlines and prose only**. **Navigation and control labels stay literal** — "My listings", "Create account", "Log in". A label a user has to decode trades usability for poetry, which inverts this product's stated UI bar (§2). Write the hero with voice; write the buttons plain.
+**Binding on every surface:** the story lives in **headlines and prose only**. **Navigation and control labels stay literal** — "Browse", "My listings", "Create account", "Log in". A label a user has to decode trades usability for poetry, which inverts this product's stated UI bar (§2). Write the hero with voice; write the buttons plain.
+
+### The two audiences
+
+The **seller is the lead audience** — supply is the scarce side of a marketplace, and the succession story is theirs. But a seller-led framing gives a buyer no reason to be here, so **the buyer counter-story gets equal billing**, never a footnote: *take over something real — with customers, revenue and a history — instead of starting from zero.*
+
+### Words to use, words to avoid
+
+| Use | Avoid | Why |
+|---|---|---|
+| next owner, carries it forward, succession | buy and sell, exit, flip | "Buy and sell" frames a business as inventory — the framing every competitor uses |
+| you decide who gets to look | listing visibility, lead gen | the NDA gate is a seller's *choice*, not a settings toggle |
+| take over something real | acquire an asset | buyers are operators, not portfolio managers |
+| locked until the NDA is signed | premium, upgrade | the gate is about trust, not tiering (it is also the future paywall surface — don't pre-empt that) |
+
+### Inheritance
+
+Surfaces built after M4 inherit this section rather than reinventing a tone — in particular **M8's notification emails and saved-search alerts**, which are the next place prose reaches a user unprompted. An email that says "a new business is for sale" has silently reverted to the competitor framing; "a business is looking for its next owner" has not.
 
 ## 8. Accessibility (non-negotiable)
 
