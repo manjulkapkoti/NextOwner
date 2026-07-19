@@ -126,7 +126,10 @@ def browse_listings(
     all."""
     conditions = [Listing.status == "live"]
 
-    if query.type is not None:
+    # Truthiness, not `is not None`, so `?type=` (an empty value, which is how a
+    # cleared dropdown serializes) means "no filter" rather than "match the
+    # empty string" — matching `q`'s handling below.
+    if query.type:
         conditions.append(Listing.type == query.type)
 
     # Money is stored as TEXT (the `Money` TypeDecorator keeps Decimal lossless),
