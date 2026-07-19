@@ -153,30 +153,30 @@ Each GIVEN/WHEN/THEN below becomes **exactly one test** (constitution Article 3 
 
 `GET /api/listings/{id}/private`. **Every state, per `security.md` §7 M5.**
 
-- **D1** GIVEN the listing's owner, WHEN they read private data, THEN 200.
-- **D2** GIVEN a buyer whose request is `approved`, THEN 200 and the payload carries `company_name`, `website_url`, `detailed_financials`.
-- **D3** GIVEN a buyer whose request is `requested`, THEN 403 with code `nda_access_required`.
-- **D4** GIVEN a buyer whose request is `denied`, THEN 403.
-- **D5** GIVEN a buyer whose request was `approved` and is now `revoked`, THEN 403 — **revocation re-denies immediately** (`security.md` §6).
-- **D6** GIVEN an authenticated user with **no request at all**, THEN 403.
-- **D7** GIVEN no credentials, THEN 401.
-- **D8** GIVEN a listing that has never been published and a non-owner caller, THEN 404 — not 403 (D1 in § Decisions).
-- **D9** GIVEN an approved buyer and a listing the seller has since **paused/closed**, THEN still 200 — approval survives the listing's status change (D2 in § Decisions).
-- **D10 — reachability (the corridor, not the door).** GIVEN every sequence of up to **three** actions drawn from {sign NDA, request access, seller approves, seller denies, seller revokes, seller pauses, seller resumes, seller closes}, WHEN private data is fetched **after every step**, THEN it returns 200 **only** when the caller is the owner or holds an `approved` request. *This exists because M3's forbidden-path tests each named one door and missed the corridor (`pause → edit → resume`), and M4's first attempt at the fix could not reach the corridor it claimed to test (constitution amendment 2026-07-19; `progress.md` § M4 carryover). Verify it by reverting the gate — it must fail.*
+- **D1** — GIVEN the listing's owner, WHEN they `GET /api/listings/{id}/private`, THEN 200.
+- **D2** — GIVEN a buyer whose request is `approved`, WHEN they read private data, THEN 200 and the payload carries `company_name`, `website_url`, `detailed_financials`.
+- **D3** — GIVEN a buyer whose request is `requested`, WHEN they read private data, THEN 403 with code `nda_access_required`.
+- **D4** — GIVEN a buyer whose request is `denied`, WHEN they read private data, THEN 403.
+- **D5** — GIVEN a buyer whose request was `approved` and is now `revoked`, WHEN they read private data, THEN 403 — **revocation re-denies immediately** (`security.md` §6).
+- **D6** — GIVEN an authenticated user with **no request at all**, WHEN they read private data, THEN 403.
+- **D7** — GIVEN no credentials, WHEN private data is requested, THEN 401.
+- **D8** — GIVEN a listing that has never been published, WHEN a non-owner reads its private data, THEN 404 — not 403 (§ Decisions D1).
+- **D9** — GIVEN an approved buyer and a listing the seller has since **paused/closed**, WHEN they read private data, THEN still 200 — approval survives the listing's status change (§ Decisions D2).
+- **D10** — reachability, the corridor rather than the door. GIVEN every sequence of up to **three** actions drawn from {sign NDA, request access, seller approves, seller denies, seller revokes, seller pauses, seller resumes, seller closes}, WHEN private data is fetched **after every step**, THEN it returns 200 **only** when the caller is the owner or holds an `approved` request. *This exists because M3's forbidden-path tests each named one door and missed the corridor (`pause → edit → resume`), and M4's first attempt at the fix could not reach the corridor it claimed to test (constitution amendment 2026-07-19; `progress.md` § M4 carryover). Verify it by reverting the gate — it must fail.*
 
 ### E — The same gate on document downloads
 
-- **E1** GIVEN an approved buyer, WHEN they `GET /api/listings/{id}/documents/{doc_id}`, THEN 200 and the file is served as an attachment.
-- **E2** GIVEN a buyer whose request is `requested`, THEN 403 — the download path enforces the **same** gate, not a second copy of it.
-- **E3** GIVEN a buyer whose access was `revoked`, THEN 403.
-- **E4** GIVEN the owner, THEN 200 — M2's behaviour is preserved.
-- **E5** GIVEN a non-owner and a never-published listing, THEN 404 — M2's `test_e2` still passes **unchanged** (D1).
+- **E1** — GIVEN an approved buyer, WHEN they `GET /api/listings/{id}/documents/{doc_id}`, THEN 200 and the file is served as an attachment.
+- **E2** — GIVEN a buyer whose request is `requested`, WHEN they download the document, THEN 403 — the download path enforces the **same** gate, not a second copy of it.
+- **E3** — GIVEN a buyer whose access was `revoked`, WHEN they download the document, THEN 403.
+- **E4** — GIVEN the owner, WHEN they download their own document, THEN 200 — M2's behaviour is preserved.
+- **E5** — GIVEN a non-owner and a never-published listing, WHEN they download its document, THEN 404 — M2's `test_e2` still passes **unchanged** (§ Decisions D1).
 
 ### F — The buyer's own requests (`GET /api/my/access-requests`)
 
 - **F1** GIVEN a buyer with requests across two listings, WHEN they fetch, THEN both are returned with their statuses.
 - **F2** GIVEN two buyers with requests, WHEN buyer A fetches, THEN buyer B's rows never appear (caller-scoped).
-- **F3** GIVEN no credentials, THEN 401.
+- **F3** — GIVEN no credentials, WHEN `GET /api/my/access-requests` is called, THEN 401.
 
 ### G — The seller's queue (`GET /api/my/listings/{id}/access-requests`, FR-14 — D7)
 
@@ -188,23 +188,23 @@ Each GIVEN/WHEN/THEN below becomes **exactly one test** (constitution Article 3 
 
 Derived from `docs/security.md` §7 (M5) + §6. These are the crown jewels.
 
-- **S1 — IDOR on the decision route.** GIVEN a request belonging to another seller's listing, WHEN a seller approves it by guessing its id, THEN 403 — the row is authorized against the caller's ownership of *its* listing, not merely fetched by id.
-- **S2 — IDOR on private data.** GIVEN an approved request for listing X, WHEN that buyer reads listing **Y**'s private data, THEN 403 — approval is per listing and never transfers.
-- **S3 — Schema leak.** GIVEN the access-request response model, WHEN any endpoint returns it, THEN it cannot contain the buyer's email or password hash **by schema** (asserted against the model, not a sampled response).
-- **S4 — Schema leak, private payload.** GIVEN the public listing route (`GET /api/listings/{id}`), WHEN M5's private model exists, THEN the public response still carries no private or identity field — M5 must not widen M4's boundary.
-- **S5 — Mass assignment on decision.** GIVEN the seller, WHEN they approve while sending `status: "revoked"` and a forged `decided_at`, THEN the server derives both.
-- **S6 — Token attacks reach the gate too.** GIVEN an expired or tampered token, WHEN private data is requested, THEN 401 (never 403 — the identity boundary resolves first).
-- **S7 — Enumeration.** GIVEN a sequence of access-request ids the caller does not own, WHEN each is probed, THEN the response is uniform and reveals no existence signal.
-- **S8 — No leak on denial.** GIVEN any 403 from the gate, WHEN the body is inspected, THEN it carries the generic contract + machine code — no company name, no owner identity, no SQL, no stack.
+- **S1** — *IDOR on the decision route.* GIVEN a request belonging to another seller's listing, WHEN a seller approves it by guessing its id, THEN 403 — the row is authorized against the caller's ownership of *its* listing, not merely fetched by id.
+- **S2** — *IDOR on private data.* GIVEN an approved request for listing X, WHEN that buyer reads listing **Y**'s private data, THEN 403 — approval is per listing and never transfers.
+- **S3** — *Schema leak.* GIVEN the access-request response model, WHEN any endpoint returns it, THEN it cannot contain the buyer's email or password hash **by schema** (asserted against the model, not a sampled response).
+- **S4** — *Schema leak, private payload.* GIVEN the public listing route (`GET /api/listings/{id}`), WHEN M5's private model exists, THEN the public response still carries no private or identity field — M5 must not widen M4's boundary.
+- **S5** — *Mass assignment on decision.* GIVEN the seller, WHEN they approve while sending `status: "revoked"` and a forged `decided_at`, THEN the server derives both.
+- **S6** — *Token attacks reach the gate too.* GIVEN an expired or tampered token, WHEN private data is requested, THEN 401 (never 403 — the identity boundary resolves first).
+- **S7** — *Enumeration.* GIVEN a sequence of access-request ids the caller does not own, WHEN each is probed, THEN the response is uniform and reveals no existence signal.
+- **S8** — *No leak on denial.* GIVEN any 403 from the gate, WHEN the body is inspected, THEN it carries the generic contract + machine code — no company name, no owner identity, no SQL, no stack.
 
 ### Errors & failure modes
 
 Per `docs/error_handling.md` (§7 contract: `{detail, code, request_id}`).
 
-- **X1 — 422.** GIVEN a malformed decision body (wrong types), WHEN posted, THEN 422 with field-level detail.
-- **X2 — 409 carries a machine code.** GIVEN an illegal transition (C6/C7), WHEN it 409s, THEN the body carries a stable `code` the UI can branch on.
-- **X3 — 500-safety.** GIVEN a forced internal error inside the gate, WHEN private data is requested, THEN the generic 500 contract is returned — no stack, no SQL, no private field (`security.md` §6 info-leakage).
-- **X4 — Frontend states.** GIVEN the listing detail page, WHEN the private section is loading / locked (403) / unlocked / errored, THEN each renders its own state; a 403 renders the request-access CTA rather than an error page.
+- **X1** — *422.* GIVEN a malformed decision body (wrong types), WHEN posted, THEN 422 with field-level detail.
+- **X2** — *409 carries a machine code.* GIVEN an illegal transition (C6/C7), WHEN it 409s, THEN the body carries a stable `code` the UI can branch on.
+- **X3** — *500-safety.* GIVEN a forced internal error inside the gate, WHEN private data is requested, THEN the generic 500 contract is returned — no stack, no SQL, no private field (`security.md` §6 info-leakage).
+- **X4** — *Frontend states.* GIVEN the listing detail page, WHEN the private section is loading / locked (403) / unlocked / errored, THEN each renders its own state; a 403 renders the request-access CTA rather than an error page.
 
 ### Frontend (FR-6, FR-13, FR-14)
 

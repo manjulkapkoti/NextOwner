@@ -119,6 +119,13 @@ the error contract was designed right at M1.
   requesting are **one user action** (J1) even though they are two API calls.
 - **`RequestAccessPanel.tsx`** — the four states on listing detail: locked / pending / approved
   / denied, driven by the gate's machine code rather than by guessing (J2, J3, X4).
+  **State survives a reload via `GET /api/my/access-requests`** (F1), filtered to this listing —
+  *not* from the POST response alone, which only knows what happened in the current session.
+  A buyer who requests access and refreshes must still see "pending"; reading it from the
+  buyer's own list needs **no new endpoint** and no second source of truth. *(Recorded
+  2026-07-20: the test-writing pass flagged that neither document said where this state came
+  from, and defaulted to the POST response — which would have shown a returning buyer the
+  request-access button for a request they had already made.)*
 - **`PrivateSection.tsx`** — renders `ListingPrivateRead` + the document list once unlocked.
 - **`AccessRequestQueue.tsx`** — the seller's list with profile + approve/deny/revoke (J4).
 - **`accessStore.ts`** (MobX) — request state; must **not** treat a 403 as a global-401 (J5).
