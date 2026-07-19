@@ -83,7 +83,8 @@ describe('ListingDetail', () => {
 
   it('F11: sends no Authorization header', async () => {
     localStorage.setItem('token', 'a.b.c')
-    const fetchMock = vi.fn(
+    // Typed as `fetch` so `mock.calls[0][1]` is indexable under `tsc -b`.
+    const fetchMock = vi.fn<typeof fetch>(
       async () =>
         new Response(JSON.stringify(listing), {
           status: 200,

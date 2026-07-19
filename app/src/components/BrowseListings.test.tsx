@@ -70,7 +70,9 @@ describe('BrowseListings', () => {
   })
 
   it('F6: changing a filter refetches with the filter in the query string', async () => {
-    const fetchMock = vi.fn(async () => page([item]))
+    // Typed as `fetch`, not `vi.fn(async () => ...)` — a zero-arg mock gives
+    // `mock.calls` an empty-tuple element type, so indexing it fails `tsc -b`.
+    const fetchMock = vi.fn<typeof fetch>(async () => page([item]))
     vi.stubGlobal('fetch', fetchMock)
     renderBrowse()
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
@@ -84,7 +86,7 @@ describe('BrowseListings', () => {
   })
 
   it('S11: browsing sends no Authorization header', async () => {
-    const fetchMock = vi.fn(async () => page([item]))
+    const fetchMock = vi.fn<typeof fetch>(async () => page([item]))
     vi.stubGlobal('fetch', fetchMock)
     renderBrowse()
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
