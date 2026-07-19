@@ -178,6 +178,19 @@ Each numbered scenario maps to **exactly one test**.
   its listings (re-running a seed script is a normal thing to do).
 - **E3** — WHEN seeded listings are fetched via `GET /api/listings`, THEN none
   of them leaks an identity field (the seed goes through the same schema).
+- **E4** — GIVEN a `DATABASE_URL` that is not a local SQLite file, WHEN
+  `seed/seed.py` is run as a script, THEN it exits without writing anything.
+- **E5** — GIVEN a session bound to a non-SQLite engine, WHEN `seed(session)` is
+  called directly, THEN it refuses.
+
+*Both added during the branch review. The seed sellers' password is a constant
+in this repository, so running the script against a shared or deployed database
+would create real `is_seller` accounts with publicly-known credentials. E4 came
+first and guarded only the CLI; the re-verification round pointed out that
+`seed(session)` — the function that actually writes — was still reachable
+unguarded by any other caller, including the two-line pattern in this
+milestone's own test fixture. Hence **E5**: the guard reads the session's bound
+engine, so it travels with the capability rather than with one entry point.*
 
 ### F — frontend
 
@@ -196,6 +209,15 @@ Each numbered scenario maps to **exactly one test**.
   not the visitor is signed in.
 - **F9** — `/browse` renders for a logged-out visitor without redirecting to
   login (it is a public route, not a `RequireAuth` one).
+- **F10** — the landing page carries the **buyer counter-story** alongside the
+  seller-led succession framing. *(Its own criterion, not a second test filed
+  under F7: it is a distinct fold-in scope item — `milestones.md` § Scope
+  fold-ins → M4, item (b) — and one ID must map to one test.)*
+- **F11** — `ListingDetail` renders its loading, loaded and not-available
+  states, and a 404 surfaces as "not available" rather than anything revealing
+  whether the listing exists. *(Added during the branch review: the component
+  shipped with backend criteria cited in its header and no frontend test of its
+  own.)*
 
 ### Security & abuse
 
@@ -217,13 +239,28 @@ Each numbered scenario maps to **exactly one test**.
 - **S8 — the public route grants nothing extra to an authed caller.** GIVEN an
   admin token, WHEN `GET /api/listings` is called with it, THEN the response is
   byte-identical to the anonymous one (no privileged widening on a public route).
-- **S9 — reachability: no seller-controlled path publishes to browse.** GIVEN a
-  fresh listing, WHEN every sequence of up to three seller-only actions
-  (`submit`, `pause`, `resume`, `close`, `PUT` edit) is walked, THEN the listing
-  appears in `GET /api/listings` **only** in states reached via an admin
-  approval. *Extends spec 003's E6 reachability test to the newly public
-  surface: M3 proved the seller cannot reach `live`; M4 must prove that being
-  in browse requires exactly that.*
+- **S9 — reachability, never-approved half.** GIVEN a fresh **draft**, WHEN
+  every 3-step sequence of seller-only actions (`submit`, `pause`, `resume`,
+  `close`, `PUT` edit) is walked, THEN the listing never appears in
+  `GET /api/listings`.
+- **S10 — reachability, republish half.** GIVEN an **approved, live** listing,
+  WHEN every 3-step sequence of those same actions is walked, THEN after *every
+  step* the listing is either absent from `GET /api/listings` or shows the
+  content an admin approved — never edited content.
+
+  *These are two corridors, not one, and the branch review is why they are
+  separated. S9 was originally written to claim both. It cannot: `pause` only
+  transitions from `live`, and `live` is reachable only through admin approval,
+  so a walk starting at `draft` never reaches `live` or `paused` — meaning it
+  never exercises `pause → edit → resume`, **the exact bypass M3 found**. S9 as
+  written still fails if browse drops its `status` filter, so it is not a
+  vacuous test; it was an over-claiming one. S10 covers the corridor S9 cannot
+  reach, and is verified the way spec 003's E6 was: revert the `paused` arm of
+  the edit-resets-review guard in `update_listing` and S10 fails.*
+- **S11 — the browse request carries no credential.** GIVEN the browse page,
+  WHEN it fetches listings, THEN the request carries no `Authorization` header.
+  *(Its own criterion rather than a label borrowed from F9, which is about
+  routing, not credentials.)*
 
 ### Errors & failure modes
 

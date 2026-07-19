@@ -83,7 +83,7 @@ describe('BrowseListings', () => {
     })
   })
 
-  it('F9/security: browsing sends no Authorization header when logged out', async () => {
+  it('S11: browsing sends no Authorization header', async () => {
     const fetchMock = vi.fn(async () => page([item]))
     vi.stubGlobal('fetch', fetchMock)
     renderBrowse()

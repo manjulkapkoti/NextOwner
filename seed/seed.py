@@ -133,7 +133,21 @@ def seed(session: Session, *, count: int = 32) -> int:
     """Create a browsable marketplace. Returns the number of listings created.
 
     Idempotent: a second run detects the marker and creates nothing (E2).
+
+    Guarded on the **session's own bound engine**, not on global settings, so
+    the check travels with the capability: any caller handing this function a
+    session — a startup hook, a migration step, an engineer copy-pasting the
+    test fixture's two lines — is checked, not just `python -m seed.seed`. The
+    branch review's re-verification round caught that guarding only the CLI
+    entry point left the write path itself open (spec E5).
     """
+    driver = session.get_bind().url.drivername
+    if not driver.startswith("sqlite"):
+        raise SystemExit(
+            f"Refusing to seed: the session is bound to {driver!r}, not local SQLite. "
+            "This script creates accounts with a password committed to the repository."
+        )
+
     if _already_seeded(session):
         return 0
 
@@ -194,7 +208,24 @@ def seed(session: Session, *, count: int = 32) -> int:
 
 
 def main() -> None:
+    from app.config import settings
     from app.db import engine, init_db
+
+    # Refuse to write anywhere but a local SQLite file.
+    #
+    # The seed sellers' password is a constant in this file, so it is public to
+    # anyone who can read the repo. That is fine for a throwaway local database
+    # and unacceptable anywhere else: run this against a shared or deployed DB
+    # and it silently creates real `is_seller=True` accounts whose credentials
+    # everyone knows. The guard is here rather than in `seed()` so the tests can
+    # still drive the function directly against their in-memory session.
+    if not settings.database_url.startswith("sqlite"):
+        raise SystemExit(
+            "Refusing to seed: DATABASE_URL is not a local SQLite database.\n"
+            "This script creates accounts with a password that is committed to "
+            "the repository, so it must never run against a shared or deployed "
+            "database."
+        )
 
     init_db()
     with Session(engine) as session:

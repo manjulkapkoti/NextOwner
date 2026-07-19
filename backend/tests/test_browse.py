@@ -203,6 +203,28 @@ def test_b10_like_wildcards_in_q_are_escaped(client, make_live):
     assert client.get("/api/listings?q=%").json()["items"] == []
 
 
+def test_b14_the_single_character_like_wildcard_is_also_escaped(client, make_live):
+    """`_` matches any one character in LIKE, exactly as `%` matches any run.
+
+    B10 covered `%` only; `_escape_like` escapes both, and the branch review
+    noted the second half had no test to hold it honest.
+    """
+    make_live(headline="Profitable scheduling SaaS")
+    assert client.get("/api/listings?q=S_aS").json()["items"] == []
+
+
+def test_b15_a_negative_min_profit_is_accepted_and_filters(client, make_live):
+    """`ttm_profit` may legitimately be negative, so `min_profit` must accept a
+    negative bound rather than 422 — the one money filter without a `ge=0`."""
+    losing = make_live(ttm_profit="-50000.00")
+    profitable = make_live(ttm_profit="120000.00")
+
+    res = client.get("/api/listings?min_profit=-100000")
+    assert res.status_code == 200
+    assert sorted(_ids(res)) == sorted([losing, profitable])
+    assert _ids(client.get("/api/listings?min_profit=0")) == [profitable]
+
+
 def test_b11_a_non_numeric_price_is_422_with_a_field_level_detail(client):
     res = client.get("/api/listings?min_price=cheap")
     assert res.status_code == 422
@@ -294,11 +316,17 @@ def test_s8_an_authed_caller_gets_no_wider_response_than_an_anonymous_one(
 def test_s9_no_sequence_of_seller_actions_reaches_the_public_browse(
     client, auth_headers, make_listing
 ):
-    """Reachability, extending spec 003's E6 to the newly public surface.
+    """A listing that was never approved never appears in browse.
 
-    M3 proved a seller cannot reach `live`. M4 must prove the converse for the
-    surface that matters: appearing in browse *requires* an admin approval. The
-    per-door tests each name one door; this walks the corridor.
+    Walks every 3-step sequence of seller-only actions from a fresh draft.
+
+    **Scope, stated precisely** (the branch review caught this docstring
+    over-claiming): because `pause` only transitions from `live`, and `live` is
+    reachable only through admin approval, no sequence here reaches `live` or
+    `paused`. So this covers the *never-approved* half of the invariant — it
+    fails if browse ever stops filtering on `status`. The other half, where an
+    already-approved listing is edited and republished, is a different corridor
+    and needs an approved starting state: that is S10 below.
     """
     from itertools import product
 
@@ -321,6 +349,59 @@ def test_s9_no_sequence_of_seller_actions_reaches_the_public_browse(
         assert listing_id not in visible, (
             f"seller-only sequence {sequence} published to the public marketplace"
         )
+
+
+def test_s10_no_seller_sequence_puts_unreviewed_content_in_the_public_browse(
+    client, auth_headers, admin_headers, make_listing
+):
+    """The republish corridor — the bypass class M3 actually found.
+
+    Starts from an **approved, live** listing (the state S9 cannot reach) and
+    walks every 3-step sequence of seller-only actions, checking browse after
+    *every* step rather than only at the end. The invariant is not "the listing
+    is absent" — a live approved listing belongs in browse — but:
+
+        if it is publicly visible, the content shown is content an admin approved.
+
+    This is what catches `pause → edit → resume`. Revert the M3 guard (the
+    `paused` arm of the edit-resets-review check in `update_listing`) and this
+    fails: the edit sticks while paused, resume returns it to `live`, and the
+    swapped headline reaches the public marketplace.
+    """
+    from itertools import product
+
+    APPROVED = "Approved headline — an admin has seen this"
+    UNREVIEWED = "SWAPPED — no admin has ever seen this"
+
+    admin = admin_headers()
+    seller = auth_headers(email="republisher@example.com", role="seller")
+    actions = ["submit", "pause", "resume", "close", "edit"]
+
+    for sequence in product(actions, repeat=3):
+        listing_id = make_listing(seller, headline=APPROVED).json()["id"]
+        client.post(f"/api/listings/{listing_id}/submit", headers=seller)
+        client.post(f"/api/listings/{listing_id}/approve", headers=admin)
+
+        for step, action in enumerate(sequence, start=1):
+            if action == "edit":
+                client.put(
+                    f"/api/listings/{listing_id}",
+                    json={"headline": UNREVIEWED, "asking_price": "999999.00"},
+                    headers=seller,
+                )
+            else:
+                client.post(f"/api/listings/{listing_id}/{action}", headers=seller)
+
+            shown = next(
+                (item for item in client.get("/api/listings").json()["items"]
+                 if item["id"] == listing_id),
+                None,
+            )
+            if shown is not None:
+                assert shown["headline"] == APPROVED, (
+                    f"sequence {sequence} exposed unreviewed content at step {step} — "
+                    "a seller republished without a second admin decision"
+                )
 
 
 # ── Errors & failure modes ───────────────────────────────────────────────────

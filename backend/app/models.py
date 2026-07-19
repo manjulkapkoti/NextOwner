@@ -85,7 +85,9 @@ class Listing(SQLModel, table=True):
     churn_pct: Decimal = Field(sa_type=Money)
     customers: int
     created_at: datetime = Field(default_factory=_utcnow)
-    published_at: datetime | None = None                  # set by admin at M3
+    # Set by admin at M3; indexed at M4 because it is the public browse's
+    # default ordering column, so every anonymous request sorts on it.
+    published_at: datetime | None = Field(default=None, index=True)
 
 
 class ListingPrivate(SQLModel, table=True):

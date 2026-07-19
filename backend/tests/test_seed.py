@@ -53,6 +53,51 @@ def test_e2_seeding_twice_does_not_duplicate(seed_fn, session):
     assert len(list(session.exec(select(Listing)).all())) == first
 
 
+def test_e4_the_cli_refuses_a_database_that_is_not_local_sqlite(monkeypatch):
+    """The seed sellers' password is a constant in this repo (spec 004 E4).
+
+    Fine for a throwaway local file, unacceptable anywhere else — so the CLI
+    must refuse rather than trust the operator to notice.
+
+    Asserts the *property* (nothing was written), not just that it exited: the
+    re-verification round pointed out that `pytest.raises(SystemExit)` alone
+    would still pass if a future edit performed a write before reaching the
+    guard, while E4's wording promises "exits without writing anything".
+    """
+    import seed.seed as seed_module
+
+    from app.config import settings
+
+    writes: list[object] = []
+    monkeypatch.setattr(seed_module, "seed", lambda *a, **kw: writes.append(a))
+
+    original = settings.database_url
+    settings.database_url = "postgresql://user:pw@db.internal/nextowner"
+    try:
+        with pytest.raises(SystemExit):
+            seed_module.main()
+    finally:
+        settings.database_url = original
+
+    assert writes == [], "the seed write ran despite a non-SQLite database"
+
+
+def test_e5_the_write_function_itself_refuses_a_non_sqlite_session(seed_fn, session, monkeypatch):
+    """The guard travels with the capability, not just the CLI (spec 004 E5).
+
+    Guarding only `main()` left `seed(session)` open to any other caller — a
+    startup hook, a migration step, or the two-line pattern in this file's own
+    fixture. Found by the branch review's bounded re-verification round.
+    """
+    from unittest.mock import Mock
+
+    monkeypatch.setattr(
+        session, "get_bind", lambda: Mock(url=Mock(drivername="postgresql"))
+    )
+    with pytest.raises(SystemExit):
+        seed_fn(session)
+
+
 def test_e3_seeded_listings_leak_nothing_through_the_public_api(seed_fn, session, client):
     seed_fn(session)
     blob = client.get("/api/listings?limit=50").text

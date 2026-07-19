@@ -83,7 +83,7 @@ describe('AppShell routing', () => {
   // M4 (spec 004 criterion F7) — the seller-led succession framing leaves the
   // buyer cold unless the page answers "what is in this for me", so the
   // counter-story is a criterion of its own rather than a nice-to-have.
-  it('F7: the landing page carries the buyer counter-story alongside the seller story', async () => {
+  it('F10: the landing page carries the buyer counter-story alongside the seller story', async () => {
     renderShellAt('/')
     await waitFor(() =>
       expect(screen.getByText(/instead of starting from zero/i)).toBeInTheDocument(),
@@ -120,14 +120,16 @@ describe('AppShell routing', () => {
     expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument()
   })
 
-  // The landing page's only actions are the nav's two: Log in for returning
-  // visitors, Get started for new ones. The hero deliberately carries no CTA
-  // of its own, so there is one of each rather than duplicates.
-  it('offers exactly one Log in and one Get started on the landing page', async () => {
+  // Log in and Get started live in the nav — one of each, never duplicated in
+  // the hero. From M4 the hero does carry exactly one CTA of its own (Browse
+  // listings), which is the one action the nav's auth pair doesn't offer;
+  // asserted here so "one of each" stays precise rather than becoming "no CTA".
+  it('offers exactly one Log in, one Get started, and one hero Browse CTA', async () => {
     renderShellAt('/')
     await waitFor(() =>
       expect(screen.getByText(/you choose who carries it forward/i)).toBeInTheDocument(),
     )
+    expect(screen.getAllByRole('link', { name: /browse listings/i })).toHaveLength(1)
     expect(screen.getByRole('link', { name: /get started/i })).toHaveAttribute('href', '/register')
     expect(screen.getAllByRole('link', { name: /log in/i })).toHaveLength(1)
   })

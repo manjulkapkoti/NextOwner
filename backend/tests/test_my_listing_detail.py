@@ -48,9 +48,9 @@ def test_h1_the_old_path_no_longer_serves_private_fields_to_the_owner(
 ):
     """The D1 move, asserted as a removal rather than assumed.
 
-    Six M2/M3 tests were re-pointed to the new path with their assertions
-    unchanged. That is only a rename if the old path's private-field behavior is
-    actually gone — which is what this asserts.
+    Three M2/M3 call sites were re-pointed to the new path with their
+    assertions unchanged. That is only a rename if the old path's private-field
+    behavior is actually gone — which is what this asserts.
     """
     seller = auth_headers(email="owner@example.com", role="seller")
     listing_id = make_listing(seller).json()["id"]        # a draft
