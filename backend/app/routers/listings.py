@@ -247,12 +247,37 @@ def my_listings(
     ]
 
 
-@router.get("/listings/{listing_id}", response_model=ListingRead)
-def get_listing(
+@router.get("/my/listings/{listing_id}", response_model=ListingRead)
+def get_my_listing(
     listing: Listing = Depends(get_owned_listing),
     session: Session = Depends(get_session),
 ) -> ListingRead:
+    """The owner's full view (spec 004 D1-D3).
+
+    **Moved** from `GET /listings/{listing_id}` at M4 so the public browse could
+    take the canonical path (spec 004 decision D1). Semantics are unchanged:
+    `get_owned_listing` still returns 404 — never 403 — for someone else's
+    listing, so a draft's existence is never confirmed.
+    """
     return _to_read(listing, session.get(ListingPrivate, listing.id))
+
+
+@router.get("/listings/{listing_id}", response_model=ListingPublic)
+def get_public_listing(
+    listing_id: int,
+    session: Session = Depends(get_session),
+) -> ListingPublic:
+    """The anonymous card (spec 004 C1-C4). Public — no auth.
+
+    A non-`live` listing and a missing one raise the **same** 404 with the same
+    message, so this route is not an existence oracle: an unapproved draft can't
+    be probed for (C3). The owner is not special-cased — the public route never
+    serves unapproved content, not even to the person who wrote it (C2).
+    """
+    listing = session.get(Listing, listing_id)
+    if listing is None or listing.status != "live":
+        raise NotFound("Listing not found")
+    return _to_public(listing)
 
 
 @router.put("/listings/{listing_id}", response_model=ListingRead)

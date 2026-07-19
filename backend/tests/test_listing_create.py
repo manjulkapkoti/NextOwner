@@ -18,7 +18,9 @@ def test_a2_client_owner_id_is_ignored(client, auth_headers, make_listing):
     # The listing is retrievable by its real owner (the caller), proving owner_id
     # came from the JWT, not the body.
     listing_id = r.json()["id"]
-    mine = client.get(f"/api/listings/{listing_id}", headers=auth_headers())
+    # Path moved to /my/listings/{id} at M4 (spec 004 D1) so public browse could
+    # take /listings/{id}; the assertion is unchanged.
+    mine = client.get(f"/api/my/listings/{listing_id}", headers=auth_headers())
     assert mine.status_code == 200
 
 
@@ -48,5 +50,6 @@ def test_a7_money_is_decimal_no_float_rounding(client, auth_headers, make_listin
     # 13 significant digits — a float cannot hold this exactly; Decimal can.
     r = make_listing(auth_headers(), asking_price="12345678901.99")
     listing_id = r.json()["id"]
-    got = client.get(f"/api/listings/{listing_id}", headers=auth_headers()).json()["asking_price"]
+    # Path moved at M4 (spec 004 D1); assertion unchanged.
+    got = client.get(f"/api/my/listings/{listing_id}", headers=auth_headers()).json()["asking_price"]
     assert Decimal(str(got)) == Decimal("12345678901.99")

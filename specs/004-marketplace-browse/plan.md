@@ -158,9 +158,9 @@ yet pinned. LIKE escaping and the `limit` ceiling land here, with their tests.
 **Slice 3 — the public detail + the owner-route move (spec D1).**
 Turns green: **C1–C4, D1–D3, S5, H1, E-3**.
 Third because it is the only slice that *moves* an existing route: doing it
-after the public collection means the new owner path is added and the six M2/M3
-tests re-pointed in a single reviewable commit, rather than being tangled with
-new-feature work. The commit message states the rename explicitly.
+after the public collection means the new owner path is added and the three
+M2/M3 call sites re-pointed in a single reviewable commit, rather than being
+tangled with new-feature work. The commit message states the rename explicitly.
 
 **Slice 4 — `seed/seed.py`.**
 Turns green: **E1–E3**.
@@ -184,7 +184,7 @@ with the browse work. Also adds the voice section to
 from the fold-in: navigation labels stay literal** ("Browse", "My listings") —
 the story lives in headlines and prose only.
 
-*No slice removes tests.* The D1 route move in slice 3 **re-points** six
-existing tests to `/api/my/listings/{id}` with their assertions unchanged, and
+*No slice removes tests.* The D1 route move in slice 3 **re-points** three
+existing call sites to `/api/my/listings/{id}` with their assertions unchanged, and
 adds **H1** to assert the old path's private-field behavior is gone — so
 coverage moves rather than shrinks.

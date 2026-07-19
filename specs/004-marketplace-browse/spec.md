@@ -40,7 +40,10 @@ cannot serve two trust levels, so:
 | `GET /api/my/listings/{id}` | owner | `ListingRead` *(**moved** from `/api/listings/{id}`)* |
 
 The owner's route joins the `/my/` prefix its sibling collection already uses.
-**Six M2/M3 tests re-point to the new path with their assertions unchanged** —
+**Three M2/M3 call sites re-point to the new path with their assertions
+unchanged** (`test_listing_create.py` ×2, `test_listing_lifecycle.py` ×1 —
+counted from `grep`, not estimated; `test_curation.py`'s `/api/listings/{id}`
+references are `PUT`s and are unaffected) —
 this is a route rename carried out as a spec decision, *not* a test weakened to
 pass (`/dod` forbids the latter; criterion **H1** pins the distinction by
 asserting the old path no longer serves the owner's private fields).

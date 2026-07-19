@@ -54,7 +54,8 @@ def test_c7_seller_has_no_path_to_set_live_directly(client, auth_headers, make_l
     h = auth_headers()
     listing_id = make_listing(h).json()["id"]
     client.post(f"/api/listings/{listing_id}/submit", headers=h)
-    got = client.get(f"/api/listings/{listing_id}", headers=h).json()
+    # Path moved to /my/listings/{id} at M4 (spec 004 D1); assertion unchanged.
+    got = client.get(f"/api/my/listings/{listing_id}", headers=h).json()
     assert got["status"] == "pending_review"     # never "live"
 
 
