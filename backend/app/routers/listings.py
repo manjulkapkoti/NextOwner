@@ -13,7 +13,7 @@ import os
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import Response
-from sqlalchemy import func
+from sqlalchemy import Numeric, cast, func, or_
 from sqlmodel import Session, select
 
 from ..config import ALLOWED_UPLOAD_TYPES, settings
@@ -88,6 +88,18 @@ def _to_read(listing: Listing, private: ListingPrivate | None) -> ListingRead:
 # even in scope at the call site: there is no private row here to leak from.
 
 
+def _escape_like(term: str) -> str:
+    """Neutralize LIKE metacharacters in user input.
+
+    Parameterization stops SQL injection but says nothing about *wildcards*: a
+    bound parameter of `%` is still a valid LIKE pattern matching every row, and
+    `_` matches any single character. Escaping them (backslash first, or we'd
+    double-escape our own escapes) makes the search term literal, which is what
+    a user typing `%` means (spec B10).
+    """
+    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _to_public(listing: Listing) -> ListingPublic:
     return ListingPublic(
         id=listing.id,
@@ -109,9 +121,37 @@ def browse_listings(
     query: ListingQuery = Depends(),
     session: Session = Depends(get_session),
 ) -> ListingPage:
-    """Public browse (spec 004 A1-A11). No auth — and no widening if a token is
-    present (S8): this function never reads the caller's identity at all."""
+    """Public browse (spec 004 A1-A11, B1-B13). No auth — and no widening if a
+    token is present (S8): this function never reads the caller's identity at
+    all."""
     conditions = [Listing.status == "live"]
+
+    if query.type is not None:
+        conditions.append(Listing.type == query.type)
+
+    # Money is stored as TEXT (the `Money` TypeDecorator keeps Decimal lossless),
+    # so a bare SQL comparison would be **lexicographic**: '90000.00' > '200000.00'
+    # is true as strings and false as money. Cast for the comparison. Only the
+    # boundary check goes through NUMERIC — the stored and returned values are
+    # still exact Decimals, so this does not reintroduce float money.
+    if query.min_price is not None:
+        conditions.append(cast(Listing.asking_price, Numeric(14, 2)) >= query.min_price)
+    if query.max_price is not None:
+        conditions.append(cast(Listing.asking_price, Numeric(14, 2)) <= query.max_price)
+    if query.min_profit is not None:
+        conditions.append(cast(Listing.ttm_profit, Numeric(14, 2)) >= query.min_profit)
+
+    if query.q:
+        # Public text only (spec D4/B8). Reaching into `ListingPrivate` here
+        # would turn the search box into an identity oracle: a caller could
+        # confirm "SecretCo" exists without the field ever being rendered.
+        term = f"%{_escape_like(query.q)}%"
+        conditions.append(
+            or_(
+                Listing.headline.ilike(term, escape="\\"),
+                Listing.description.ilike(term, escape="\\"),
+            )
+        )
 
     total = session.exec(
         select(func.count()).select_from(Listing).where(*conditions)

@@ -194,8 +194,17 @@ class ListingQuery(SQLModel):
     the schema, an over-limit request is refused by Pydantic *before* a query is
     built, and the refusal is an explicit 422 rather than a silent clamp — a
     clamp hides the caller's mistake and makes the ceiling invisible.
+
+    Every filter is optional and bounded. `q` is length-capped so a pathological
+    search term can't become an expensive scan, and its LIKE metacharacters are
+    escaped in the router — a bare `%` would otherwise match the whole table.
     """
 
+    q: str | None = Field(default=None, max_length=100)
+    type: str | None = Field(default=None, max_length=40)
+    min_price: Decimal | None = Field(default=None, ge=0, max_digits=14)
+    max_price: Decimal | None = Field(default=None, ge=0, max_digits=14)
+    min_profit: Decimal | None = Field(default=None, max_digits=14)   # may be negative
     limit: int = Field(default=20, ge=1, le=50)
     offset: int = Field(default=0, ge=0)
 
