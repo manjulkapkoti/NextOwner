@@ -10,7 +10,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import EmailStr, Field, field_serializer
+from pydantic import EmailStr, Field, field_serializer, field_validator
 from sqlmodel import SQLModel
 
 Role = Literal["buyer", "seller"]
@@ -141,6 +141,10 @@ class ListingSummary(SQLModel):
     status: str
     asking_price: Decimal
     created_at: datetime
+    # Derived from the latest rejection event, not stored on the listing —
+    # a column would be a second copy that goes stale the moment a listing is
+    # rejected twice (spec C6, plan.md § Schema delta).
+    rejection_reason: str | None = None
 
     @field_serializer("asking_price", when_used="json")
     def _ser_price(self, v: Decimal) -> str:
@@ -154,3 +158,33 @@ class DocumentRead(SQLModel):
     content_type: str
     size_bytes: int
     uploaded_at: datetime
+
+
+class AdminListingRead(ListingRead):
+    """The curation queue row (M3, spec A5).
+
+    Extends the owner's view rather than redefining it, so a field added to
+    ListingRead cannot silently go missing from the admin's judgement surface.
+    Private company detail is included deliberately — an admin cannot curate a
+    listing they cannot see — which makes this the only schema outside the
+    owner's own routes that carries it before M5's NDA gate. **Never mount it
+    on a route guarded by anything weaker than `require_admin`.**
+    """
+
+
+class RejectRequest(SQLModel):
+    """A rejection must tell the seller what to fix (spec C3).
+
+    `min_length` alone would accept "   ", so the validator strips first — a
+    whitespace-only reason is a blank one, and rejecting it here means the
+    state machine never sees a rejection the seller cannot act on.
+    """
+
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("A rejection reason is required")
+        return v

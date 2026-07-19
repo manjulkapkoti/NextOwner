@@ -4,11 +4,13 @@ import { Fragment, useEffect } from 'react'
 import { Box, Button, Container, Stack, Typography } from '@mui/material'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { brandTint } from './theme'
+import { AdminQueue } from './components/AdminQueue'
 import { ListingWizard } from './components/ListingWizard'
 import { LoginForm } from './components/LoginForm'
 import { MyListings } from './components/MyListings'
 import { NavBar } from './components/NavBar'
 import { RegisterForm } from './components/RegisterForm'
+import { RequireAdmin } from './components/RequireAdmin'
 import { RequireAuth } from './components/RequireAuth'
 import { Wordmark } from './components/Wordmark'
 import { authStore } from './stores/authStore'
@@ -219,6 +221,16 @@ export function AppShell() {
                 <ListingWizard />
               </Container>
             </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <RequireAdmin>
+              <Container maxWidth="md" sx={{ mt: 4 }}>
+                <AdminQueue />
+              </Container>
+            </RequireAdmin>
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />

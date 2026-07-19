@@ -98,6 +98,34 @@ class ListingPrivate(SQLModel, table=True):
     detailed_financials: str | None = None                # JSON string
 
 
+class ListingEvent(SQLModel, table=True):
+    """Append-only audit of listing state changes (M3, FR-21's audit NFR).
+
+    One row per *completed* transition — never per attempt, so the log records
+    what happened rather than what was tried (spec D3). `actor_id` is derived
+    from the JWT, never from the request body.
+
+    `from_status`/`to_status` make each row self-contained: a reader knows what
+    changed without replaying the whole history. That is also what lets M8
+    project notifications from these rows instead of M3 designing a
+    notification table five milestones before its only consumer
+    (`milestones.md` § Scope fold-ins → M8).
+
+    Append-only by discipline: nothing in the codebase updates or deletes a
+    row, and spec D4 asserts both rows survive a second decision. SQLite offers
+    no cheap enforcement; a Postgres trigger can add it later if it earns one.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    listing_id: int = Field(foreign_key="listing.id", index=True)
+    actor_id: int = Field(foreign_key="user.id")          # server-derived from the JWT
+    action: str                                            # approved | rejected (M12 extends)
+    from_status: str
+    to_status: str
+    reason: str | None = None                              # required for rejections
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 class ListingDocument(SQLModel, table=True):
     """One row per uploaded file. `storage_key` is opaque (from the storage
     port); `original_filename` is display-only and NEVER used to build a path."""

@@ -144,6 +144,57 @@ def make_listing(client):
 
 
 @pytest.fixture
+def admin_headers(register, login, session):
+    """Register a user, promote them in the DB, then log in.
+
+    Promotion is a direct UPDATE because there is deliberately no endpoint that
+    grants admin (M1 decision, unchanged at M3) — seeding a state no API can
+    reach is exactly what `testing_guide.md` allows a fixture to do. The token
+    is issued *after* promotion here; `test_require_admin.py` covers the
+    inverse (token first, promotion after) to prove `is_admin` is re-read from
+    the DB per request rather than trusted from the token.
+    """
+    from sqlalchemy import text
+
+    def _admin(email="admin@example.com", password=VALID_PW):
+        register(email=email, password=password, role="buyer")
+        session.execute(text('UPDATE "user" SET is_admin = 1 WHERE email = :e'), {"e": email})
+        session.commit()
+        token = login(email=email, password=password).json()["access_token"]
+        return {"Authorization": f"Bearer {token}"}
+
+    return _admin
+
+
+@pytest.fixture
+def listing_events(session):
+    """Read the audit rows for a listing, oldest first (M3)."""
+    from sqlalchemy import text
+
+    def _events(listing_id):
+        rows = session.execute(
+            text(
+                "SELECT actor_id, action, from_status, to_status, reason, created_at "
+                "FROM listingevent WHERE listing_id = :i ORDER BY id"
+            ),
+            {"i": listing_id},
+        ).fetchall()
+        return [
+            {
+                "actor_id": r[0],
+                "action": r[1],
+                "from_status": r[2],
+                "to_status": r[3],
+                "reason": r[4],
+                "created_at": r[5],
+            }
+            for r in rows
+        ]
+
+    return _events
+
+
+@pytest.fixture
 def force_status(session):
     """Force a listing's status directly in the DB (seeding a state a seller
     can't reach alone — e.g. `live`, which needs admin approval at M3)."""

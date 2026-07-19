@@ -12,14 +12,14 @@
 3. (failing tests first)       # appsec-engineer writes the forbidden-path tests — they FAIL. The red set is now the queue.
 4. (implement, slice by slice) # work plan.md's Build order — one trust boundary per slice, one commit each; red count only goes down
 5. /dod                        # full `npm test` + the security must-cover matrix → verifies green (NO PR yet)
-6. (review + test)             # inline review ON THE BRANCH (+ 1 appsec agent on M1/M2/M5/M7/M8/M10), fix findings
+6. (review + test)             # inline review ON THE BRANCH (+ 1 appsec agent on M1/M2/M3/M5/M7/M8/M10), fix findings
 7. (open PR)                   # only after the review is clean → a PR = "vetted, ready for a human"
 8. (human review) → "close the feature"   # you approve → squash-merge + sync main → next milestone
 ```
 
 **Rules:** spec only 1–2 milestones ahead · every GIVEN/WHEN/THEN = one test, written failing first · `main` is updated only via a **green PR** · commit freely on the branch (WIP is fine).
 
-**Automate it:** `/run-milestone <slug>` drives steps 1–7 for you (branch → spec → failing tests → implement → `/dod` green gate → **review & test on the branch** — inline by default, plus one independent `appsec` pass on the security-critical milestones M1/M2/M5/M7/M8/M10 → open the PR once it's clean) and stops at the vetted PR for your review. Add `--pause-after-spec` to approve the spec before it builds. The merge always stays manual — you review, then `/close-feature`.
+**Automate it:** `/run-milestone <slug>` drives steps 1–7 for you (branch → spec → failing tests → implement → `/dod` green gate → **review & test on the branch** — inline by default, plus one independent `appsec` pass on the security-critical milestones M1/M2/M3/M5/M7/M8/M10 → open the PR once it's clean) and stops at the vetted PR for your review. Add `--pause-after-spec` to approve the spec before it builds. The merge always stays manual — you review, then `/close-feature`.
 
 For example:
 
@@ -96,6 +96,7 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
   - **Sibling-offers policy on accept** (auto-decline with notification vs. leave pending) — decide + test; M12 honors it on re-list.
   - **`GET /my/offers`** (buyer) / offers per listing (seller); emit offer events. Offer **expiry** may be deferred post-MVP — say so in the spec.
 - **M8 — notifications engine + saved searches** *(scope expanded — constitution amendment 2026-07-16):* deliver **all** events emitted by M3/M5/M6/M7 (in-app inbox + email via MailHog — FR-22 + the FR-16 fallback), plus the saved-search matching fan-out; every delivery caller-scoped.
+  - **The `notification` table is M8's to design, not M3's** *(owner-approved 2026-07-19)*. M3's fold-in originally asked it to emit notification rows; that was **re-sequenced here, not dropped**. M3 instead writes `listing_event` rows carrying actor, action, `from_status`, `to_status`, reason and timestamp — everything a "listing approved/rejected" notification needs — and **M8 projects notifications from those events**. Rationale: a table designed five milestones before its only consumer is speculative, and one written by M3 but read by nobody until M8 could not be verified by any test writable at M3 time. **When scoping M8, start from `listing_event`** (`specs/003-admin-curation/`) and check the same question for M5/M6/M7's events before inventing a schema.
   - **Account lifecycle — password reset + email verification** *(moved here from M1, 2026-07-17).* M8 **owns the email channel** (SMTP → MailHog at `localhost:8025`), so the recovery flows ship with the machinery that delivers them — the dependency M1's fold-in had backwards ("the channel arrives in M1; M8 reuses it"). **This makes M8 security-critical** (see the ⚠ below): a reset token is account takeover if it leaks, so it needs single-use + short expiry + high entropy, an invariant response whether or not the address exists (no user enumeration — same rule as M1's login), and no token in a log or a URL that a proxy records. Email verification gates nothing until a milestone asks it to; say so explicitly in the spec rather than leaving it implied.
   - ⚠ **Consequence to accept knowingly:** M1–M7 ship with **no self-serve password reset and no verified addresses**. Fine while the build is 100% local with no real users (reset in SQLite); **not** fine the moment anyone real signs up. If the plan changes and real users arrive before M8, this fold-in moves back — it is a scoping call, not an architectural one.
 - **M10 — buyer verification:** the badge surfaces on the M1 profile (and in M5's request list); add a **per-listing upload count / total-size quota** (extends the M2 upload rules; security.md §6 addendum).
@@ -111,7 +112,7 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
 - [x] **M2** — listing builder + uploads *(+ lifecycle transitions, `Decimal` money, storage port — § Scope fold-ins)*
 - [x] **App-shell** — router + nav + login→app flow + global-401 redirect *(frontend foundation; spec `pre-003`, before M3)* · *(+ public landing page #26, register page #27)*
 - [x] **Design system** — tokens (`theme.ts`) + brand assets + `StatusChip` + all six screens restyled *(frontend foundation, merged #28; **no spec folder** — an owner-directed design pass, not an FR-bearing milestone. Decisions live in `docs/design_system_spec.md`.)*
-- [ ] **M3** — admin curation *(+ `listing_event` audit — § Scope fold-ins)*
+- [x] **M3** — admin curation *(+ `listingevent` audit; notification events re-sequenced to M8 — § Scope fold-ins)*
 - [ ] **M4** — marketplace browse *(+ keyword search, seed data, brand voice & landing copy — § Scope fold-ins)*
 - [ ] **M5** ⭐ — NDA + access gate *(+ revocation endpoint, `nda_version` — § Scope fold-ins)*
 - [ ] **M6** — realtime chat *(+ unread counts, WS error contract — § Scope fold-ins)*

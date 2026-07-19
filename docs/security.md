@@ -191,7 +191,7 @@ Each milestone's spec must include a **"Security & abuse"** subsection turning t
 1. **Spec (`/new-spec`):** add a **"Security & abuse"** subsection from §6 + §7 — the forbidden-path scenarios as GIVEN/WHEN/THEN, citing the FR and the control here.
 2. **Tests (before code):** every `401/403/404/409` is one failing test first (permission tests = crown jewels). Include the negative tests: IDOR, mass-assignment, path traversal, spoofed identity, schema-leak.
 3. **Implement:** gate first (default-deny) → validate input → parameterized query, caller-scoped → shape output (`response_model`) → secrets from env.
-4. **Review (the `/dod` green gate + the inline branch review every milestone; an independent `appsec-engineer` pass on the security-critical milestones M1/M2/M5/M7/M8/M10) — touched → must-cover matrix:**
+4. **Review (the `/dod` green gate + the inline branch review every milestone; an independent `appsec-engineer` pass on the security-critical milestones M1/M2/M3/M5/M7/M8/M10) — touched → must-cover matrix:**
 
    | If the change touches… | It must have a passing negative test for… |
    |---|---|
@@ -208,6 +208,8 @@ Each milestone's spec must include a **"Security & abuse"** subsection turning t
 ---
 
 ## 9. Deferred-but-designed — deploy-time hardening
+
+- **Data sweep for the M3 curation bypass — one-time, before any real data ships.** The M3 fix (`update_listing` demotes on edit while `live` **or** `paused`) gates the transition **going forward only**; it cannot repair rows that already exist. Any listing sitting in `paused` that was edited under the old code is holding content no admin ever reviewed, and a single `resume` publishes it. **Before this reaches a database with real listings, force every `paused` listing back to `pending_review`** (or diff each against its last `approved` audit event and demote only the changed ones — `listingevent` has what you need). Not applicable to the test suite, which builds a fresh in-memory DB per test, which is exactly why no test will ever tell you about it. *Raised by the re-verification round on 2026-07-19: a code fix closes the door, it does not evict whoever already walked through.*
 
 These are post-MVP but decided now so nothing is retrofitted blindly:
 

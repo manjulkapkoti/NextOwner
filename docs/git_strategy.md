@@ -30,7 +30,7 @@ Sub-agents run in isolation and hand work back to the main session. Having each 
 4. Build   →  backend/frontend implement → commit(s)       ("feat: auth endpoints + JWT")
 5. Green   →  /dod: full suite + security must-cover matrix + checklist must pass   (verifies green — does NOT open the PR)
 6. Review  →  INLINE by the orchestrator every milestone (architecture + §8 matrix)  ← ON THE BRANCH,
-              + 1 independent appsec agent on M1/M2/M5/M7/M8/M10 (diff-scoped)             BEFORE the PR exists
+              + 1 independent appsec agent on M1/M2/M3/M5/M7/M8/M10 (diff-scoped)             BEFORE the PR exists
               → fix findings, re-run tests, until clean
 7. PR      →  git push -u origin … → gh pr create → main                              ← opened only after sign-off;
               (body: FRs, security-matrix result, test summary, agent sign-off)         a PR = "ready for a human"
@@ -45,6 +45,18 @@ The pre-PR review is **inline by default**: the orchestrator (in the `tech-lead`
 **One independent `appsec-engineer` agent is added only on the security-critical milestones** — **M1** (auth), **M2** (uploads), **M5 ⭐** (NDA gate), **M7** (offers/money), **M8** (password-reset tokens), **M10** (verification) — for cold, blind-spot-free security eyes. Even then: a **single** agent (no separate `tech-lead` agent), **scoped to the diff** (`git diff main...<branch>` + the relevant §8 rows, not a full-repo read), run **async in the background** (transcript stays out of the main context), on **Sonnet** (Opus only for M5). The `/dod` forbidden-path tests are the always-on security floor on *every* milestone regardless.
 
 ---
+
+### The bounded re-verification round (added 2026-07-19)
+
+A review that only runs **before** the fix leaves the fix itself unchecked — and a fix is exactly where a new bug enters. On M3 the independent pass found a blocking curation bypass, the orchestrator patched it, and nothing verified the patch: it happened to be sound, but only because a mechanical reachability test existed to prove it, not because the process demanded proof.
+
+So after fixing any **blocking** finding, run **one** re-verification round:
+
+- **Send it to the same agent, not a fresh one.** Continue the existing reviewer (`SendMessage` by id or name) — it already holds the finding, the code and the attack it wrote. A cold spawn re-derives all of that and costs many times more for a worse answer.
+- **Ask three narrow questions**, not "review it again": does this close the finding or is there a variant it misses; does the fix break a legitimate flow (a guard that fires on more states changes valid paths too); and is the new test's coverage sound or does it give false confidence?
+- **Exactly one round.** If the agent still objects afterwards, it is no longer a review loop — surface it to the human as a decision. Unbounded loops rubber-stamp and burn budget.
+
+Non-blocking findings do not get a round. They are either fixed inline, or recorded **with the trigger that should reopen them** ("when M4's seed data lands"), never as an undated "later".
 
 ## Two open PRs (staleness + conflict recovery)
 
