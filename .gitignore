@@ -48,3 +48,10 @@ Thumbs.db
 
 # Playwright screen captures — artefacts for looking at, not for review
 app/e2e/__screens__/
+
+# Captured command output — scratch artifacts from test/debug runs. One of these
+# (backend/count_out.txt) reached `main` via an uninspected `git add -A`; the
+# habit fix is reading `git status` before staging, this is only the backstop.
+*_out.txt
+scratch_*
+*.bak
