@@ -10,7 +10,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import EmailStr, Field, field_serializer
+from pydantic import EmailStr, Field, field_serializer, field_validator
 from sqlmodel import SQLModel
 
 Role = Literal["buyer", "seller"]
@@ -166,3 +166,21 @@ class AdminListingRead(ListingRead):
     owner's own routes that carries it before M5's NDA gate. **Never mount it
     on a route guarded by anything weaker than `require_admin`.**
     """
+
+
+class RejectRequest(SQLModel):
+    """A rejection must tell the seller what to fix (spec C3).
+
+    `min_length` alone would accept "   ", so the validator strips first — a
+    whitespace-only reason is a blank one, and rejecting it here means the
+    state machine never sees a rejection the seller cannot act on.
+    """
+
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("A rejection reason is required")
+        return v

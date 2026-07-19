@@ -18,14 +18,15 @@ from sqlmodel import Session, select
 from ..config import ALLOWED_UPLOAD_TYPES, settings
 from ..db import get_session
 from ..errors import InvalidTransition, NotFound, PayloadTooLarge, UnsupportedMediaType
-from ..models import Listing, ListingDocument, ListingPrivate, User
-from ..permissions import get_current_user, get_owned_listing
+from ..models import Listing, ListingDocument, ListingEvent, ListingPrivate, User, _utcnow
+from ..permissions import get_current_user, get_owned_listing, require_admin
 from ..schemas import (
     DocumentRead,
     ListingCreate,
     ListingRead,
     ListingSummary,
     ListingUpdate,
+    RejectRequest,
 )
 from ..storage import LocalDiskStorageBackend
 
@@ -147,11 +148,51 @@ def update_listing(
 
 # ── Lifecycle transitions ────────────────────────────────────────────────────
 
-def _transition(listing: Listing, allowed_from: set[str], to: str, session: Session) -> Listing:
-    if listing.status not in allowed_from:
-        raise InvalidTransition(f"Cannot go from {listing.status!r} to {to!r}")
+def _transition(
+    listing: Listing,
+    allowed_from: set[str],
+    to: str,
+    session: Session,
+    *,
+    actor: User | None = None,
+    action: str | None = None,
+    reason: str | None = None,
+    set_fields: dict[str, object] | None = None,
+) -> Listing:
+    """Move a listing between states, and audit it if an actor is given.
+
+    The status check comes first, so an illegal transition raises before
+    anything is written — that is what makes "no audit row for a failed
+    attempt" (spec D3) a property of the code rather than a promise. The log
+    records what happened, not what was tried.
+
+    `actor`/`action` are optional because seller-driven transitions (submit,
+    pause) are not audited at M3: FR-21 asks for an audit of *curation*
+    decisions. When the seller lifecycle needs its own trail, pass an actor
+    here rather than adding a second logging path.
+    """
+    from_status = listing.status
+    if from_status not in allowed_from:
+        raise InvalidTransition(f"Cannot go from {from_status!r} to {to!r}")
     listing.status = to
+    # Applied only after the guard passed, so a 409 leaves the row untouched —
+    # `published_at` must never be stamped on a listing that did not go live.
+    for field, value in (set_fields or {}).items():
+        setattr(listing, field, value)
     session.add(listing)
+
+    if actor is not None and action is not None:
+        session.add(
+            ListingEvent(
+                listing_id=listing.id,
+                actor_id=actor.id,          # from the JWT, never the body
+                action=action,
+                from_status=from_status,
+                to_status=to,
+                reason=reason,
+            )
+        )
+
     session.commit()
     session.refresh(listing)
     return listing
@@ -250,3 +291,63 @@ def download_document(
         media_type=doc.content_type,
         headers={"Content-Disposition": f'attachment; filename="{safe or "document"}"'},
     )
+
+
+# ── Curation (M3) — admin only ───────────────────────────────────────────────
+#
+# These live here, beside the rest of the state machine, rather than in the
+# admin router: `listing.status` changes in exactly one place (Article 2 #3).
+# A second implementation in another file is how a state machine grows a hole.
+
+
+def _pending_listing(listing_id: int, session: Session) -> Listing:
+    """Fetch for curation. Unlike `get_owned_listing`, a 404 here is safe to be
+    literal — the caller is already an authenticated admin, so there is no
+    existence oracle to protect."""
+    listing = session.get(Listing, listing_id)
+    if listing is None:
+        raise NotFound("Listing not found")
+    return listing
+
+
+@router.post("/listings/{listing_id}/approve", response_model=ListingRead)
+def approve_listing(
+    listing_id: int,
+    admin: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> ListingRead:
+    """The only path to `live` (spec B1-B5). No seller-reachable route sets it."""
+    listing = _pending_listing(listing_id, session)
+    _transition(
+        listing,
+        {"pending_review"},
+        "live",
+        session,
+        actor=admin,
+        action="approved",
+        set_fields={"published_at": _utcnow()},   # server clock, never the client's
+    )
+    return _to_read(listing, session.get(ListingPrivate, listing.id))
+
+
+@router.post("/listings/{listing_id}/reject", response_model=ListingRead)
+def reject_listing(
+    listing_id: int,
+    body: RejectRequest,
+    admin: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> ListingRead:
+    """Reject with a reason (spec C1-C5). The reason is required by schema, so a
+    blank one is a 422 at the boundary and never reaches the state machine — a
+    rejection the seller cannot act on is worse than none."""
+    listing = _pending_listing(listing_id, session)
+    _transition(
+        listing,
+        {"pending_review"},
+        "rejected",
+        session,
+        actor=admin,
+        action="rejected",
+        reason=body.reason.strip(),
+    )
+    return _to_read(listing, session.get(ListingPrivate, listing.id))

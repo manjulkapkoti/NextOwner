@@ -8,6 +8,8 @@ Implementation plan for `spec.md`. Schema, endpoints, components, and the **Buil
 
 ### New: `listing_event` (append-only audit)
 
+*Physical table name is `listingevent`* — SQLModel's default, matching the existing `listingdocument` and `listingprivate`. `listing_event` is how the docs and the fold-in refer to it; one naming convention per database beats a readable exception.
+
 | Column | Type | Notes |
 |---|---|---|
 | `id` | int PK | |

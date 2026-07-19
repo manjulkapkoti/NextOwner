@@ -175,7 +175,7 @@ def listing_events(session):
         rows = session.execute(
             text(
                 "SELECT actor_id, action, from_status, to_status, reason, created_at "
-                "FROM listing_event WHERE listing_id = :i ORDER BY id"
+                "FROM listingevent WHERE listing_id = :i ORDER BY id"
             ),
             {"i": listing_id},
         ).fetchall()
