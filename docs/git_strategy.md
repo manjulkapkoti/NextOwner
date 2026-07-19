@@ -46,6 +46,18 @@ The pre-PR review is **inline by default**: the orchestrator (in the `tech-lead`
 
 ---
 
+### The bounded re-verification round (added 2026-07-19)
+
+A review that only runs **before** the fix leaves the fix itself unchecked — and a fix is exactly where a new bug enters. On M3 the independent pass found a blocking curation bypass, the orchestrator patched it, and nothing verified the patch: it happened to be sound, but only because a mechanical reachability test existed to prove it, not because the process demanded proof.
+
+So after fixing any **blocking** finding, run **one** re-verification round:
+
+- **Send it to the same agent, not a fresh one.** Continue the existing reviewer (`SendMessage` by id or name) — it already holds the finding, the code and the attack it wrote. A cold spawn re-derives all of that and costs many times more for a worse answer.
+- **Ask three narrow questions**, not "review it again": does this close the finding or is there a variant it misses; does the fix break a legitimate flow (a guard that fires on more states changes valid paths too); and is the new test's coverage sound or does it give false confidence?
+- **Exactly one round.** If the agent still objects afterwards, it is no longer a review loop — surface it to the human as a decision. Unbounded loops rubber-stamp and burn budget.
+
+Non-blocking findings do not get a round. They are either fixed inline, or recorded **with the trigger that should reopen them** ("when M4's seed data lands"), never as an undated "later".
+
 ## Two open PRs (staleness + conflict recovery)
 
 Milestones are built **one at a time**, so each branch is cut from fresh `main` and squash-merges cleanly — normally there's only one PR in flight and this never comes up. But when two PRs are open at once (e.g. a process/hotfix PR alongside a milestone), the moment the first merges the second is based on an **older `main`**:
