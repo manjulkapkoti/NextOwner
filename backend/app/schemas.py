@@ -154,3 +154,15 @@ class DocumentRead(SQLModel):
     content_type: str
     size_bytes: int
     uploaded_at: datetime
+
+
+class AdminListingRead(ListingRead):
+    """The curation queue row (M3, spec A5).
+
+    Extends the owner's view rather than redefining it, so a field added to
+    ListingRead cannot silently go missing from the admin's judgement surface.
+    Private company detail is included deliberately — an admin cannot curate a
+    listing they cannot see — which makes this the only schema outside the
+    owner's own routes that carries it before M5's NDA gate. **Never mount it
+    on a route guarded by anything weaker than `require_admin`.**
+    """
