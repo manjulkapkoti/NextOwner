@@ -322,8 +322,8 @@ def _apply(client, headers, listing_id, action):
 def test_e6_no_seller_action_sequence_republishes_unreviewed_content(
     client, auth_headers, admin_headers, make_listing, force_status, session
 ):
-    """Exhaustive: every sequence of up to three seller actions, from every
-    status a seller can be in, must never leave a listing `live` after an edit.
+    """Exhaustive: every sequence of up to TWO seller actions, from every status
+    a seller can be in, must never leave a listing `live` after an edit.
 
     E1-E5 each name one forbidden path. This names the *invariant* instead —
     "a seller cannot publish content an admin has not seen" — and checks it
@@ -347,7 +347,7 @@ def test_e6_no_seller_action_sequence_republishes_unreviewed_content(
 
     failures: list[str] = []
     for start in ("draft", "pending_review", "live", "paused"):
-        for length in (1, 2):
+        for length in (1, 2):   # depth 2 — see the docstring; depth 3 cost 45s for no coverage
             for sequence in itertools.product(SELLER_ACTIONS, repeat=length):
                 listing_id = make_listing(seller).json()["id"]
                 force_status(listing_id, start)

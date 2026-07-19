@@ -97,6 +97,22 @@ def status_regions() -> list[tuple[str, str]]:
         if line.startswith(("**Milestone status:**", "**In flight:**", "**Open PRs:**")):
             regions.append((f"docs/progress.md '{line.split('**')[1]}**' line", line))
 
+    # The "next action" block. It was NOT scanned until 2026-07-19, and that
+    # gap let a stale "Review the M3 PR, then close the feature" instruction sit
+    # on `main` after #33 had already merged — invisible to the very check that
+    # claims to fail the build when a status surface still describes work as
+    # awaiting approval. The most-read line in the file was the unwatched one.
+    in_next_action = False
+    for line in progress.splitlines():
+        if line.startswith("## ") and "NEXT ACTION" in line.upper():
+            in_next_action = True
+            continue
+        if in_next_action:
+            if line.startswith("## "):
+                break
+            if line.strip():
+                regions.append(("docs/progress.md '▶ NEXT ACTION' block", line))
+
     return regions
 
 
