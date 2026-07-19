@@ -11,8 +11,6 @@ S3 asserts the control itself rather than one of its outputs, so a field added
 to the model in a later milestone is caught even if no route test covers it.
 """
 
-import itertools
-
 import pytest
 
 
@@ -22,15 +20,17 @@ def make_live(client, auth_headers, admin_headers, make_listing):
 
     `live` is only reachable via admin approval (M3, spec 003 B1-B5), so this
     submits and approves rather than force-setting the status — the fixture
-    exercises the same path a real listing takes. Each call registers its own
-    seller so the tests never depend on one account owning everything.
+    exercises the same path a real listing takes.
+
+    One seller owns every listing it makes: browse never reads `owner_id` (that
+    is the point — S8), and registering per listing would both cost a bcrypt
+    hash each time and trip M1's registration rate-limit once a test needs more
+    than a handful of rows.
     """
     admin = admin_headers()
-    counter = itertools.count(1)
+    seller = auth_headers(email="seller@example.com", role="seller")
 
     def _make(**overrides):
-        n = next(counter)
-        seller = auth_headers(email=f"seller{n}@example.com", role="seller")
         listing_id = make_listing(seller, **overrides).json()["id"]
         client.post(f"/api/listings/{listing_id}/submit", headers=seller)
         client.post(f"/api/listings/{listing_id}/approve", headers=admin)

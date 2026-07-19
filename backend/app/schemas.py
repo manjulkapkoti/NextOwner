@@ -151,6 +151,65 @@ class ListingSummary(SQLModel):
         return str(v)
 
 
+# ── Public marketplace (M4) ──────────────────────────────────────────────────
+
+class ListingPublic(SQLModel):
+    """The anonymous card — what an unauthenticated stranger may see (FR-6).
+
+    Deliberately a **standalone model, not a subclass of `ListingRead`**. If it
+    inherited, a private field added to the owner's view would silently join the
+    public one; the inheritance direction that makes `AdminListingRead` correct
+    (it *should* get everything) is exactly wrong here. The duplication is the
+    control, and spec 004 S3 asserts the absent field set directly so this
+    cannot drift unnoticed.
+
+    Absent by construction: `owner_id`, `status`, `company_name`, `website_url`,
+    `detailed_financials`. `status` is excluded even though it is not private —
+    browse returns `live` rows only, so the field would be a constant that tells
+    a caller nothing while creating a channel for a future state to leak by
+    accident (spec D2). M12 may add a deliberate public "under offer" flag.
+    """
+
+    id: int
+    type: str
+    headline: str
+    description: str
+    asking_price: Decimal
+    ttm_revenue: Decimal
+    ttm_profit: Decimal
+    mrr: Decimal
+    churn_pct: Decimal
+    customers: int
+    published_at: datetime | None = None
+
+    @field_serializer(*_MONEY_FIELDS, when_used="json")
+    def _ser_money(self, v: Decimal) -> str:
+        return str(v)
+
+
+class ListingQuery(SQLModel):
+    """Browse query parameters, validated at the boundary (security.md §2).
+
+    The `limit` ceiling is the DoS control (spec 004 S7): because it lives on
+    the schema, an over-limit request is refused by Pydantic *before* a query is
+    built, and the refusal is an explicit 422 rather than a silent clamp — a
+    clamp hides the caller's mistake and makes the ceiling invisible.
+    """
+
+    limit: int = Field(default=20, ge=1, le=50)
+    offset: int = Field(default=0, ge=0)
+
+
+class ListingPage(SQLModel):
+    """A page of public listings. `total` is the count *before* limit/offset, so
+    the UI can paginate without a second endpoint."""
+
+    items: list[ListingPublic]
+    total: int
+    limit: int
+    offset: int
+
+
 class DocumentRead(SQLModel):
     id: int
     listing_id: int

@@ -13,6 +13,7 @@ import os
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import Response
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from ..config import ALLOWED_UPLOAD_TYPES, settings
@@ -23,6 +24,9 @@ from ..permissions import get_current_user, get_owned_listing, require_admin
 from ..schemas import (
     DocumentRead,
     ListingCreate,
+    ListingPage,
+    ListingPublic,
+    ListingQuery,
     ListingRead,
     ListingSummary,
     ListingUpdate,
@@ -68,6 +72,67 @@ def _to_read(listing: Listing, private: ListingPrivate | None) -> ListingRead:
         company_name=private.company_name if private else None,
         website_url=private.website_url if private else None,
         detailed_financials=private.detailed_financials if private else None,
+    )
+
+
+# ── Public marketplace (M4) ──────────────────────────────────────────────────
+#
+# The first routes in the project an anonymous stranger may call. They have no
+# permission dependency **by design** — and because there is no gate, two other
+# controls are the entire boundary:
+#
+#   1. `WHERE status = 'live'`  — nothing unapproved is ever public
+#   2. the `ListingPublic` schema — identity fields cannot leak
+#
+# `_to_public` takes a `Listing` and nothing else, so `ListingPrivate` is not
+# even in scope at the call site: there is no private row here to leak from.
+
+
+def _to_public(listing: Listing) -> ListingPublic:
+    return ListingPublic(
+        id=listing.id,
+        type=listing.type,
+        headline=listing.headline,
+        description=listing.description,
+        asking_price=listing.asking_price,
+        ttm_revenue=listing.ttm_revenue,
+        ttm_profit=listing.ttm_profit,
+        mrr=listing.mrr,
+        churn_pct=listing.churn_pct,
+        customers=listing.customers,
+        published_at=listing.published_at,
+    )
+
+
+@router.get("/listings", response_model=ListingPage)
+def browse_listings(
+    query: ListingQuery = Depends(),
+    session: Session = Depends(get_session),
+) -> ListingPage:
+    """Public browse (spec 004 A1-A11). No auth — and no widening if a token is
+    present (S8): this function never reads the caller's identity at all."""
+    conditions = [Listing.status == "live"]
+
+    total = session.exec(
+        select(func.count()).select_from(Listing).where(*conditions)
+    ).one()
+
+    rows = session.exec(
+        select(Listing)
+        .where(*conditions)
+        # `id` breaks ties so the ordering is total, not just sorted — two
+        # listings approved in the same clock tick must not swap between pages
+        # and hide a row from a paginating caller.
+        .order_by(Listing.published_at.desc(), Listing.id.desc())
+        .limit(query.limit)
+        .offset(query.offset)
+    ).all()
+
+    return ListingPage(
+        items=[_to_public(row) for row in rows],
+        total=total,
+        limit=query.limit,
+        offset=query.offset,
     )
 
 
