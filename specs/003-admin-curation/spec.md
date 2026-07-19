@@ -106,10 +106,12 @@ Per `docs/security.md` §7 (M3) and §8:
 
 ---
 
-## Open decision for the owner
+## Decision — notification table deferred to M8 (owner-approved 2026-07-19)
 
-**The M3 fold-in asks for notification events on approve/reject, "delivered when M8 lands."** This spec proposes **not** creating a `notification` table in M3, because `listing_event` already records everything such a notification needs — actor, action, listing, reason, timestamp — and M8 can project notifications from it. Designing a notification schema five milestones before its only consumer is speculative, and a table written by M3 but read by nobody until M8 cannot be verified by any test we can write now.
+The M3 fold-in asked for notification events on approve/reject, "delivered when M8 lands." **M3 does not create a `notification` table.**
 
-**The alternative** is to create the table now and insert rows, accepting that M8 may reshape it.
+`listing_event` already records everything such a notification needs — actor, action, listing, reason, timestamp — so **M8 projects notifications from it** rather than M3 guessing M8's schema. Designing a table five milestones before its only consumer is speculative, and one written by M3 but read by nobody until M8 could not be verified by any test writable today.
 
-The fold-in is a recorded scope item, so dropping it silently would be exactly the drift this project keeps fighting — hence raising it here rather than deciding it alone.
+**The obligation moves rather than disappears:** recorded in `docs/milestones.md` § Scope fold-ins → M8, where `/new-spec` will read it. That is the "amend, don't drift" rule — a fold-in may be re-sequenced by decision, never dropped by silence.
+
+**What M3 owes M8 in exchange:** the event rows must be rich enough to project from. Hence `from_status` and `to_status` on every row (D1), the reason stored verbatim (D2), and no row on a failed transition (D3) — a notification must never be generated for something that did not happen.
