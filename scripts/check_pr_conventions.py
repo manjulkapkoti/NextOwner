@@ -50,24 +50,42 @@ for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
+# Every pattern is LINE-ANCHORED, and code spans are stripped before matching.
+#
+# This distinction is the whole design, and it was found the hard way: the first
+# version of this check failed on its own PR, because that PR's body *documents*
+# the forbidden strings in order to explain the rule. A guard that cannot tell
+# "carries attribution" from "talks about attribution" makes it impossible to
+# write the docs, the spec, or this file's own tests.
+#
+# The signal is position. A real `Co-Authored-By:` trailer or a real footer sits
+# at the start of its own line; prose quotes them mid-sentence or in backticks.
+# Leading non-word characters are tolerated so an emoji-prefixed footer
+# ("<robot> Generated with...") still matches.
+_LEAD = r"^[^\w\n]{0,4}"
+
 ATTRIBUTION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (
-        re.compile(r"co-authored-by:\s*(claude|anthropic|gpt|copilot|codex|devin)", re.I),
+        re.compile(_LEAD + r"co-authored-by:\s*(claude|anthropic|gpt|copilot|codex|devin)", re.I | re.M),
         "an agent `Co-Authored-By:` trailer",
     ),
     (
-        re.compile(r"generated\s+with\s+\[?\s*claude", re.I),
+        re.compile(_LEAD + r"generated\s+with\s+\[?\s*claude", re.I | re.M),
         'a "Generated with Claude Code" footer',
     ),
-    # The pattern needs the character; the *label* must not print it — a Windows
-    # console is often cp1252 and would raise on the way out, turning a lint
-    # failure into a crash.
-    (re.compile("\U0001F916"), "the robot attribution emoji"),
     (
-        re.compile(r"\b(?:written|authored|created|generated)\s+by\s+claude\b", re.I),
+        re.compile(_LEAD + r"(?:written|authored|created|generated)\s+by\s+claude\b", re.I | re.M),
         'an "authored by Claude" line',
     ),
 ]
+
+# Fenced blocks and inline code spans hold *examples*, never live attribution.
+_FENCED = re.compile(r"```.*?```", re.S)
+_INLINE_CODE = re.compile(r"`[^`\n]*`")
+
+
+def strip_code(text: str) -> str:
+    return _INLINE_CODE.sub(" ", _FENCED.sub(" ", text))
 
 REQUIRED_HEADING = re.compile(r"^#{1,3}\s*What was shipped\s*$", re.I | re.M)
 
@@ -135,7 +153,7 @@ def main() -> int:
 
     for sha, message in commit_messages(args.base):
         for pattern, label in ATTRIBUTION_PATTERNS:
-            if pattern.search(message):
+            if pattern.search(strip_code(message)):
                 subject = message.strip().splitlines()[0][:60]
                 problems.append(f"commit {sha} ({subject}) carries {label}")
 
@@ -144,7 +162,7 @@ def main() -> int:
         print("note: no PR event payload — checking commits only.", file=sys.stderr)
     elif body.strip():
         for pattern, label in ATTRIBUTION_PATTERNS:
-            if pattern.search(body):
+            if pattern.search(strip_code(body)):
                 problems.append(f"the PR body carries {label}")
         if not REQUIRED_HEADING.search(body):
             problems.append(

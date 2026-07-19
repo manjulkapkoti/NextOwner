@@ -50,23 +50,43 @@ FILE_ARG_RE = re.compile(
     r"(?:--body-file|--file|-F)[=\s]+(?:\"([^\"]+)\"|'([^']+)'|(\S+))"
 )
 
-# Attribution. Deliberately narrow: a *human* Co-Authored-By trailer is a
-# legitimate thing to write, so only agent co-authors are blocked.
+# Attribution. Two deliberate narrowings, both learned rather than guessed:
+#
+#   1. A *human* `Co-Authored-By` trailer is legitimate, so only agent
+#      co-authors are matched.
+#   2. Every pattern is LINE-ANCHORED and code spans are stripped first, so
+#      *documenting* the rule does not trip it. The CI twin of this check failed
+#      on its own PR because that PR's body quoted the forbidden strings in
+#      order to explain them — a guard that cannot tell "carries attribution"
+#      from "talks about attribution" makes the docs unwritable.
+#
+# The signal is position: a real trailer or footer starts its own line, while
+# prose quotes it mid-sentence or in backticks. Leading non-word characters are
+# tolerated so an emoji-prefixed footer still matches.
+_LEAD = r"^[^\w\n]{0,4}"
+
 ATTRIBUTION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (
-        re.compile(r"co-authored-by:\s*(claude|anthropic|gpt|copilot|codex|devin)", re.I),
+        re.compile(_LEAD + r"co-authored-by:\s*(claude|anthropic|gpt|copilot|codex|devin)", re.I | re.M),
         "an agent `Co-Authored-By:` trailer",
     ),
     (
-        re.compile(r"generated\s+with\s+\[?\s*claude", re.I),
+        re.compile(_LEAD + r"generated\s+with\s+\[?\s*claude", re.I | re.M),
         'a "Generated with Claude Code" footer',
     ),
-    (re.compile("🤖"), "the robot attribution emoji"),
     (
-        re.compile(r"\b(?:written|authored|created|generated)\s+by\s+claude\b", re.I),
+        re.compile(_LEAD + r"(?:written|authored|created|generated)\s+by\s+claude\b", re.I | re.M),
         'an "authored by Claude" line',
     ),
 ]
+
+# Fenced blocks and inline code spans hold *examples*, never live attribution.
+_FENCED = re.compile(r"```.*?```", re.S)
+_INLINE_CODE = re.compile(r"`[^`\n]*`")
+
+
+def strip_code(text: str) -> str:
+    return _INLINE_CODE.sub(" ", _FENCED.sub(" ", text))
 
 REQUIRED_HEADING = re.compile(r"^#{1,3}\s*What was shipped\s*$", re.I | re.M)
 
@@ -123,10 +143,11 @@ def body_text(command: str) -> str | None:
 
 
 def check_attribution(text: str) -> list[str]:
+    stripped = strip_code(text)
     return [
         f"  - {label}"
         for pattern, label in ATTRIBUTION_PATTERNS
-        if pattern.search(text)
+        if pattern.search(stripped)
     ]
 
 

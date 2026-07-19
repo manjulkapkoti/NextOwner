@@ -133,6 +133,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # The guards' own tests run first: they block commits and PRs, so a false
+      # positive is a wall, not a nuisance. The "documents the rule" cases exist
+      # because the first version of this check failed on its own PR.
+      - name: Test the guards
+        run: python scripts/test_pr_conventions.py
       - name: Check commits and the PR body
         run: python scripts/check_pr_conventions.py --base ${{ github.base_ref }}
 
