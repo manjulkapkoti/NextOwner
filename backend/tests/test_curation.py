@@ -7,6 +7,8 @@ quality promise is void.
 Written failing first, forbidden paths before happy paths.
 """
 
+import itertools
+
 from sqlalchemy import text
 
 
@@ -295,3 +297,59 @@ def test_e5_pause_edit_resume_cannot_republish_unreviewed_content(
     # Editing while paused returns it to the queue, so resume has nothing to resume.
     assert row["status"] == "pending_review"
     assert res.status_code == 409
+
+
+# ── E6 — reachability: the invariant, not a list of known doors ──────────────
+
+SELLER_ACTIONS = ("submit", "pause", "resume", "edit")
+
+
+def _apply(client, headers, listing_id, action):
+    """One seller-reachable action. Illegal ones 409 and are simply no-ops."""
+    if action == "edit":
+        return client.put(
+            f"/api/listings/{listing_id}",
+            json={"headline": "EDITED — never reviewed", "asking_price": "999999.00"},
+            headers=headers,
+        )
+    return client.post(f"/api/listings/{listing_id}/{action}", headers=headers)
+
+
+def test_e6_no_seller_action_sequence_republishes_unreviewed_content(
+    client, auth_headers, admin_headers, make_listing, force_status, session
+):
+    """Exhaustive: every sequence of up to three seller actions, from every
+    status a seller can be in, must never leave a listing `live` after an edit.
+
+    E1-E5 each name one forbidden path. This names the *invariant* instead —
+    "a seller cannot publish content an admin has not seen" — and checks it
+    against the whole reachable graph. The E5 bypass (pause → edit → resume)
+    was found by a human reviewer precisely because no test asked this
+    question; every seller route M4+ adds is now checked against it for free.
+    """
+    seller = auth_headers(email="seller@example.com", role="seller")
+    admin_headers()          # exists, but takes no part in these sequences
+
+    failures: list[str] = []
+    for start in ("pending_review", "live", "paused"):
+        for length in (1, 2, 3):
+            for sequence in itertools.product(SELLER_ACTIONS, repeat=length):
+                listing_id = make_listing(seller).json()["id"]
+                force_status(listing_id, start)
+
+                edited = False
+                for action in sequence:
+                    res = _apply(client, seller, listing_id, action)
+                    if action == "edit" and res.status_code == 200:
+                        edited = True
+
+                final = session.execute(
+                    text("SELECT status FROM listing WHERE id = :i"), {"i": listing_id}
+                ).scalar()
+
+                # The invariant: content the seller changed cannot be public
+                # again until an admin has seen it.
+                if edited and final == "live":
+                    failures.append(f"{start} + {' -> '.join(sequence)} ended live after an edit")
+
+    assert not failures, "seller-reachable paths to unreviewed `live` content:\n" + "\n".join(failures)
