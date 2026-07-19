@@ -2,7 +2,7 @@
 
 > **Milestone:** M2 — Seller listing builder ([`design_implementation.md`](../../docs/design_implementation.md) Part 4 → *Milestone 2*).
 > **Complies with:** [`specs/000-constitution.md`](../000-constitution.md). **Security-critical** (uploads + owner-scoped writes) — the forbidden-path tests are the crown jewels, and this milestone gets an independent appsec pass.
-> **Status:** awaiting approval (`--pause-after-spec`).
+> **Status:** ✅ shipped — merged as #23.
 
 ---
 

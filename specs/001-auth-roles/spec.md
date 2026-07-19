@@ -2,7 +2,7 @@
 
 > **Milestone:** M1 — Auth & roles ([`design_implementation.md`](../../docs/design_implementation.md) Part 4 → *Milestone 1*).
 > **Complies with:** [`specs/000-constitution.md`](../000-constitution.md). **Security is the owner's #1 priority** — the forbidden-path tests below are the crown jewels.
-> **Status:** decisions resolved 2026-07-17 (§ Decisions). Spec awaiting final go-ahead to build (`--pause-after-spec`).
+> **Status:** ✅ shipped — merged as #22. *(Decisions D1/D2 resolved 2026-07-17, § Decisions.)*
 
 ---
 

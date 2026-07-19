@@ -36,7 +36,7 @@ When two PRs are open at once, the moment the first squash-merges the second is 
 1. **Sync the branch onto the new main:** `git checkout <branch> && git fetch origin && git merge origin/main` (or `git rebase origin/main`).
 2. **Resolve the conflict markers** — reconcile *both* sides' intent (each PR's spec + commits). A conflict in a **security-sensitive file** (`permissions.py`, auth, status state machines, response models) is new security surface — a bad merge silently drops a guard.
 3. **Commit + push** the resolution.
-4. **Re-run the gate — a resolved conflict is new, unreviewed code:** `/dod` (tests + the `docs/security.md` §8 matrix) must pass **and** the `tech-lead` + `appsec-engineer` review re-runs on the merged result (mandatory for any security-touching file). Never merge a hand-resolved conflict blind.
+4. **Re-run the gate — a resolved conflict is new, unreviewed code:** `/dod` (tests + the `docs/security.md` §8 matrix) must pass **and** the branch review re-runs on the merged result — **inline** by the orchestrator (do NOT spawn a `tech-lead` agent), plus the `appsec-engineer` agent if the conflict touched a security-sensitive file. Never merge a hand-resolved conflict blind.
 5. **Then** `/close-feature <pr#>` — now `MERGEABLE`. Full detail: `docs/git_strategy.md` § Two open PRs.
 
 Never force-merge a PR with `CHANGES_REQUESTED` or conflicts. The branch review (inline every milestone, plus an independent `appsec-engineer` pass on the security-critical milestones) happens **on the branch, before the PR is opened** (a PR = vetted, ready for a human) — see `/run-milestone`, `/dod`, and `docs/git_strategy.md`.

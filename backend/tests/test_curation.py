@@ -330,7 +330,7 @@ def test_e6_no_seller_action_sequence_republishes_unreviewed_content(
     against the reachable graph. The E5 bypass (pause → edit → resume) was
     found by a human reviewer precisely because no test asked this question.
 
-    Why depth 3 is enough, rather than arbitrary: `status` is the only state
+    Why depth 2 is enough, rather than arbitrary: `status` is the only state
     the transitions depend on — `Listing` carries no "edited since review"
     field — so every action's effect is a function of the current status
     alone. Exhausting every single action from every reachable status
