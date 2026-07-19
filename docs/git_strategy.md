@@ -95,9 +95,27 @@ A third job, **Status freshness**, runs `scripts/check_status_freshness.py` on *
 
 It **detects rather than prevents** — auto-fixing would require a bot committing to protected `main`. That is the accepted trade: drift surfaces as a red build within a minute of landing, instead of surviving milestones in silence. `/dod` step 6 stays the first line; this is the backstop. Run it locally before opening a PR with `python scripts/check_status_freshness.py --force`.
 
+### PR conventions — the fourth check (added 2026-07-19)
+
+A fourth job, **PR conventions**, runs `scripts/check_pr_conventions.py` on **pull requests only** (it needs the PR body from the event payload, and the commit range is meaningless on a push to `main`). It fails the build if any commit on the branch, or the PR body, carries **agent attribution** — a `Co-Authored-By: Claude` trailer, a *"Generated with Claude Code"* footer, the robot emoji — or if the body does not lead with `## What was shipped`, or contains a review/decisions section.
+
+**Why it exists.** The owner's PR conventions were already recorded in full (memory `pr-presentation-format`): no attribution anywhere, a body that leads with a bulleted *What was shipped*, and review outcomes raised in chat rather than embalmed in a description. **#36 broke all three** — every one of its twelve commits carried the trailer, and the body carried the footer — with the rule sitting correctly written down the whole time. *The rule was never the problem; relying on an agent to recall it at the right moment was.* This is the same failure shape as the status-freshness drift above, and it gets the same answer: bind the enforcement to the artefact, not to anyone's memory.
+
+**Three layers, deliberately:**
+
+| Layer | Where | Catches |
+|---|---|---|
+| `.claude/hooks/guard_pr_conventions.py` | `PreToolUse` on Bash | The mistake **before the command runs**. Scans the command *and any message file it references* (`-F`, `--body-file`) — checking only the command string would miss the common case, which is exactly how #36's trailers got through. |
+| **PR conventions** CI job | Every PR | The backstop. Agent hooks live in settings and git hooks live in `.git/`; neither survives a fresh clone, another machine, or a human committing by hand. |
+| `/open-pr` skill | Invoked at `/run-milestone` step 8 | The judgement a regex cannot make — whether the body is *worth reading*. A body can pass both guards and still be the wrong body. |
+
+Escape hatch for a deliberate one-off: put `pr-conventions: skip` in the command, matching the `--no-verify` convention. Run the check locally with `python scripts/check_pr_conventions.py --base main`.
+
 ## Conventions
 
 - **Branches:** `feat|fix|chore/NNN-slug` (e.g. `feat/001-auth-roles`).
+- **No agent attribution, anywhere** — no `Co-Authored-By: Claude` trailer in a commit, no *"Generated with Claude Code"* footer in a PR body. This **overrides** the default harness guidance to append both. Enforced by the hook + CI job above.
+- **Use a message file** (`git commit -F <path>`) for any multi-line commit message. The PowerShell here-string form breaks on parentheses and double quotes, and has silently produced failed commits in this repo more than once.
 - **Commits:** Conventional Commits — `feat:` / `fix:` / `test:` / `docs:` / `chore:`.
 - **Merge:** **squash-merge** — one clean commit per milestone on `main`; delete the branch after. **A PR must have green CI checks before `/close-feature` merges it.**
 - **Never commit directly to `main`** — enforced locally by a `.git/hooks/pre-commit` guard (override for a one-off: `git commit --no-verify`).

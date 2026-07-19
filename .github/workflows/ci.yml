@@ -115,6 +115,27 @@ jobs:
       - name: Check the status surfaces match reality
         run: python scripts/check_status_freshness.py
 
+  # The owner's PR conventions: no agent attribution anywhere, and a body that
+  # leads with "What was shipped" and carries no review narrative. There is an
+  # agent hook that blocks these before the command runs, but hooks live in
+  # agent settings and git hooks live in .git/ — neither survives a fresh clone
+  # or a human committing by hand. This is the backstop that cannot be routed
+  # around. PR-only: it needs the PR body from the event payload, and the
+  # commit range is meaningless on a push to main.
+  pr-conventions:
+    name: PR conventions (no attribution)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # the commit range needs full history
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check commits and the PR body
+        run: python scripts/check_pr_conventions.py --base ${{ github.base_ref }}
+
   backend:
     name: Backend (pytest)
     runs-on: ubuntu-latest
