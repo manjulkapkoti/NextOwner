@@ -4,7 +4,7 @@
 >
 > **Requirements:** FR-7 (pending-review → admin approves / rejects with reason), FR-21 (admin dashboard: curation queue), F3 (marketplace quality is the moat).
 > **Scope fold-ins** (`docs/milestones.md`): `listing_event` audit table; notification events on approve/reject.
-> **Security:** `docs/security.md` §7 — M3 row. **M3 is *not* on the binding security-critical list** (`M1/M2/M5/M7/M8/M10`, per the constitution) — an earlier note in `progress.md` claimed otherwise and this spec first repeated it. It got the independent `appsec-engineer` pass regardless: M3 owns `require_admin`'s first real consumer, owns the only path to `live`, and is the first milestone to serve `ListingPrivate` to anyone but its owner.
+> **Security:** `docs/security.md` §7 — M3 row. **M3 is *not* on the binding security-critical list** (`M1/M2/M3/M5/M7/M8/M10`, per the constitution) — an earlier note in `progress.md` claimed otherwise and this spec first repeated it. It got the independent `appsec-engineer` pass regardless: M3 owns `require_admin`'s first real consumer, owns the only path to `live`, and is the first milestone to serve `ListingPrivate` to anyone but its owner.
 
 ---
 

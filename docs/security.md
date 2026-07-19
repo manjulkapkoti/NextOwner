@@ -191,7 +191,7 @@ Each milestone's spec must include a **"Security & abuse"** subsection turning t
 1. **Spec (`/new-spec`):** add a **"Security & abuse"** subsection from §6 + §7 — the forbidden-path scenarios as GIVEN/WHEN/THEN, citing the FR and the control here.
 2. **Tests (before code):** every `401/403/404/409` is one failing test first (permission tests = crown jewels). Include the negative tests: IDOR, mass-assignment, path traversal, spoofed identity, schema-leak.
 3. **Implement:** gate first (default-deny) → validate input → parameterized query, caller-scoped → shape output (`response_model`) → secrets from env.
-4. **Review (the `/dod` green gate + the inline branch review every milestone; an independent `appsec-engineer` pass on the security-critical milestones M1/M2/M5/M7/M8/M10) — touched → must-cover matrix:**
+4. **Review (the `/dod` green gate + the inline branch review every milestone; an independent `appsec-engineer` pass on the security-critical milestones M1/M2/M3/M5/M7/M8/M10) — touched → must-cover matrix:**
 
    | If the change touches… | It must have a passing negative test for… |
    |---|---|
