@@ -31,4 +31,29 @@ describe('MyListings', () => {
     await waitFor(() => expect(screen.getByText('My SaaS')).toBeInTheDocument())
     expect(screen.getByText(/draft/i)).toBeInTheDocument()
   })
+
+// M3 (spec 003 criterion C6) — the API returning the reason is not the same as
+// the seller being able to read it.
+it('C6: shows the rejection reason on a rejected listing', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify([
+            {
+              id: 1,
+              headline: 'My SaaS',
+              status: 'rejected',
+              rejection_reason: 'Financials do not reconcile with the stated MRR.',
+            },
+          ]),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    ),
+  )
+  render(<MyListings />)
+  await waitFor(() => expect(screen.getByText('My SaaS')).toBeInTheDocument())
+  expect(screen.getByText(/do not reconcile/i)).toBeInTheDocument()
+})
 })

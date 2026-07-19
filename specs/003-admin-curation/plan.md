@@ -104,3 +104,9 @@ Turns green: **F1–F3**.
 It matters now for a reason it did not before: an audit trail exists as of this milestone, and this transition leaves no row in it. A seller can take a listing out of the public marketplace and nothing records that it happened.
 
 **Not fixed in M3** — routing it through `_transition()` means reconciling that helper's commit with `update_listing`'s own, which is real surgery on M2's edit path and outside this milestone's scope. **Recommended for the next milestone that touches the seller lifecycle**, together with the decision about whether seller-driven transitions should be audited at all (M3 deliberately audits only curation decisions).
+
+## Fast-follow from the security review (non-blocking)
+
+**`GET /api/admin/listings` has no pagination or cap.** Acceptable now — the route is `require_admin`-gated so it is not reachable by an untrusted party, and volume is trivial before M4's seed data. **Add a limit/offset or a hard ceiling when M4's ~30 seeded listings land**, which is the first point the queue could return a meaningful number of rows.
+
+**No test asserts a non-admin can never receive an `AdminListingRead`-shaped body.** Implicitly covered — `test_a3`/`test_a4` return 403/401 before serialization ever happens — but if this "admin sees private data" pattern is repeated before M5, it deserves an explicit schema-leak test of its own.

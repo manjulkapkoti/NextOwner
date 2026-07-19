@@ -15,6 +15,7 @@ interface ListingRow {
   id: number
   headline: string
   status: string
+  rejection_reason?: string | null
 }
 
 export function MyListings() {
@@ -74,18 +75,39 @@ export function MyListings() {
               key={row.id}
               sx={{
                 p: 2.5,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 2,
                 // Hover raises the shadow only (design_system_spec.md §5).
                 '&:hover': { boxShadow: 3 },
               }}
             >
-              <Typography sx={{ fontWeight: 600, minWidth: 0, overflowWrap: 'anywhere' }}>
-                {row.headline}
-              </Typography>
-              <StatusChip status={row.status} />
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 2,
+                }}
+              >
+                <Typography sx={{ fontWeight: 600, minWidth: 0, overflowWrap: 'anywhere' }}>
+                  {row.headline}
+                </Typography>
+                <StatusChip status={row.status} />
+              </Box>
+
+              {/* A rejection is only useful if the seller can read why (spec
+                  C6). Rendered as ordinary JSX text — React escapes it, and
+                  this string is written by an admin and read by a seller, so
+                  it is the one stored-XSS surface in the milestone. Never
+                  dangerouslySetInnerHTML. */}
+              {row.status === 'rejected' && row.rejection_reason && (
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                    Why this was rejected
+                  </Typography>
+                  <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                    {row.rejection_reason}
+                  </Typography>
+                </Alert>
+              )}
             </Card>
           ))}
         </Stack>
