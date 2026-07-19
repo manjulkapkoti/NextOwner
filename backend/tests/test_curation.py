@@ -301,7 +301,11 @@ def test_e5_pause_edit_resume_cannot_republish_unreviewed_content(
 
 # ── E6 — reachability: the invariant, not a list of known doors ──────────────
 
-SELLER_ACTIONS = ("submit", "pause", "resume", "edit")
+# Every seller-reachable action that can move a listing. MAINTENANCE: this
+# list is hand-written, not discovered from the router — a new seller route in
+# M4+ is NOT covered until it is added here. The re-verification pass flagged
+# the original docstring for claiming otherwise.
+SELLER_ACTIONS = ("submit", "pause", "resume", "edit", "close")
 
 
 def _apply(client, headers, listing_id, action):
@@ -323,16 +327,27 @@ def test_e6_no_seller_action_sequence_republishes_unreviewed_content(
 
     E1-E5 each name one forbidden path. This names the *invariant* instead —
     "a seller cannot publish content an admin has not seen" — and checks it
-    against the whole reachable graph. The E5 bypass (pause → edit → resume)
-    was found by a human reviewer precisely because no test asked this
-    question; every seller route M4+ adds is now checked against it for free.
+    against the reachable graph. The E5 bypass (pause → edit → resume) was
+    found by a human reviewer precisely because no test asked this question.
+
+    Why depth 3 is enough, rather than arbitrary: `status` is the only state
+    the transitions depend on — `Listing` carries no "edited since review"
+    field — so every action's effect is a function of the current status
+    alone. Exhausting every single action from every reachable status
+    therefore proves the invariant inductively for sequences of any length;
+    depth 2 guards against a regression in this test's own reasoning, not
+    against longer attacks. Depth 3 was tried and cost 45s for no additional
+    coverage — the E5 bypass is caught at depth 2 (`paused → edit → resume`).
+
+    **This does not maintain itself.** `SELLER_ACTIONS` is hand-written. A new
+    seller-facing route added in M4+ is not covered until someone adds it here.
     """
     seller = auth_headers(email="seller@example.com", role="seller")
     admin_headers()          # exists, but takes no part in these sequences
 
     failures: list[str] = []
-    for start in ("pending_review", "live", "paused"):
-        for length in (1, 2, 3):
+    for start in ("draft", "pending_review", "live", "paused"):
+        for length in (1, 2):
             for sequence in itertools.product(SELLER_ACTIONS, repeat=length):
                 listing_id = make_listing(seller).json()["id"]
                 force_status(listing_id, start)

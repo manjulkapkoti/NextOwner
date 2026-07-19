@@ -209,6 +209,8 @@ Each milestone's spec must include a **"Security & abuse"** subsection turning t
 
 ## 9. Deferred-but-designed — deploy-time hardening
 
+- **Data sweep for the M3 curation bypass — one-time, before any real data ships.** The M3 fix (`update_listing` demotes on edit while `live` **or** `paused`) gates the transition **going forward only**; it cannot repair rows that already exist. Any listing sitting in `paused` that was edited under the old code is holding content no admin ever reviewed, and a single `resume` publishes it. **Before this reaches a database with real listings, force every `paused` listing back to `pending_review`** (or diff each against its last `approved` audit event and demote only the changed ones — `listingevent` has what you need). Not applicable to the test suite, which builds a fresh in-memory DB per test, which is exactly why no test will ever tell you about it. *Raised by the re-verification round on 2026-07-19: a code fix closes the door, it does not evict whoever already walked through.*
+
 These are post-MVP but decided now so nothing is retrofitted blindly:
 
 - **TLS everywhere** (`https://` + `wss://`), HSTS.
