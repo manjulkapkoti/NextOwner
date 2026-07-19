@@ -96,3 +96,11 @@ Turns green: **F1–F3**.
 - **No new transition logic.** If a slice wants to write `listing.status = ...` outside `_transition()`, stop: that is the state machine leaking out of its one home.
 - **The reason is rendered to a seller.** React escapes by default; do not reach for `dangerouslySetInnerHTML`.
 - **New CI gates now apply**: every criterion above must be cited by a test (`scripts/check_spec_coverage.py`), and the admin UI must pass the axe and layout specs.
+
+## Finding from the M3 inline review — deferred, not fixed here
+
+`update_listing` (`routers/listings.py`, the "editing a live listing sends it back through curation" line) writes `listing.status` **directly, outside `_transition()`** — the exact thing this plan's own note forbids. It is pre-existing M2 code, and it is **safe in direction**: it can only move a listing *away* from `live`, never toward it, so it is not a path to self-publishing and not a blocker for M3.
+
+It matters now for a reason it did not before: an audit trail exists as of this milestone, and this transition leaves no row in it. A seller can take a listing out of the public marketplace and nothing records that it happened.
+
+**Not fixed in M3** — routing it through `_transition()` means reconciling that helper's commit with `update_listing`'s own, which is real surgery on M2's edit path and outside this milestone's scope. **Recommended for the next milestone that touches the seller lifecycle**, together with the decision about whether seller-driven transitions should be audited at all (M3 deliberately audits only curation decisions).
