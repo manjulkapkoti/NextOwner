@@ -263,3 +263,35 @@ def test_e4_an_admin_may_approve_a_listing_they_own(client, admin_headers, make_
     res = client.post(f"/api/listings/{listing_id}/approve", headers=admin)
     assert res.status_code == 200
     assert res.json()["status"] == "live"
+
+
+def test_e5_pause_edit_resume_cannot_republish_unreviewed_content(
+    client, auth_headers, admin_headers, make_listing
+):
+    """The curation bypass found by the independent security review.
+
+    Every step is individually legal — pause, edit, resume are all the seller's
+    own routes — but composed they put unreviewed content in front of buyers
+    without a second admin decision. E1-E4 all checked paths that set `status`
+    directly, which is why none of them caught it.
+    """
+    seller, listing_id = _seller_with_pending_listing(auth_headers, make_listing, client)
+    client.post(f"/api/listings/{listing_id}/approve", headers=admin_headers())
+
+    client.post(f"/api/listings/{listing_id}/pause", headers=seller)
+    swapped = "TOTALLY DIFFERENT — never reviewed"
+    client.put(
+        f"/api/listings/{listing_id}",
+        json={"headline": swapped, "asking_price": "999999.00"},
+        headers=seller,
+    )
+    res = client.post(f"/api/listings/{listing_id}/resume", headers=seller)
+
+    row = next(r for r in client.get("/api/my/listings", headers=seller).json() if r["id"] == listing_id)
+    assert row["status"] != "live", (
+        "a seller republished edited content without a second admin decision — "
+        "approval must be the only path to live"
+    )
+    # Editing while paused returns it to the queue, so resume has nothing to resume.
+    assert row["status"] == "pending_review"
+    assert res.status_code == 409

@@ -64,6 +64,8 @@ Each becomes exactly one test, written failing first. IDs are cited in test name
 - **E2** — GIVEN a seller, WHEN they call `POST /api/listings/{id}/submit` twice, THEN the second is **409** — submit does not become a publish loop.
 - **E3** — GIVEN a seller whose listing is `pending_review`, WHEN they search the API surface, THEN no endpoint reachable with a seller identity sets `live` (asserted by attempting approve as the owner → **403**).
 - **E4** — GIVEN an admin approving a listing they themselves own, WHEN they approve it, THEN it succeeds — admin authority is by role, not by ownership. *(Recorded deliberately: the alternative — forbidding self-approval — is a policy decision, not a security one, and is out of scope here.)*
+- **E5** — GIVEN a `live` listing, WHEN its seller pauses it, edits its content, and resumes, THEN the listing does **not** return to `live` carrying unreviewed content — the edit sends it back to `pending_review`, and only an admin can publish it again.
+  *Added mid-milestone, from the independent security review.* E1–E4 covered the paths that set `status` **directly** and missed the one that reaches `live` by composing three individually legal transitions. `pause`, `resume` and the edit-resets-review rule all predate M3 and were harmless while nothing could reach `live` at all — M3 is what turned them into a curation bypass. This is the criterion that makes the milestone's headline claim (*approval is the only path to `live`*) actually true.
 
 ### F — Admin UI
 

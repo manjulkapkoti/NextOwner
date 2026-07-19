@@ -164,8 +164,14 @@ def update_listing(
             setattr(private, field, value)
         else:
             setattr(listing, field, value)
-    # Editing a live listing sends it back through curation (no bait-and-switch).
-    if listing.status == "live":
+    # Editing publicly-visible content sends it back through curation (no
+    # bait-and-switch). `paused` counts: a paused listing is one `resume` away
+    # from being public again, so an edit made while paused would otherwise
+    # reach buyers without a second admin decision — pause → edit → resume was
+    # a working curation bypass until M3 (spec E5, found by the independent
+    # security review). `draft` and `pending_review` are excluded because
+    # neither is publicly visible and `pending_review` is already in the queue.
+    if listing.status in ("live", "paused"):
         listing.status = "pending_review"
     session.add(listing)
     session.add(private)
@@ -249,7 +255,11 @@ def resume_listing(
     listing: Listing = Depends(get_owned_listing),
     session: Session = Depends(get_session),
 ) -> ListingRead:
-    _transition(listing, {"paused"}, "live", session)    # no re-review — not a content change
+    # Safe without re-review only because an edit while paused already sent the
+    # listing back to `pending_review` (see `update_listing`) — so anything
+    # resumable here is content an admin has approved. That invariant is the
+    # whole reason this route can skip curation; spec E5 guards it.
+    _transition(listing, {"paused"}, "live", session)
     return _to_read(listing, session.get(ListingPrivate, listing.id))
 
 
