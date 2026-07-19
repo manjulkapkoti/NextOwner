@@ -88,6 +88,20 @@ export const NavBar = observer(function NavBar() {
             </Box>
           </Stack>
 
+          {/* M4 — the public marketplace, reachable from every page whether or
+              not there is a session. The label stays literal: the succession
+              voice lives in headlines and prose, never in navigation, because a
+              label someone has to decode trades usability for poetry
+              (milestones.md § Scope fold-ins → M4). */}
+          <Button
+            color="inherit"
+            component={RouterLink}
+            to="/browse"
+            sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}
+          >
+            Browse
+          </Button>
+
           {authStore.isAuthenticated ? (
             <>
               {/* >=sm: the actions inline. */}

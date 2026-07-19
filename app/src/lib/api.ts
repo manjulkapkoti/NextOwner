@@ -22,6 +22,30 @@ export class ApiError extends Error {
   }
 }
 
+// M4 — the public marketplace calls (spec 004). Deliberately a separate entry
+// point that never attaches the JWT and never emits `auth:unauthorized`:
+//
+//  - browse is anonymous, so sending a token would be the client volunteering
+//    identity to a route that has no business knowing it;
+//  - and if a stale token did ride along, its 401 would bounce a logged-out
+//    visitor off a public page to the login form — a session concern breaking
+//    a surface that has no session.
+export async function publicApi(path: string) {
+  const res = await fetch(`/api${path}`, { headers: { 'Content-Type': 'application/json' } })
+  if (!res.ok) {
+    let body: { detail?: unknown; code?: string } | null = null
+    try {
+      body = await res.json()
+    } catch {
+      body = null
+    }
+    const detail = body?.detail
+    const message = typeof detail === 'string' ? detail : res.statusText
+    throw new ApiError(res.status, body?.code ?? null, detail, message)
+  }
+  return res.json()
+}
+
 export async function api(path: string, opts: RequestInit = {}) {
   const token = localStorage.getItem('token')
   const res = await fetch(`/api${path}`, {

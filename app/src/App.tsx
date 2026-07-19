@@ -5,6 +5,8 @@ import { Box, Button, Container, Stack, Typography } from '@mui/material'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { brandTint } from './theme'
 import { AdminQueue } from './components/AdminQueue'
+import { BrowseListings } from './components/BrowseListings'
+import { ListingDetail } from './components/ListingDetail'
 import { ListingWizard } from './components/ListingWizard'
 import { LoginForm } from './components/LoginForm'
 import { MyListings } from './components/MyListings'
@@ -203,6 +205,10 @@ export function AppShell() {
         <Route path="/login" element={<LoginRoute />} />
         <Route path="/register" element={<RegisterRoute />} />
         <Route path="/" element={<LandingRoute />} />
+        {/* M4 — public marketplace. Deliberately NOT wrapped in RequireAuth:
+            browsing is the anonymous half of the trust gate (spec 004 F9). */}
+        <Route path="/browse" element={<BrowseListings />} />
+        <Route path="/browse/:id" element={<ListingDetail />} />
         <Route
           path="/my-listings"
           element={
