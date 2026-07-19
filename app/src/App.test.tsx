@@ -70,12 +70,51 @@ describe('AppShell routing', () => {
   it('AS7: a logged-out visitor hitting the landing page sees public content, not the login form', async () => {
     // "NextOwner" alone would also match the nav bar brand — assert on the
     // page's own tagline instead, which is unique to the landing content.
+    // Tagline updated at M4 with the succession-voice rewrite (spec 004 F7);
+    // the criterion is unchanged, only the string it looks for.
     renderShellAt('/')
     await waitFor(() =>
-      expect(screen.getByText(/buying and selling small online businesses/i)).toBeInTheDocument(),
+      expect(screen.getByText(/you choose who carries it forward/i)).toBeInTheDocument(),
     )
     expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: /log in/i })).toBeInTheDocument()
+  })
+
+  // M4 (spec 004 criterion F7) — the seller-led succession framing leaves the
+  // buyer cold unless the page answers "what is in this for me", so the
+  // counter-story is a criterion of its own rather than a nice-to-have.
+  it('F7: the landing page carries the buyer counter-story alongside the seller story', async () => {
+    renderShellAt('/')
+    await waitFor(() =>
+      expect(screen.getByText(/instead of starting from zero/i)).toBeInTheDocument(),
+    )
+  })
+
+  // M4 (spec 004 criterion F8) — browse is reachable from the nav whether or
+  // not the visitor is signed in. The label stays literal: the brand voice
+  // lives in headlines and prose, never in navigation (fold-in constraint).
+  it('F8: the nav offers a Browse link to the public marketplace', async () => {
+    renderShellAt('/')
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /browse/i })).toHaveAttribute('href', '/browse'),
+    )
+  })
+
+  // M4 (spec 004 criterion F9) — /browse is public, not a RequireAuth route.
+  it('F9: a logged-out visitor hitting /browse sees the marketplace, not the login form', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ items: [], total: 0, limit: 20, offset: 0 }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+      ),
+    )
+    renderShellAt('/browse')
+    await waitFor(() => expect(screen.getByText(/no listings match/i)).toBeInTheDocument())
+    expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument()
   })
 
   // The landing page's only actions are the nav's two: Log in for returning
@@ -84,7 +123,7 @@ describe('AppShell routing', () => {
   it('offers exactly one Log in and one Get started on the landing page', async () => {
     renderShellAt('/')
     await waitFor(() =>
-      expect(screen.getByText(/buying and selling small online businesses/i)).toBeInTheDocument(),
+      expect(screen.getByText(/you choose who carries it forward/i)).toBeInTheDocument(),
     )
     expect(screen.getByRole('link', { name: /get started/i })).toHaveAttribute('href', '/register')
     expect(screen.getAllByRole('link', { name: /log in/i })).toHaveLength(1)

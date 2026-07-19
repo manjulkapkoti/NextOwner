@@ -224,7 +224,10 @@ Each numbered scenario maps to **exactly one test**.
 
 ### Errors & failure modes
 
-*(`docs/error_handling.md` — contract: `{error: {code, message, request_id}}`, generic messages, no internals.)*
+*(`docs/error_handling.md` — contract as implemented at M1: a flat
+`{detail, code, request_id}` body, generic messages, no internals. Verified
+against `backend/tests/test_error_contract.py` G1–G3 rather than quoted from
+prose.)*
 
 - **E-1** — a 422 from a bad filter carries a field-level detail identifying the
   offending parameter (**B11** asserts the status; this asserts the shape).
