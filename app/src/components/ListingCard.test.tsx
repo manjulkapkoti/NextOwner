@@ -38,10 +38,11 @@ describe('ListingCard', () => {
   it('F1: renders the public headline, type and metrics', () => {
     renderCard(publicListing)
     expect(screen.getByText(/profitable b2b scheduling saas/i)).toBeInTheDocument()
+    // The chip shows the display label ("SaaS"), not the wire value ("saas").
     // Exact string, not /saas/i — the headline also contains "SaaS", and an
     // ambiguous matcher would fail on the match count rather than on the thing
     // the criterion is about.
-    expect(screen.getByText('saas')).toBeInTheDocument()
+    expect(screen.getByText('SaaS')).toBeInTheDocument()
   })
 
   it('F1: renders no identity field, even when one is present on the object', () => {

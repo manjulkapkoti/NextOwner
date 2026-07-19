@@ -23,18 +23,19 @@ import {
 } from '@mui/material'
 import { useSearchParams } from 'react-router-dom'
 import { publicApi } from '../lib/api'
+import { LISTING_TYPES } from '../lib/listingTypes'
 import { ListingCard, type PublicListing } from './ListingCard'
 
 const PAGE_SIZE = 20
 
-const TYPES = [
-  { value: '', label: 'All types' },
-  { value: 'saas', label: 'SaaS' },
-  { value: 'ecommerce', label: 'Ecommerce' },
-  { value: 'content', label: 'Content' },
-  { value: 'agency', label: 'Agency' },
-  { value: 'marketplace', label: 'Marketplace' },
-]
+// "No type filter" is a real, selectable option, so it needs a real value.
+// MUI treats `value=""` as *empty* and renders a zero-width space instead of
+// the matching menu item — which left the control looking blank with its label
+// sitting where the value should be. A sentinel avoids that entirely; the URL
+// still carries no `type` param when it is selected.
+const ALL_TYPES = 'all'
+
+const TYPES = [{ value: ALL_TYPES, label: 'All types' }, ...LISTING_TYPES]
 
 interface Page {
   items: PublicListing[]
@@ -150,8 +151,10 @@ export function BrowseListings() {
             <TextField
               select
               label="Type"
-              value={type}
-              onChange={(e) => setFilter('type', e.target.value)}
+              value={type || ALL_TYPES}
+              onChange={(e) =>
+                setFilter('type', e.target.value === ALL_TYPES ? '' : e.target.value)
+              }
               size="small"
               fullWidth
             >

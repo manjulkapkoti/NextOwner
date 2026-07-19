@@ -19,6 +19,7 @@ import {
 } from '@mui/material'
 import { Link as RouterLink, useParams } from 'react-router-dom'
 import { ApiError, publicApi } from '../lib/api'
+import { listingTypeLabel } from '../lib/listingTypes'
 import type { PublicListing } from './ListingCard'
 
 function money(value: string): string {
@@ -90,7 +91,11 @@ export function ListingDetail() {
       {!error && listing && (
         <Stack spacing={3}>
           <Stack spacing={1.5}>
-            <Chip label={listing.type} size="small" sx={{ alignSelf: 'flex-start' }} />
+            <Chip
+              label={listingTypeLabel(listing.type)}
+              size="small"
+              sx={{ alignSelf: 'flex-start' }}
+            />
             <Typography variant="h4" component="h1" sx={{ overflowWrap: 'anywhere' }}>
               {listing.headline}
             </Typography>

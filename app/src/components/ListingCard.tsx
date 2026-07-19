@@ -10,6 +10,7 @@
 // the product's core mechanic.
 import { Box, Card, CardActionArea, Chip, Stack, Typography } from '@mui/material'
 import { Link as RouterLink } from 'react-router-dom'
+import { listingTypeLabel } from '../lib/listingTypes'
 
 export interface PublicListing {
   id: number
@@ -57,7 +58,11 @@ export function ListingCard({ listing }: { listing: PublicListing }) {
         sx={{ height: '100%', p: 2.5, display: 'block', textAlign: 'left' }}
       >
         <Stack spacing={1.5} sx={{ height: '100%' }}>
-          <Chip label={listing.type} size="small" sx={{ alignSelf: 'flex-start' }} />
+          <Chip
+            label={listingTypeLabel(listing.type)}
+            size="small"
+            sx={{ alignSelf: 'flex-start' }}
+          />
 
           <Typography variant="h6" component="h3" sx={{ overflowWrap: 'anywhere' }}>
             {listing.headline}

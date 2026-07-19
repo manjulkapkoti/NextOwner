@@ -56,6 +56,46 @@ for (const screen of PUBLIC_SCREENS) {
   })
 }
 
+// M4's marketplace — the most-visited public screen in the product, and the
+// only one an anonymous stranger reaches with real data on it. Scanned with
+// results present rather than empty: an empty grid would skip the cards, which
+// carry most of the screen's text and contrast.
+test('a11y: marketplace browse with results', async ({ page }) => {
+  const card = (id: number, headline: string, type: string) => ({
+    id,
+    type,
+    headline,
+    description: 'A small, profitable business with steady revenue and low churn.',
+    asking_price: '500000.00',
+    ttm_revenue: '200000.00',
+    ttm_profit: '120000.00',
+    mrr: '18000.00',
+    churn_pct: '2.50',
+    customers: 340,
+    published_at: '2026-07-01T00:00:00Z',
+  })
+  await page.route('**/api/listings*', (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          card(1, 'Profitable B2B scheduling SaaS', 'saas'),
+          card(2, 'DTC specialty coffee subscription', 'ecommerce'),
+        ],
+        total: 2,
+        limit: 20,
+        offset: 0,
+      },
+    }),
+  )
+  await page.goto('/browse')
+  await page.getByText('Profitable B2B scheduling SaaS').waitFor()
+  const results = await scan(page)
+  expect(
+    results.violations,
+    results.violations.map((v) => `${v.id}: ${v.help} (${v.nodes.length} nodes)`).join('\n'),
+  ).toEqual([])
+})
+
 test('a11y: dashboard with listings', async ({ page }) => {
   await stubSeller(page, [
     { id: 1, headline: 'Profitable B2B SaaS in the HR space', status: 'live' },
