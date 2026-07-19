@@ -1,6 +1,8 @@
 # NextOwner — Agent Team
 
-The specialized Claude Code agents that build and run NextOwner. Defined in `.claude/agents/*.md`; roles mirror `docs/team_strategy.md`.
+The specialized Claude Code agents that build and run NextOwner. **`.claude/agents/*.md` is the source of truth** — an agent exists if and only if it has a file there; this table describes what those files mean and how the roles fit together. Human-role strategy (who you would hire, and when) lives in `docs/team_strategy.md`, which is a different question and a different document.
+
+*If a ✅ row here has no matching file, or a file has no row, this table has drifted — `docs-auditor` was added on 2026-07-19 and this table did not notice for one commit.*
 
 **Status:** ✅ = created/active (Phase 1) · ⬜ = planned (added when its work first appears — the `tech-lead` and `product-lead` agents recommend these on trigger; see `docs/team_strategy.md` § When to hire).
 
@@ -12,6 +14,7 @@ The specialized Claude Code agents that build and run NextOwner. Defined in `.cl
 | ✅ `frontend-engineer` | React/Vite/MUI/MobX SPA — listing wizard, browse with anonymous cards, data-room/chat UI, admin queue, dashboards, the `lib/api.ts` JWT layer. | Full toolset | sonnet | `tech-lead` | React + JavaScript/TypeScript, MUI/MobX; client-side leak prevention & XSS-safe rendering; full-stack. |
 | ⭐ ✅ `appsec-engineer` | **#1 priority.** Owns `docs/security.md`; threat-models each milestone, red-teams the NDA gate, drives permission tests, hardens auth/JWT/uploads/secrets, runs the touched→must-cover matrix, can block merges. | Full toolset | **opus** | `tech-lead` (→ Owner on security) | Product/application security across the whole stack; adversarial testing; auth/crypto, upload safety, supply-chain. |
 | ✅ `product-designer` | Two-sided flows and trust UX (NDA signing, access requests, data room, verified-buyer badges); MUI design system; conversion surfaces (valuation calculator). | Full toolset | sonnet | `product-lead` | Marketplace/SaaS UX; trust & conversion design; MUI design systems. |
+| ✅ `docs-auditor` | Audits prose for **integrity, not style**: contradictions between documents, claims conflicting with the constitution, stale references, over-claiming, unverifiable numbers, untestable acceptance criteria, duplicated truth. Triggered by `scripts/check_docs_trigger.py` on any binding-doc change or 40+ prose lines. Never edits. | Full toolset | sonnet | `tech-lead` | Specification auditing on normative documents (standards, regulated procedures); requirements engineering; evidence-seeking rather than editorial. |
 | ⬜ `devops-sre` | Single-origin deploy (reverse proxy for `/api` + `/ws`), CI/CD, the Postgres + Alembic migration, backups, secrets manager, observability. | Full toolset | sonnet | `tech-lead` | DevOps/SRE, CI/CD, PostgreSQL, infra & observability; system design. |
 | ⬜ `qa-sdet` | Deepen negative/permission-test coverage, build the Playwright golden-path E2E, add load/perf testing. | Full toolset | sonnet | `tech-lead` | Test automation (pytest, Vitest, Playwright); security/negative testing; Python + TypeScript. |
 | ⬜ `ai-ml-engineer` | Post-MVP agentic layer (deal-scout, diligence agent) as scoped users through the same gates; tool-calling/MCP; evals-as-pytest; `agent_runs` tracing; pgvector. | Full toolset | **opus** | `tech-lead` | LLM/agents, tool-calling & MCP, RAG/pgvector, evals; Python. |
@@ -25,7 +28,7 @@ The specialized Claude Code agents that build and run NextOwner. Defined in `.cl
 ```
 Owner (you)
 ├── product-lead ── product-designer · trust-safety-ops ⬜ · legal-compliance ⬜ · growth-marketing ⬜ · data-analyst ⬜
-└── tech-lead ───── backend-engineer · frontend-engineer · appsec-engineer ⭐ · devops-sre ⬜ · qa-sdet ⬜ · ai-ml-engineer ⬜
+└── tech-lead ───── backend-engineer · frontend-engineer · appsec-engineer ⭐ · docs-auditor · devops-sre ⬜ · qa-sdet ⬜ · ai-ml-engineer ⬜
 ```
 
 `appsec-engineer` reports to `tech-lead` for delivery but escalates security decisions directly to the Owner — the trust boundary is the product, so it can block a merge regardless of hierarchy.
