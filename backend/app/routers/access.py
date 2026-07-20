@@ -20,18 +20,24 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from ..db import get_session
 from ..errors import Conflict, Forbidden, InvalidTransition, NotFound
 from ..models import AccessRequest, AccessRequestEvent, Listing, ListingPrivate, User, _utcnow
 from ..permissions import (
     get_current_user,
+    get_owned_listing,
     require_private_access,
     require_request_decider,
     require_signed_nda,
 )
-from ..schemas import AccessRequestRead, ListingPrivateRead
+from ..schemas import (
+    AccessRequestRead,
+    AccessRequestWithBuyer,
+    BuyerProfile,
+    ListingPrivateRead,
+)
 
 router = APIRouter(tags=["access"])
 
@@ -207,3 +213,73 @@ def get_listing_private(
     if private is None:                     # a listing with no private row yet
         raise NotFound("Listing not found")
     return private
+
+
+# ── The two queues (spec 005 F1-F3, G1-G3) ───────────────────────────────────
+
+
+@router.get("/my/access-requests", response_model=list[AccessRequestRead])
+def my_access_requests(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[AccessRequest]:
+    """The buyer's own requests, across every listing (M5 fold-in).
+
+    Caller-scoped in the **query**, not in a post-filter: `buyer_id == user.id`
+    is a WHERE clause, so another buyer's row is never loaded in the first place
+    and cannot leak through a serialization mistake (F2).
+
+    This is also what the buyer's UI reads to know it has a request pending after
+    a page reload — the POST response only knows about the current session
+    (plan.md § Frontend).
+    """
+    return session.exec(
+        select(AccessRequest)
+        .where(AccessRequest.buyer_id == user.id)
+        .order_by(AccessRequest.created_at.desc(), AccessRequest.id.desc())
+    ).all()
+
+
+@router.get(
+    "/my/listings/{listing_id}/access-requests",
+    response_model=list[AccessRequestWithBuyer],
+)
+def listing_access_requests(
+    listing: Listing = Depends(get_owned_listing),
+    session: Session = Depends(get_session),
+) -> list[AccessRequestWithBuyer]:
+    """The seller's queue for one listing — who is asking, and enough to decide (FR-14).
+
+    **Guarded by the existing `get_owned_listing`** (spec 005 D7), which is the
+    whole reason the path carries the listing id instead of taking it as a query
+    parameter: ownership is checked by a trust boundary that already exists and
+    is already tested, rather than by a fresh comparison written here. Its
+    404-for-not-yours semantics come along for free, so this route confirms no
+    listing's existence to a stranger (G2).
+
+    The buyer is projected into `BuyerProfile` — never returned as a `User`.
+    A seller sees a profile, not contact details (G3).
+    """
+    rows = session.exec(
+        select(AccessRequest, User)
+        .join(User, User.id == AccessRequest.buyer_id)
+        .where(AccessRequest.listing_id == listing.id)
+        .order_by(AccessRequest.created_at.desc(), AccessRequest.id.desc())
+    ).all()
+
+    return [
+        AccessRequestWithBuyer(
+            id=request.id,
+            listing_id=request.listing_id,
+            status=request.status,
+            created_at=request.created_at,
+            decided_at=request.decided_at,
+            buyer=BuyerProfile(
+                display_name=buyer.display_name,
+                budget=buyer.budget,
+                target_industries=buyer.target_industries,
+                experience=buyer.experience,
+            ),
+        )
+        for request, buyer in rows
+    ]

@@ -295,3 +295,39 @@ class ListingPrivateRead(SQLModel):
     company_name: str
     website_url: str
     detailed_financials: str | None = None
+
+
+class BuyerProfile(SQLModel):
+    """What a seller learns about a buyer when deciding (FR-14).
+
+    **No email, by construction** (spec 005 G3/S3). The seller needs enough to
+    judge whether to open their books — budget, sector, experience — and contact
+    details are not that; chat (M6) is the channel, once they have decided. The
+    absence of the field *is* the control, exactly as with `UserRead` and
+    `password_hash`.
+
+    **No verification field either** (spec 005 D5). M10 owns buyer verification
+    and its fold-in already covers surfacing the badge here. A placeholder now
+    would be an unenforced flag, which `security.md` §7 M8 rightly calls
+    decoration.
+    """
+
+    display_name: str | None
+    budget: Decimal | None
+    target_industries: str | None
+    experience: str | None
+
+    @field_serializer("budget", when_used="json")
+    def _ser_budget(self, v: Decimal | None) -> str | None:
+        return None if v is None else str(v)
+
+
+class AccessRequestWithBuyer(SQLModel):
+    """A row in the seller's queue: the request plus who is asking."""
+
+    id: int
+    listing_id: int
+    status: str
+    created_at: datetime
+    decided_at: datetime | None
+    buyer: BuyerProfile
