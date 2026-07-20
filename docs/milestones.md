@@ -115,7 +115,7 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
 - [x] **M3** — admin curation *(+ `listingevent` audit; notification events re-sequenced to M8 — § Scope fold-ins)*
 - [x] **M4** — marketplace browse *(+ keyword search, seed data, brand voice & landing copy — § Scope fold-ins)*
 - [x] **M5** ⭐ — NDA + access gate *(+ revocation endpoint, `nda_version`, `accessrequestevent` audit; FR-14's verification half deferred to M10 and notification events to M8 — § Scope fold-ins)*
-- [ ] **M6** — realtime chat *(+ unread counts, WS error contract — § Scope fold-ins)*
+- [x] **M6** — realtime chat *(+ unread counts, WS error contract — § Scope fold-ins)*
 - [ ] **M7** — offers / LOI *(+ counter model, sibling policy — § Scope fold-ins)*
 - [ ] **M8** — notifications engine + saved searches & alerts *(scope expanded)*
 - [ ] **M9** — watchlist

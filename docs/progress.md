@@ -7,31 +7,34 @@
 > - Full design: `docs/session_recovery.md`.
 
 **Milestone status:**
-- M0–M5 ✅ merged.
+- M0–M6 ✅ merged.
 - **App-shell** (`pre-003`) ✅ merged (#25), plus the public landing page (#26) and the register page (#27).
 - **Design system** ✅ merged (#28).
 - **Agentic workflow** ✅ merged (#32).
 - **PR conventions guard** ✅ merged (#37).
 
 **In flight:** nothing.
-**M5 ⭐ (NDA + access gate)** shipped the product's trust core:
-- `require_private_access` guarding the private payload, the data-room index and document downloads.
-- The platform-wide NDA signed once per user.
-- Per-listing access requests with a unique constraint on `(listing, buyer)`.
-- Seller-only approve/deny/revoke.
-- The append-only `accessrequestevent` audit.
+**M6 (realtime chat)** shipped the project's first WebSocket surface:
+- `WS /ws/conversations/{id}` — authenticates during the handshake; membership is re-checked live on every connect and every REST call, not cached, so revocation applies immediately.
+- A `Conversation`/`Message` schema, created only when a seller approves an M5 access request.
+- Non-fatal message validation (blank/oversized) vs. a fatal rate cap that counts every inbound frame, valid or not.
+- `GET /conversations` (unread counts via `last_read_at`), `GET /conversations/{id}/messages` (paginated history), `POST /conversations/{id}/read`.
+- The conversation list + chat window, plus a nav-bar unread badge.
 **Open PRs:** none.
 
 ## ▶ NEXT ACTION
-**M6 — realtime chat**: **`/run-milestone chat`**
+**M7 — offers / LOI**: **`/start-milestone offers`**
 
-M6 is the first WebSocket surface. Its scope fold-ins (`docs/milestones.md` § Scope fold-ins → M6) are already written: a conversation **unique per (listing, buyer)**, `last_read_at` per participant for unread counts, a **WebSocket error contract** (close codes for auth-fail / non-member / revocation / rate-cap, landing as an `error_handling.md` addendum), and message events for the FR-16 email fallback that M8 delivers.
-
-**M5 leaves M6 two things to honour.** First, `design_implementation.md` says approving access also creates the `conversation` row — that belongs to M6, with the conversation model. Second, and more important: **revocation must re-deny the socket and history immediately** (`security.md` §1.5). M5 made `revoked` a real terminal state; M6 is where a live connection has to notice it. The in-memory `{conversation_id: [sockets]}` registry is single-instance **by construction** and fails *silently* behind a load balancer, so keep the fan-out behind a `publish(conversation_id, message)` port from day one — persist → publish → fan out, in that order.
-
-M6 is **not** on the security-critical list, but `scripts/check_appsec_trigger.py` will almost certainly escalate it: it adds routes, a state machine, and websockets. Let the diff decide, as the constitution's 2026-07-19 amendment intends.
+M7 is on the security-critical list (money/state-machine surface): approved-access **and** live-listing required to make an offer, an **atomic** accept (offer + listing flip in one transaction), seller-only decisions, `409` on an already-decided offer, and `offer_event` audit rows — mirrors M3's `listingevent`/M5's `accessrequestevent` pattern. Its scope fold-ins (`docs/milestones.md` § Scope fold-ins → M7) cover counter-offer mechanics and the sibling-offer policy (what happens to other pending offers on the same listing once one is accepted).
 
 ## Carryover notes
+- **What the M6 build actually established (slices 1–7), worth keeping:**
+  - **The branch review found a real, live bug in the milestone's own headline invariant.** The independent appsec pass found that `await websocket.accept()` is a real yield point: a revoke could commit and call `chat_broker.close_user(...)` while a connect was between its pre-accept membership check and the socket's registration, leaving a revoked buyer connected until they happened to disconnect on their own — the exact opposite of "revocation applies live" (`security.md` §1.5). Fixed with a second, synchronous re-check of `conversation_role_for` immediately after `register()`, zero `await` in between so no further interleaving is possible. **Verified by sabotage in the strongest way yet in this project**: reverting the fix doesn't just fail an assertion — the regression test *hangs forever*, because the client is waiting on a close that a vulnerable server never sends. The hang **is** the proof; the same thing a real exploited buyer's tab would do.
+  - **The self-found bug and the appsec-found bug were the same shape.** Before the branch review, the WS message loop validated content *before* checking the rate limiter, so a flood of invalid/oversized frames could `continue` past the check every time and never trip the cap — the DoS surface `security.md` §6 names by name ("WebSocket message floods"). **General rule for anything with an early-`continue`/early-`return` loop and a rate limiter: the limiter has to run before any branch that can skip it, or it only limits the well-behaved traffic it doesn't need to limit.**
+  - **A subagent's own investigation can mutate the working tree it's reading — treat every review pass as a diff producer, not just a diff consumer.** The docs-auditor pass ran `git checkout feat/006-chat -- .` scoped to `backend/` while verifying file state, believing it a no-op since the branch was already checked out — it wasn't: it silently discarded the (not-yet-committed) E2 code fix and its test, while leaving the spec/plan prose edits untouched because they live outside `backend/`. The agent disclosed the command transparently, and its own finding ("the fix is described in prose but absent from the code") was **correct** — just not for the reason it assumed (an unfinished fix, not a never-attempted one). Re-applied and re-verified before commit. **The lesson: `git checkout <ref> -- <path>` discards uncommitted changes under that path even when the ref matches the currently-checked-out branch — "already on this branch" is not the same as "nothing to lose."**
+  - **This machine's pytest runs showed extended, intermittent multi-minute stalls specifically around the first test using two simultaneous WebSocket connections in one test file**, not reproducible in every configuration (a 9-test subset succeeded in 14s; the identical sequence with two extra preceding tests stalled repeatedly) and never a wrong assertion — always either a clean pass or an indefinite stall. The full 237-test suite and the two chat test files each completed cleanly at least once end-to-end during this milestone's build. Read as Windows-specific `anyio`/Starlette-TestClient portal-thread flakiness under this session's heavy repeated pytest invocation, not a product defect — CI (Linux) is the authoritative gate for this file going forward, and a maintainer hitting a similar local stall on `test_chat.py` should not assume it means the code is broken without checking CI first.
+- **M6 spec decisions, all recorded in `specs/006-chat/spec.md` § Decisions:** **D1** close codes are custom (4000–4999): `4001` auth-fail, `4003` non-member (uniform for a missing or foreign conversation id), `4004` a **live** force-close on revocation, `4009` rate-capped; **D2** a missing/foreign conversation id is `403`/`4003` uniformly, never `404` — a conversation only ever exists behind an already-decided access request, so unlike a listing there's no separate secret its id could leak; **D3** `last_read_at` is two columns on `Conversation`, not a participant table — exactly two possible participants, same shape `AccessRequest` already has; **D4** the sender's own socket receives the broadcast too, so one code path renders every message including the sender's; **D5** entry point is a global "Messages" nav link, not a per-listing deep link — no criterion asked for one; **D6** the WS token is a query param, not a header (browsers can't attach custom headers to a WS handshake).
+  - `chat_broker.py`'s `ChatBroker`/`InMemoryChatBroker` split is the fold-in's `publish()` port, modeled directly on `ratelimit.py`'s existing `RateLimiterBackend` shape — the second real instance of "per-instance state behind a swappable interface" in this codebase, both still single-instance in practice. Whoever does the horizontal-scale pass has two matching examples to generalize from, not one.
 - **What the M5 build actually established (slices 1–7), worth keeping:**
   - **Slice 6 was one dependency swap.** Re-gating document downloads changed `get_owned_listing` → `require_private_access` and touched nothing in the body. That was the *stated test* of the design (plan.md: "if this slice needs new logic, the gate was built wrong"), and it is the concrete payoff of one-function-per-trust-boundary. M2's `test_listing_download.py` passes **unedited** — verified by diffing the file against `ecd8934`, not by assertion.
   - **The audit table earns its place only for values a later transition overwrites.** Criteria C9/C10 failed because the first implementation wrote an event row at request *creation*. `decided_at` gets overwritten by every decision; `created_at` never moves — so a `requested` event was a second copy of a fact that cannot drift. **Generalize: before adding an event row, ask what it preserves that the row itself loses.**
