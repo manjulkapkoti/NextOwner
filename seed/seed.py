@@ -12,6 +12,12 @@ Two properties this script is built around:
   marker in its private row, so a second run finds them and does nothing rather
   than doubling the marketplace.
 
+Also seeds one buyer (`buyer.seed@example.com`) with the NDA already signed,
+three access requests in three different states (approved / requested /
+denied), and a short conversation already sitting in the approved one — so
+M5's gate and M6's chat have something to look at locally without walking
+request → approve → open-chat by hand first (owner request, 2026-07-21).
+
 Everything here is fictional. The script creates only its own seed sellers and
 must never be pointed at production data.
 
@@ -35,7 +41,15 @@ from sqlmodel import Session, select
 # be the rows the API reads.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
-from app.models import Listing, ListingPrivate, User, _utcnow  # noqa: E402
+from app.models import (  # noqa: E402
+    AccessRequest,
+    Conversation,
+    Listing,
+    ListingPrivate,
+    Message,
+    User,
+    _utcnow,
+)
 from app.security import hash_password  # noqa: E402
 
 # Marks a row as seed-generated, so a re-run is a no-op (E2). Stored in the
@@ -47,6 +61,13 @@ SELLER_EMAILS = [
     "amir.seed@example.com",
     "rowan.seed@example.com",
 ]
+
+# A buyer with the trust flow already walked (owner request, 2026-07-21): sign
+# the NDA, request access to three listings in three different states, and
+# leave one conversation with a short exchange already in it — so a fresh
+# local database has something for M5/M6 to show without a developer having to
+# drive the whole product by hand first.
+BUYER_EMAIL = "buyer.seed@example.com"
 
 # (type, headline, description, company, domain)
 _TEMPLATES: list[tuple[str, str, str, str, str]] = [
@@ -129,10 +150,97 @@ def _ensure_sellers(session: Session) -> list[User]:
     return sellers
 
 
-def seed(session: Session, *, count: int = 32) -> int:
-    """Create a browsable marketplace. Returns the number of listings created.
+def _ensure_buyer(session: Session) -> User:
+    """The seed buyer, NDA already signed — B1/D3-style setup with no request
+    to click through, since the point is to skip the manual walk."""
+    from app.config import settings
 
-    Idempotent: a second run detects the marker and creates nothing (E2).
+    user = session.exec(select(User).where(User.email == BUYER_EMAIL)).first()
+    if user is None:
+        user = User(
+            email=BUYER_EMAIL,
+            password_hash=hash_password("correct horse battery staple"),
+            is_buyer=True,
+            display_name="Buyer Seed",
+            tos_accepted_at=_utcnow(),
+            tos_version="v1",
+            nda_signed_at=_utcnow(),
+            nda_version=settings.nda_version,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+    return user
+
+
+def _seed_access_and_chat(session: Session, buyer: User, live_listings: list[Listing]) -> None:
+    """Three access-request states + one conversation with messages already
+    in it, so M5's gate and M6's chat both have something to look at locally
+    without walking the request → approve → open-chat flow by hand first.
+
+    Direct model construction, matching this script's own precedent for
+    listings (`seed()` never drives the real submit/approve endpoints either)
+    — a seed script optimizes for "fast, obviously fictional data," not for
+    proving a transition is reachable, which is the test suite's job.
+    """
+    if len(live_listings) < 3:
+        return  # not enough live listings yet to pick three distinct ones from
+
+    # Idempotent on its own (E2's rule, extended): no longer covered by the
+    # listing marketplace's early return now that the two run independently,
+    # so this function needs its own "already did this" check.
+    if session.exec(select(AccessRequest).where(AccessRequest.buyer_id == buyer.id)).first() is not None:
+        return
+
+    approved_listing, requested_listing, denied_listing = live_listings[:3]
+
+    approved_request = AccessRequest(
+        listing_id=approved_listing.id,
+        buyer_id=buyer.id,
+        status="approved",
+        decided_at=_utcnow(),
+        decided_by_id=approved_listing.owner_id,
+    )
+    session.add(approved_request)
+    session.add(AccessRequest(listing_id=requested_listing.id, buyer_id=buyer.id, status="requested"))
+    session.add(
+        AccessRequest(
+            listing_id=denied_listing.id,
+            buyer_id=buyer.id,
+            status="denied",
+            decided_at=_utcnow(),
+            decided_by_id=denied_listing.owner_id,
+        )
+    )
+    session.commit()
+
+    # Mirrors approve_access_request's own side effect (M6, spec 006 A1): the
+    # conversation exists only because this request is approved.
+    conversation = Conversation(listing_id=approved_listing.id, buyer_id=buyer.id)
+    session.add(conversation)
+    session.commit()
+    session.refresh(conversation)
+
+    for sender_id, text in (
+        (approved_listing.owner_id, "Thanks for requesting access — happy to answer any questions."),
+        (buyer.id, "Appreciate it. Is the churn number trailing twelve months or last quarter?"),
+        (approved_listing.owner_id, "Trailing twelve months — quarter-over-quarter has actually been lower."),
+    ):
+        session.add(Message(conversation_id=conversation.id, sender_id=sender_id, text=text))
+    session.commit()
+
+
+def seed(session: Session, *, count: int = 32) -> int:
+    """Create a browsable marketplace, a seed buyer, and that buyer's access
+    requests + one conversation. Returns the number of listings created (`0`
+    if the marketplace half was already seeded).
+
+    Idempotent, but as **two independent checks**, not one (E2, extended
+    2026-07-21): the listing marketplace detects its own marker, and the
+    buyer/access/chat fixtures detect their own prior existence — so running
+    this against a database that already has listings (seeded before this
+    capability existed) still adds the buyer fixtures instead of leaving them
+    permanently unreachable behind the marketplace's own early return.
 
     Guarded on the **session's own bound engine**, not on global settings, so
     the check travels with the capability: any caller handing this function a
@@ -148,13 +256,35 @@ def seed(session: Session, *, count: int = 32) -> int:
             "This script creates accounts with a password committed to the repository."
         )
 
-    if _already_seeded(session):
-        return 0
+    buyer = _ensure_buyer(session)
+    created = 0
 
+    # The listing marketplace and the buyer/access/chat fixtures are
+    # idempotent **independently** (owner request, 2026-07-21) — not one
+    # early return covering both. A database seeded before this capability
+    # existed already has its listings, so gating the buyer fixtures behind
+    # "listings already seeded" would make them permanently unreachable on
+    # any database that predates this change; each half checks its own state
+    # instead.
+    if _already_seeded(session):
+        live_listings = list(session.exec(select(Listing).where(Listing.status == "live")).all())
+    else:
+        live_listings = _seed_listings(session, count=count)
+        created = count
+
+    _seed_access_and_chat(session, buyer, live_listings)
+
+    return created
+
+
+def _seed_listings(session: Session, *, count: int) -> list[Listing]:
+    """The listing half of `seed()` (spec 004 E1-E2) — split out so `seed()`
+    itself can decide, per the note above, whether this half needs to run at
+    all. Returns every `live` listing created, for `_seed_access_and_chat`."""
     rng = random.Random(20260719)          # fixed seed → reproducible fixtures
     sellers = _ensure_sellers(session)
     now = datetime.now(UTC)
-    created = 0
+    live_listings: list[Listing] = []
 
     for i in range(count):
         kind, headline, description, company, domain = _TEMPLATES[i % len(_TEMPLATES)]
@@ -202,9 +332,10 @@ def seed(session: Session, *, count: int = 32) -> int:
             )
         )
         session.commit()
-        created += 1
+        if status == "live":
+            live_listings.append(listing)
 
-    return created
+    return live_listings
 
 
 def main() -> None:
@@ -230,7 +361,13 @@ def main() -> None:
     init_db()
     with Session(engine) as session:
         created = seed(session)
-    print(f"Seeded {created} listings." if created else "Already seeded — nothing to do.")
+    if created:
+        print(
+            f"Seeded {created} listings, a buyer ({BUYER_EMAIL}), three access "
+            "requests (approved/requested/denied), and a conversation with messages."
+        )
+    else:
+        print("Already seeded — nothing to do.")
 
 
 if __name__ == "__main__":
