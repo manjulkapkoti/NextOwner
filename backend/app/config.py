@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     # ceiling to allow multipart overhead.
     max_request_bytes: int = 12 * 1024 * 1024         # 12 MB
 
+    # Chat (M6, spec 006). The size cap is a WS boundary rule (D2), not a
+    # column constraint; the rate cap is per-connection, mirroring the auth
+    # limiters' shape (`security.md` §6 DoS surface).
+    chat_message_max_chars: int = 4000
+    chat_rate_limit_max: int = 20
+    chat_rate_limit_window_seconds: int = 10
+    chat_history_page_limit: int = 50
+
     # Test-only: mount the /_debug/boom route (500-contract tests). Off in prod.
     enable_debug_routes: bool = False
 
