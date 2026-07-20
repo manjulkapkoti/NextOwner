@@ -331,3 +331,33 @@ class AccessRequestWithBuyer(SQLModel):
     created_at: datetime
     decided_at: datetime | None
     buyer: BuyerProfile
+
+
+# ── M6 — chat ──────────────────────────────────────────────────────────────
+
+class ConversationSummary(SQLModel):
+    """A row in the caller's conversation list (spec 006 I1-I3).
+
+    No email for either participant (S2) — a display name is the only
+    identity-adjacent field, the same minimization `BuyerProfile` applies.
+    """
+
+    id: int
+    listing_id: int
+    listing_headline: str
+    counterpart_display_name: str | None
+    unread_count: int
+    last_message_at: datetime | None
+
+
+class MessageRead(SQLModel):
+    """One chat message (spec 006 G1-G2). `sender_id` is a bare integer —
+    the frontend already knows both participants from the conversation
+    summary it came from; comparing this to the caller's own id is how it
+    tells "mine" from "theirs" (J3)."""
+
+    id: int
+    conversation_id: int
+    sender_id: int
+    text: str
+    created_at: datetime

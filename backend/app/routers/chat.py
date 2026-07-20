@@ -16,16 +16,18 @@ import json
 
 import jwt
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
-from sqlmodel import Session
+from sqlmodel import Session, func, or_, select
 
 from ..chat_broker import chat_broker
 from ..config import settings
 from ..db import get_session
-from ..models import Conversation, Message, User
-from ..permissions import conversation_role_for
+from ..models import Conversation, Listing, Message, User, _utcnow
+from ..permissions import conversation_role_for, get_current_user, require_conversation_member
 from ..ratelimit import InMemoryRateLimiterBackend, RateLimiter
+from ..schemas import ConversationSummary, MessageRead
 from ..security import decode_access_token
 
+router = APIRouter(tags=["chat"])
 ws_router = APIRouter()
 
 # Per-connection message cap (spec 006 E1). In-process, like the auth
@@ -125,3 +127,87 @@ async def conversation_socket(
             )
     finally:
         chat_broker.unregister(conversation_id, user.id, websocket)
+
+
+# ── REST: history, mark-as-read, the conversation list (spec 006 G, H, I) ───
+
+
+@router.get("/conversations", response_model=list[ConversationSummary])
+def list_conversations(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[ConversationSummary]:
+    """Every conversation the caller participates in, as buyer or as seller
+    (spec 006 I1-I2) — caller-scoped in the join itself, not a post-filter."""
+    rows = session.exec(
+        select(Conversation, Listing)
+        .join(Listing, Listing.id == Conversation.listing_id)
+        .where(or_(Conversation.buyer_id == user.id, Listing.owner_id == user.id))
+    ).all()
+
+    summaries: list[ConversationSummary] = []
+    for conversation, listing in rows:
+        is_seller = listing.owner_id == user.id
+        counterpart_id = conversation.buyer_id if is_seller else listing.owner_id
+        counterpart = session.get(User, counterpart_id)
+        last_read = conversation.seller_last_read_at if is_seller else conversation.buyer_last_read_at
+
+        unread_query = select(func.count()).select_from(Message).where(
+            Message.conversation_id == conversation.id, Message.sender_id != user.id
+        )
+        if last_read is not None:
+            unread_query = unread_query.where(Message.created_at > last_read)
+        unread_count = session.exec(unread_query).one()
+
+        last_message_at = session.exec(
+            select(Message.created_at)
+            .where(Message.conversation_id == conversation.id)
+            .order_by(Message.created_at.desc())
+            .limit(1)
+        ).first()
+
+        summaries.append(
+            ConversationSummary(
+                id=conversation.id,
+                listing_id=listing.id,
+                listing_headline=listing.headline,
+                counterpart_display_name=counterpart.display_name if counterpart else None,
+                unread_count=unread_count,
+                last_message_at=last_message_at,
+            )
+        )
+    return summaries
+
+
+@router.get("/conversations/{conversation_id}/messages", response_model=list[MessageRead])
+def get_conversation_messages(
+    conversation: Conversation = Depends(require_conversation_member),
+    before: int | None = None,
+    limit: int = Query(default=settings.chat_history_page_limit, ge=1, le=settings.chat_history_page_limit),
+    session: Session = Depends(get_session),
+) -> list[Message]:
+    """The most recent page, newest first; `before` walks further back
+    (spec 006 G1-G2). `limit`'s ceiling is a boundary rule, not a runtime
+    clamp (G5) — the same discipline M4's `ListingQuery` uses."""
+    query = select(Message).where(Message.conversation_id == conversation.id)
+    if before is not None:
+        query = query.where(Message.id < before)
+    query = query.order_by(Message.id.desc()).limit(limit)
+    return session.exec(query).all()
+
+
+@router.post("/conversations/{conversation_id}/read", status_code=204)
+def mark_conversation_read(
+    conversation: Conversation = Depends(require_conversation_member),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> None:
+    """Stamp the caller's own `*_last_read_at` (spec 006 H2) — `require_conversation_member`
+    already proved the caller is exactly one of these two roles, so no second
+    role lookup is needed here."""
+    if user.id == conversation.buyer_id:
+        conversation.buyer_last_read_at = _utcnow()
+    else:
+        conversation.seller_last_read_at = _utcnow()
+    session.add(conversation)
+    session.commit()
