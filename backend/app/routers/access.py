@@ -27,6 +27,7 @@ from ..errors import Conflict, Forbidden, InvalidTransition, NotFound
 from ..models import (
     AccessRequest,
     AccessRequestEvent,
+    Conversation,
     Listing,
     ListingDocument,
     ListingPrivate,
@@ -195,8 +196,19 @@ def approve_access_request(
     seller: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> AccessRequest:
-    """Grant the data room. **The only door to `ListingPrivate` besides ownership.**"""
-    return _decide("approve", access_request, seller, session)
+    """Grant the data room. **The only door to `ListingPrivate` besides ownership.**
+
+    Also creates the `Conversation` row (M6, spec 006 A1) —
+    `design_implementation.md` M6 names this as approval's second effect. No
+    duplicate-guard needed: the transition guard above already makes `approve`
+    fire at most once per `(listing, buyer)` pair (a second attempt is `409`
+    before reaching this line), and `Conversation`'s own unique constraint is
+    the defense-in-depth backstop, not the only line of defense.
+    """
+    result = _decide("approve", access_request, seller, session)
+    session.add(Conversation(listing_id=access_request.listing_id, buyer_id=access_request.buyer_id))
+    session.commit()
+    return result
 
 
 @router.post("/access-requests/{request_id}/deny", response_model=AccessRequestRead)
