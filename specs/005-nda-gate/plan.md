@@ -96,9 +96,13 @@ Three new functions — **one per trust boundary**, matching the file's existing
   the owner's view cannot silently join a gated one — spec 004 D2).
 - **`AccessRequestRead`** — id, listing_id, status, created_at, decided_at. **No buyer email**
   (S3).
-- **`AccessRequestWithBuyer`** — the seller's queue: the above plus a nested buyer **profile**
-  (display name, budget, target industries, experience) and explicitly **not** email (G3).
-  **No verification field** — M10 owns it and will add it here (D5).
+- **`AccessRequestWithBuyer`** — the seller's queue: the above plus the buyer **profile** nested
+  under a **`buyer`** key (`row["buyer"]["display_name"]`, `budget`, `target_industries`,
+  `experience`) and explicitly **not** email (G3). **No verification field** — M10 owns it and
+  will add it here (D5). *(The `buyer` key is pinned here 2026-07-20 because the test-writing
+  pass had to guess it — nesting rather than flattening keeps the buyer's fields namespaced, so
+  M10's verification field lands beside the profile it describes rather than colliding with a
+  request-level column.)*
 - `ListingPublic` (M4) is **unchanged** — S4 asserts M5 did not widen it.
 
 ## Errors (`backend/app/errors.py` — existing classes, new codes)

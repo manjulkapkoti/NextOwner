@@ -3,11 +3,20 @@
 //
 // This is the component that turns `GET /api/listings/{id}/private`'s two
 // outcomes (200 vs 403 `nda_access_required`) into the four states plan.md
-// names: locked / pending / approved / denied — driven by the gate's response,
-// never guessed. J5 is the sharpest edge here: `api.ts` fires the global
-// `auth:unauthorized` redirect on 401 only, but a bug that treats "no access"
-// the same as "no session" would bounce a perfectly logged-in buyer to
-// /login. That must never happen for a 403.
+// names: locked / pending / approved / denied. J5 is the sharpest edge here:
+// `api.ts` fires the global `auth:unauthorized` redirect on 401 only, but a
+// bug that treats "no access" the same as "no session" would bounce a
+// perfectly logged-in buyer to /login. That must never happen for a 403.
+//
+// State source, resolved with the coordinator after an earlier draft of this
+// file got it wrong: the locked/pending/approved/denied split is read from
+// `GET /api/my/access-requests` (F1 — the buyer's own requests, filtered to
+// this listing), fetched on **mount** — not inferred only from a POST
+// response held in local state. A POST response only knows about the current
+// session, so deriving "pending" from it alone would show a *returning*
+// buyer (one who already requested access on a previous visit) the "Request
+// access" button again, inviting a 409 (B3) on click. `GET private` remains
+// the actual gate that supplies the real payload once approved.
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
@@ -40,11 +49,24 @@ function meBody(ndaSignedAt: string | null) {
   }
 }
 
+interface MyAccessRequestRow {
+  id: number
+  listing_id: number
+  status: string
+  created_at: string
+}
+
 // Sets authStore.user directly (covers an implementation that reads it
 // straight off the store) AND stubs `/api/auth/me` (covers an implementation
 // that loads it itself, RequireAdmin-style) — the test should not care which.
+//
+// `myAccessRequests` defaults to `[]` — a buyer with no prior request for
+// this listing — and is what `GET /api/my/access-requests` returns; the
+// panel is expected to filter it to `listingId` itself (F2 — caller-scoped,
+// but multi-listing, so that's the component's job, not the mock's).
 function stubApi({
   ndaSignedAt = null as string | null,
+  myAccessRequests = [] as MyAccessRequestRow[],
   privateStatus = 403,
   privateBody = {
     detail: 'You do not have access to this data room.',
@@ -62,6 +84,9 @@ function stubApi({
     }
     if (url.includes('/api/auth/nda') && method === 'POST') {
       return jsonResponse(200, { nda_signed_at: '2026-07-20T00:00:00Z', nda_version: '1.0' })
+    }
+    if (url.match(/\/my\/access-requests$/) && method === 'GET') {
+      return jsonResponse(200, myAccessRequests)
     }
     if (url.match(/\/access-request$/) && method === 'POST') {
       return jsonResponse(201, {
@@ -104,7 +129,7 @@ describe('RequestAccessPanel', () => {
     await waitFor(() => expect(screen.getByLabelText(/loading|checking/i)).toBeInTheDocument())
   })
 
-  it('J5/X4: a 403 nda_access_required renders the locked state with a Request access CTA — not an error page — and never fires the global-401 handler', async () => {
+  it('J5/X4: a 403 nda_access_required with no prior request renders the locked state with a Request access CTA — not an error page — and never fires the global-401 handler', async () => {
     stubApi()
     const onUnauthorized = vi.fn()
     window.addEventListener('auth:unauthorized', onUnauthorized)
@@ -151,7 +176,27 @@ describe('RequestAccessPanel', () => {
     expect(calls.some((u) => u.match(/\/access-request$/))).toBe(true)
   })
 
-  it('J2: a signed buyer clicking Request access skips the modal entirely and goes straight to pending', async () => {
+  // The fix: a returning buyer already has a `requested` row sitting in
+  // `GET /api/my/access-requests` before this component ever mounts — no
+  // click, no in-session POST. This is the reload case a POST-only design
+  // cannot pass.
+  it('J2: a returning buyer with an existing pending request sees the pending state on mount, with no click at all', async () => {
+    stubApi({
+      ndaSignedAt: '2026-01-01T00:00:00Z',
+      myAccessRequests: [{ id: 55, listing_id: 7, status: 'requested', created_at: '2026-07-18T00:00:00Z' }],
+    })
+    renderPanel()
+
+    await waitFor(() => expect(screen.getByText(/pending|awaiting/i)).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /request access/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  // The in-session companion: a signed buyer with NO existing row yet who
+  // clicks through right now. Kept alongside the mount case above because it
+  // exercises a different path (the POST succeeding) that the mount test
+  // does not touch at all.
+  it('J2: a signed buyer with no existing request clicks Request access, skips the modal, and reaches pending in-session', async () => {
     const fetchMock = stubApi({ ndaSignedAt: '2026-01-01T00:00:00Z' })
     const user = userEvent.setup({ delay: null })
     renderPanel()
@@ -166,8 +211,16 @@ describe('RequestAccessPanel', () => {
     expect(calls.some((u) => u.match(/\/access-request$/))).toBe(true)
   })
 
-  it('J3: an approved buyer sees the private section rendered with real data instead of the gate', async () => {
-    stubApi({ privateStatus: 200, privateBody: PRIVATE_DATA })
+  // J3, likewise fixed: reachable from a mounted `approved` row in the
+  // buyer's request list, not only as the tail end of a live POST. `GET
+  // private` still supplies the actual payload — the list says *whether*
+  // to fetch it, not what it contains.
+  it('J3: a buyer with an approved request sees the private section rendered on mount, driven by the request list — not only a live POST', async () => {
+    stubApi({
+      myAccessRequests: [{ id: 55, listing_id: 7, status: 'approved', created_at: '2026-07-17T00:00:00Z' }],
+      privateStatus: 200,
+      privateBody: PRIVATE_DATA,
+    })
     renderPanel()
 
     await waitFor(() => expect(screen.getByText(PRIVATE_DATA.company_name)).toBeInTheDocument())

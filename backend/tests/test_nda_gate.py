@@ -113,11 +113,18 @@ def test_d7_no_credentials_is_401(client, auth_headers, live_listing):
 
 def test_d8_never_published_listing_is_404_to_a_non_owner(client, auth_headers, make_listing):
     """A draft's existence is still a secret (spec 005 D1 in § Decisions) — 404,
-    not 403, so a non-owner cannot even confirm the listing exists."""
+    not 403, so a non-owner cannot even confirm the listing exists.
+
+    Asserts the machine `code` too, not just the status — a bare 404 also
+    comes back from a route that simply isn't mounted yet (Starlette's own
+    default `{"detail": "Not Found"}`, with no `code`/`request_id`), which
+    would let this test pass vacuously for the wrong reason before the gate
+    exists (the same trap `test_browse.py::test_a4`'s comment names)."""
     seller, buyer = _seller_and_buyer(auth_headers)
     listing_id = make_listing(seller).json()["id"]     # never submitted, never approved
     res = client.get(f"/api/listings/{listing_id}/private", headers=buyer)
     assert res.status_code == 404
+    assert res.json()["code"] == "not_found"
 
 
 def test_d9_approved_access_survives_the_listing_leaving_live(client, auth_headers, live_listing, granted_access):
@@ -272,7 +279,14 @@ def test_e3_revoked_access_cannot_download(client, auth_headers, live_listing, g
 
 def test_e4_owner_still_downloads_their_own_document(client, auth_headers, live_listing):
     """M2's behaviour is preserved once the download route is re-gated onto
-    `require_private_access` (plan.md Build order, slice 6)."""
+    `require_private_access` (plan.md Build order, slice 6).
+
+    **This is a regression pin, and it passes before slice 6 is written.** That
+    is correct, not a vacuous pass: it asserts behaviour M2 already ships, so
+    "fail first" would mean M2 is already broken. Its job is to fail if slice 6
+    *breaks* the owner's download while re-gating the route — a guard against
+    the change, not a proof of it. See `test_e5` for what this pair cannot do.
+    """
     seller = auth_headers(email="seller@example.com", role="seller")
     listing_id = live_listing(seller)
     doc_id = _upload(client, listing_id, seller).json()["id"]
@@ -284,13 +298,30 @@ def test_e4_owner_still_downloads_their_own_document(client, auth_headers, live_
 def test_e5_non_owner_and_never_published_listing_is_404(client, auth_headers, make_listing):
     """`test_listing_download.py::test_e2` must keep passing **unedited**
     (spec 005 D1) — this pins the same case from M5's own file so the gate's
-    existence rule is covered here too, not only by inheritance."""
+    existence rule is covered here too, not only by inheritance.
+
+    **A regression pin, like `test_e4` — it passes before slice 6 exists, and
+    it cannot tell you whether slice 6 happened.** Be honest about the limit:
+    this case already 404s today through M2's `get_owned_listing`, and after
+    the re-gating it 404s through `require_private_access`. Both resolve to the
+    app's `NotFound`, so *every* assertion here — status and `code` alike —
+    reads identically whether slice 6 was done correctly or **not done at all**.
+    Nothing in this test moves.
+
+    That does not make it worthless, it makes it a **guard**: it fails if the
+    re-gating widens the existence rule and starts confirming an unpublished
+    listing to a stranger. The tests that actually *prove* the route was
+    re-gated are `test_e1`/`test_e2`/`test_e3` (an approved buyer can now
+    download, a requested/revoked one cannot) — all three red until slice 6
+    lands. Read this one as "M2 still holds", never as "M5 shipped".
+    """
     seller, buyer = _seller_and_buyer(auth_headers)
     listing_id = make_listing(seller).json()["id"]        # never submitted
     doc_id = _upload(client, listing_id, seller).json()["id"]
 
     res = client.get(f"/api/listings/{listing_id}/documents/{doc_id}", headers=buyer)
     assert res.status_code == 404
+    assert res.json()["code"] == "not_found"
 
 
 # ── Security & abuse (this file's slice: S2, S6, S7, S8) ─────────────────────
