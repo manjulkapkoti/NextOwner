@@ -103,3 +103,115 @@ def test_e3_seeded_listings_leak_nothing_through_the_public_api(seed_fn, session
     blob = client.get("/api/listings?limit=50").text
     for leak in ("company_name", "website_url", "detailed_financials", "owner_id"):
         assert leak not in blob
+
+
+# ── Buyer + access + chat fixtures (owner request, 2026-07-21) ──────────────
+#
+# Not tied to spec 004's own criteria (E1-E5 above) — this is dev-convenience
+# tooling the owner asked for directly, so a fresh local database has an
+# approved access request and a conversation with messages to look at without
+# walking request -> approve -> open-chat by hand first.
+
+
+def test_seed_creates_a_buyer_with_the_nda_already_signed(seed_fn, session):
+    from sqlmodel import select
+
+    from app.models import User
+
+    seed_fn(session)
+
+    buyer = session.exec(select(User).where(User.email == "buyer.seed@example.com")).first()
+    assert buyer is not None
+    assert buyer.is_buyer is True
+    assert buyer.nda_signed_at is not None
+
+
+def test_seed_creates_access_requests_in_three_distinct_states(seed_fn, session):
+    from sqlmodel import select
+
+    from app.models import AccessRequest, User
+
+    seed_fn(session)
+
+    buyer = session.exec(select(User).where(User.email == "buyer.seed@example.com")).first()
+    requests = list(session.exec(select(AccessRequest).where(AccessRequest.buyer_id == buyer.id)).all())
+
+    assert len(requests) == 3
+    assert {r.status for r in requests} == {"approved", "requested", "denied"}
+    # Each against a different listing — the unique constraint on
+    # (listing_id, buyer_id) would otherwise make this impossible anyway.
+    assert len({r.listing_id for r in requests}) == 3
+
+
+def test_seed_creates_one_conversation_with_messages_for_the_approved_request(seed_fn, session):
+    from sqlmodel import select
+
+    from app.models import AccessRequest, Conversation, Message, User
+
+    seed_fn(session)
+
+    buyer = session.exec(select(User).where(User.email == "buyer.seed@example.com")).first()
+    approved = session.exec(
+        select(AccessRequest).where(AccessRequest.buyer_id == buyer.id, AccessRequest.status == "approved")
+    ).first()
+
+    conversation = session.exec(
+        select(Conversation).where(
+            Conversation.listing_id == approved.listing_id, Conversation.buyer_id == buyer.id
+        )
+    ).first()
+    assert conversation is not None
+
+    messages = list(
+        session.exec(select(Message).where(Message.conversation_id == conversation.id)).all()
+    )
+    assert len(messages) >= 2
+    assert any(m.sender_id == buyer.id for m in messages), "the buyer sent at least one message"
+    assert any(m.sender_id != buyer.id for m in messages), "the seller sent at least one message"
+
+
+def test_seed_adds_buyer_fixtures_to_a_database_already_carrying_listings(seed_fn, session):
+    """The bug this guards against: an early draft gated the buyer/access/chat
+    fixtures behind the *same* early return as the listing marketplace, which
+    would make them permanently unreachable on any database seeded before
+    this capability existed — `seed()` would see the marketplace marker,
+    return 0, and never create the buyer at all. Simulated here by seeding
+    once, deleting the buyer-side rows by hand (as if this capability did not
+    exist yet), then seeding again."""
+    from sqlmodel import delete, select
+
+    from app.models import AccessRequest, Conversation, Message, User
+
+    seed_fn(session)
+
+    buyer = session.exec(select(User).where(User.email == "buyer.seed@example.com")).first()
+    session.exec(delete(Message))
+    session.exec(delete(Conversation))
+    session.exec(delete(AccessRequest))
+    session.delete(buyer)
+    session.commit()
+
+    created = seed_fn(session)
+    assert created == 0, "the marketplace itself must not be reseeded"
+
+    restored_buyer = session.exec(select(User).where(User.email == "buyer.seed@example.com")).first()
+    assert restored_buyer is not None
+    assert len(list(session.exec(select(AccessRequest)).all())) == 3
+    assert len(list(session.exec(select(Conversation)).all())) == 1
+
+
+def test_seed_twice_does_not_duplicate_the_buyer_or_access_requests(seed_fn, session):
+    from sqlmodel import select
+
+    from app.models import AccessRequest, Conversation, User
+
+    seed_fn(session)
+    seed_fn(session)
+
+    buyers = list(session.exec(select(User).where(User.email == "buyer.seed@example.com")).all())
+    requests = list(session.exec(select(AccessRequest)).all())
+    conversations = list(session.exec(select(Conversation)).all())
+
+    assert len(buyers) == 1
+    assert len(requests) == 3
+    assert len(conversations) == 1
