@@ -1,13 +1,26 @@
-// Nav bar logout control (spec pre-003 acceptance criterion AS5).
-import { render, screen } from '@testing-library/react'
+// Nav bar logout control (spec pre-003 acceptance criterion AS5) + the M6
+// "Messages" unread badge (spec 006 J1).
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NavBar } from './NavBar'
 import { authStore } from '../stores/authStore'
+import { chatStore } from '../stores/chatStore'
+
+function jsonResponse(status: number, body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
 
 describe('NavBar', () => {
   beforeEach(() => authStore.logout())
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    chatStore.reset()
+  })
 
   it('AS5: shows Logout when authed; clicking it clears the session and returns to /login', async () => {
     authStore.setToken('a.b.c')
@@ -59,5 +72,26 @@ describe('NavBar', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /open menu/i }))
     expect(screen.getByRole('menuitem', { name: /list a business/i })).toBeInTheDocument()
+  })
+
+  it('J1: a signed-in user with unread messages sees a Messages link with the total unread count', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse(200, [
+          { id: 1, listing_id: 7, listing_headline: 'A', counterpart_display_name: 'X', unread_count: 2, last_message_at: null },
+          { id: 2, listing_id: 8, listing_headline: 'B', counterpart_display_name: 'Y', unread_count: 1, last_message_at: null },
+        ]),
+      ),
+    )
+    authStore.setToken('a.b.c')
+    render(
+      <MemoryRouter initialEntries={['/my-listings']}>
+        <NavBar />
+      </MemoryRouter>,
+    )
+
+    const link = await screen.findByRole('link', { name: /messages/i })
+    await waitFor(() => expect(within(link).getByText('3')).toBeInTheDocument())
   })
 })

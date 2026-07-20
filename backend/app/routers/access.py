@@ -22,11 +22,13 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
+from ..chat_broker import chat_broker
 from ..db import get_session
 from ..errors import Conflict, Forbidden, InvalidTransition, NotFound
 from ..models import (
     AccessRequest,
     AccessRequestEvent,
+    Conversation,
     Listing,
     ListingDocument,
     ListingPrivate,
@@ -195,8 +197,21 @@ def approve_access_request(
     seller: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> AccessRequest:
-    """Grant the data room. **The only door to `ListingPrivate` besides ownership.**"""
-    return _decide("approve", access_request, seller, session)
+    """Grant the data room. **The only door to `ListingPrivate` besides ownership.**
+
+    Also creates the `Conversation` row (M6, spec 006 A1) —
+    `design_implementation.md` M6 names this as approval's second effect. No
+    duplicate-guard needed: the transition guard above already makes `approve`
+    fire at most once per `(listing, buyer)` pair (a second attempt is `409`
+    before reaching this line), and `Conversation`'s own unique constraint is
+    the defense-in-depth backstop, not the only line of defense.
+    """
+    result = _decide("approve", access_request, seller, session)
+    session.add(
+        Conversation(listing_id=access_request.listing_id, buyer_id=access_request.buyer_id)
+    )
+    session.commit()
+    return result
 
 
 @router.post("/access-requests/{request_id}/deny", response_model=AccessRequestRead)
@@ -209,7 +224,7 @@ def deny_access_request(
 
 
 @router.post("/access-requests/{request_id}/revoke", response_model=AccessRequestRead)
-def revoke_access_request(
+async def revoke_access_request(
     access_request: AccessRequest = Depends(require_request_decider),
     seller: User = Depends(get_current_user),
     session: Session = Depends(get_session),
@@ -219,8 +234,26 @@ def revoke_access_request(
     Legal only from `approved` — revoking a request that was never granted is a
     409, not a quiet success, because the two mean different things to a seller
     looking at their queue.
+
+    `async def` (unchanged precedent: `upload_document`, M2, is already async
+    beside sync `Session` calls) so this can `await chat_broker.close_user(...)`
+    after the decision commits (M6, spec 006 F1) — revocation must re-deny a
+    **live** socket immediately, not just the next REST call
+    (`security.md` §1.5). The decision logic itself — `_decide()`, the
+    transition guard, the audit row — is unchanged; only this call is new.
     """
-    return _decide("revoke", access_request, seller, session)
+    result = _decide("revoke", access_request, seller, session)
+    conversation = session.exec(
+        select(Conversation).where(
+            Conversation.listing_id == access_request.listing_id,
+            Conversation.buyer_id == access_request.buyer_id,
+        )
+    ).first()
+    if conversation is not None:
+        await chat_broker.close_user(
+            conversation.id, access_request.buyer_id, code=4004, reason="access_revoked"
+        )
+    return result
 
 
 # ── The data room (spec 005 D1-D10) ⭐ ────────────────────────────────────────

@@ -202,6 +202,42 @@ class AccessRequestEvent(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+class Conversation(SQLModel, table=True):
+    """One chat thread per `(listing, buyer)` pair (M6, FR-16).
+
+    Created only by `approve_access_request` (spec 006 A1) — never directly.
+    The seller is `listing.owner_id`, not duplicated here, the same choice
+    `AccessRequest` makes. `*_last_read_at` is two columns rather than a
+    participant table (spec 006 D3): a conversation has exactly two possible
+    participants, the same shape `AccessRequest` already has, so a general
+    multi-participant table would model a feature (group chat) nothing here
+    asks for.
+    """
+
+    __table_args__ = (
+        UniqueConstraint("listing_id", "buyer_id", name="uq_conversation_listing_buyer"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    listing_id: int = Field(foreign_key="listing.id", index=True)
+    buyer_id: int = Field(foreign_key="user.id", index=True)     # from the approved AccessRequest
+    created_at: datetime = Field(default_factory=_utcnow)
+    buyer_last_read_at: datetime | None = None
+    seller_last_read_at: datetime | None = None
+
+
+class Message(SQLModel, table=True):
+    """One chat message (M6, FR-16). `sender_id` is derived from the
+    WebSocket connection's verified token, never from the message payload
+    (spec 006 C3, `security.md` §1.5)."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    conversation_id: int = Field(foreign_key="conversation.id", index=True)
+    sender_id: int = Field(foreign_key="user.id")
+    text: str
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 class ListingDocument(SQLModel, table=True):
     """One row per uploaded file. `storage_key` is opaque (from the storage
     port); `original_filename` is display-only and NEVER used to build a path."""
