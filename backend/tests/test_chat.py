@@ -362,6 +362,19 @@ def test_f5_revoke_during_handshake_still_closes_the_socket(
 
     Remove the post-register re-check in `chat.py` to see this fail — the
     connection stays open despite the revoke.
+
+    Deliberate simplification, checked during re-verification (branch review
+    2026-07-20): both the WS connect and the revoke here read/write through
+    `conftest.py`'s single shared `session` object (the same object every
+    request in a test resolves `Depends(get_session)` to), so this proves the
+    re-check reacts to a write on its *own* session, not necessarily a commit
+    from a genuinely separate DB session/connection the way a real concurrent
+    revoke request would be in production. The re-verification traced this
+    gap independently (a standalone two-`Session` script against the same
+    query) and confirmed the row's mutated `status` column is what the query
+    filters on, not a cached identity-mapped object, so a truly separate
+    session sees the update too — this test's simplification doesn't hide a
+    real difference in behavior, only in what it directly exercises.
     """
     from sqlalchemy import text
 
