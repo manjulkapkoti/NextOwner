@@ -149,7 +149,14 @@ def test_d9_approved_access_survives_the_listing_leaving_live(client, auth_heade
 # signs/requests, the seller decides/moves the listing). MAINTENANCE: this
 # list is hand-written, like `SELLER_ACTIONS` in test_curation.py — a new
 # route that affects the gate is not covered until it is added here.
-D10_ACTIONS = ("sign", "request", "approve", "deny", "revoke", "pause", "resume", "close")
+D10_ACTIONS = (
+    "sign", "request", "approve", "deny", "revoke", "pause", "resume", "close",
+    # `edit` added after the M5 appsec review. Its absence was a real gap: it is
+    # the literal middle verb of M3's `pause → edit → resume` bypass, the exact
+    # corridor this test was written to answer, and it was the one action from
+    # that sequence not represented here.
+    "edit",
+)
 
 
 def _apply_d10_action(client, listing_id, buyer_headers, seller_headers, action, model):
@@ -179,6 +186,17 @@ def _apply_d10_action(client, listing_id, buyer_headers, seller_headers, action,
         res = client.post(f"/api/listings/{listing_id}/{action}", headers=seller_headers)
         if res.status_code == 200:
             model["listing"] = res.json()["status"]
+    elif action == "edit":
+        # The seller rewrites the listing mid-flight. Does not move the access
+        # request, and must not move the gate either — but M3 proved an edit
+        # sitting between two legal transitions is exactly where a bypass hides.
+        res = client.put(
+            f"/api/listings/{listing_id}",
+            json={"headline": "Edited mid-corridor"},
+            headers=seller_headers,
+        )
+        if res.status_code == 200:
+            model["listing"] = res.json()["status"]
     else:  # pragma: no cover - guards a typo in D10_ACTIONS
         raise ValueError(action)
 
@@ -198,23 +216,62 @@ def _observed(model):
 
 
 def _check_invariant(client, listing_id, buyer, seller, model, label, failures):
-    """The one assertion this whole file exists for, applied at a single point.
+    """The state-sensitive assertion, applied after **every** action.
 
     Both directions matter: a gate that denies the owner is as broken as one
     that admits a stranger, and only one of those is the bug people look for.
-    """
-    owner_res = client.get(f"/api/listings/{listing_id}/private", headers=seller)
-    if owner_res.status_code != 200:
-        failures.append(f"{label}: owner locked out of their own listing ({owner_res.status_code})")
 
-    buyer_res = client.get(f"/api/listings/{listing_id}/private", headers=buyer)
+    Probes `/private` only. Route parity and the third-party identity are
+    checked by `_check_state_parity` below, once per newly-discovered state
+    rather than at every step — see there for why that split is the honest one.
+    """
+    path = f"/api/listings/{listing_id}/private"
+    if client.get(path, headers=seller).status_code != 200:
+        failures.append(f"{label}: owner locked out of their own listing")
+
+    res = client.get(path, headers=buyer)
     should_be_ok = model["status"] == "approved"
-    if should_be_ok and buyer_res.status_code != 200:
-        failures.append(f"{label}: approved buyer denied private data ({buyer_res.status_code})")
-    elif not should_be_ok and buyer_res.status_code == 200:
+    if should_be_ok and res.status_code != 200:
+        failures.append(f"{label}: approved buyer denied private data ({res.status_code})")
+    elif not should_be_ok and res.status_code == 200:
         failures.append(
             f"{label}: buyer without approval (status={model['status']!r}) read private data"
         )
+
+
+def _check_state_parity(client, listing_id, buyer, seller, stranger, model, label, failures):
+    """Per-state checks: every gated route agrees, and a third party never passes.
+
+    Run once per **newly-discovered state**, not per step. The split is not a
+    shortcut — it matches what each assertion can actually tell you:
+
+    - The buyer's outcome depends on *how they got here*, so it is checked after
+      every action (above).
+    - Route parity is a property of the **state**: `/private` and the document
+      index share `require_private_access`, so if they ever disagree they
+      disagree in that state regardless of the path taken to reach it.
+    - A third party has no request in any state, so their outcome is state-
+      indexed too — and there is no state in which they should pass, which makes
+      this the one assertion with no exception to get wrong.
+
+    Checking these at every step instead cost 143s against 34s and found nothing
+    the per-state version does not. Measured, not assumed.
+    """
+    routes = [
+        f"/api/listings/{listing_id}/private",
+        f"/api/listings/{listing_id}/documents",
+    ]
+    codes = [client.get(r, headers=buyer).status_code for r in routes]
+    if len(set(codes)) != 1:
+        failures.append(
+            f"{label}: gated routes disagree for the buyer {dict(zip(routes, codes, strict=True))} — "
+            "they share require_private_access, so a divergence means it was reimplemented"
+        )
+    for route in routes:
+        if client.get(route, headers=stranger).status_code == 200:
+            failures.append(f"{label}: an uninvolved third party read {route}")
+        if client.get(route, headers=seller).status_code != 200:
+            failures.append(f"{label}: owner locked out of {route}")
 
 
 def test_d10_private_data_is_reachable_only_via_ownership_or_approval(
@@ -267,6 +324,7 @@ def test_d10_private_data_is_reachable_only_via_ownership_or_approval(
     admin = admin_headers()
     seller = auth_headers(email="seller@example.com", role="seller")
     buyer = auth_headers(email="buyer@example.com", role="buyer")
+    stranger = auth_headers(email="stranger@example.com", role="buyer")
     failures: list[str] = []
 
     def build():
@@ -293,6 +351,7 @@ def test_d10_private_data_is_reachable_only_via_ownership_or_approval(
     # BFS over observed states. `frontier` holds one shortest path per state.
     start_id, start_model = replay(())
     _check_invariant(client, start_id, buyer, seller, start_model, "(initial)", failures)
+    _check_state_parity(client, start_id, buyer, seller, stranger, start_model, "(initial)", failures)
     seen = {_observed(start_model)}
     frontier = [()]
 
@@ -308,6 +367,9 @@ def test_d10_private_data_is_reachable_only_via_ownership_or_approval(
             if state not in seen:
                 seen.add(state)
                 frontier.append(extended)
+                _check_state_parity(
+                    client, listing_id, buyer, seller, stranger, model, str(extended), failures
+                )
 
     assert len(seen) > 1, "explored only one state — the walk never moved, so it proves nothing"
     assert not failures, (
@@ -500,3 +562,58 @@ def test_s8_a_403_from_the_gate_leaks_nothing(client, auth_headers, live_listing
     blob = res.text.lower()
     for leak in ("secretco", "secret.example.com", seller_email, "select", "traceback", "sqlalchemy", ".py"):
         assert leak not in blob, f"{leak!r} leaked through a 403"
+
+
+def test_e6_approved_buyer_can_list_the_data_rooms_documents(
+    client, auth_headers, live_listing, granted_access
+):
+    """The index that makes E1 reachable in practice (spec 005 E6).
+
+    Added after the branch review found `GET .../documents/{doc_id}` had no
+    counterpart that lists documents: the only place a `doc_id` appeared was
+    the upload response, which only the seller ever sees. E1 proved an approved
+    buyer *may* download a document it was handed; this proves they can find
+    one at all.
+    """
+    seller, buyer = _seller_and_buyer(auth_headers)
+    listing_id = live_listing(seller)
+    doc_id = _upload(client, listing_id, seller).json()["id"]
+    granted_access(listing_id, buyer, seller)
+
+    res = client.get(f"/api/listings/{listing_id}/documents", headers=buyer)
+    assert res.status_code == 200
+    rows = res.json()
+    assert [row["id"] for row in rows] == [doc_id]
+    assert rows[0]["original_filename"] == "pnl.pdf"
+
+
+def test_e7_the_document_index_is_behind_the_same_gate_as_the_files(
+    client, auth_headers, live_listing, request_access
+):
+    """A filename is itself confidential (spec 005 E7).
+
+    "acme-holdings-cap-table.pdf" leaks both identity and circumstance, so the
+    index must not be a lighter boundary than the download. Checked in all
+    three denied states, not just one, because the gate has three ways to say no
+    and a listing route that consulted only `requested` would still pass a
+    single-state test.
+    """
+    seller, buyer = _seller_and_buyer(auth_headers)
+    listing_id = live_listing(seller)
+    _upload(client, listing_id, seller)
+    req_id = request_access(listing_id, buyer).json()["id"]
+
+    # requested — not yet approved
+    assert client.get(f"/api/listings/{listing_id}/documents", headers=buyer).status_code == 403
+
+    # approved then revoked — revocation re-denies the index too
+    client.post(f"/api/access-requests/{req_id}/approve", headers=seller)
+    assert client.get(f"/api/listings/{listing_id}/documents", headers=buyer).status_code == 200
+    client.post(f"/api/access-requests/{req_id}/revoke", headers=seller)
+    res = client.get(f"/api/listings/{listing_id}/documents", headers=buyer)
+    assert res.status_code == 403
+    assert res.json()["code"] == "nda_access_required"
+
+    # a stranger who never asked
+    stranger = auth_headers(email="stranger@example.com", role="buyer")
+    assert client.get(f"/api/listings/{listing_id}/documents", headers=stranger).status_code == 403

@@ -24,7 +24,15 @@ from sqlmodel import Session, select
 
 from ..db import get_session
 from ..errors import Conflict, Forbidden, InvalidTransition, NotFound
-from ..models import AccessRequest, AccessRequestEvent, Listing, ListingPrivate, User, _utcnow
+from ..models import (
+    AccessRequest,
+    AccessRequestEvent,
+    Listing,
+    ListingDocument,
+    ListingPrivate,
+    User,
+    _utcnow,
+)
 from ..permissions import (
     get_current_user,
     get_owned_listing,
@@ -36,6 +44,7 @@ from ..schemas import (
     AccessRequestRead,
     AccessRequestWithBuyer,
     BuyerProfile,
+    DocumentRead,
     ListingPrivateRead,
 )
 
@@ -98,8 +107,30 @@ def create_access_request(
         # a prior SELECT — a check-then-insert would race two concurrent
         # requests into two rows (security.md §6 race conditions).
         session.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         session.rollback()
+        # Narrowed to the uniqueness violation. Catching every IntegrityError
+        # here would report "you already requested this" for an unrelated
+        # constraint failure — e.g. the listing row disappearing between the
+        # `session.get` above and this commit, which is a foreign-key error and
+        # a completely different situation. Never a leak, but a diagnostic that
+        # lies to whoever debugs it next. Anything else re-raises and becomes
+        # the generic 500 (the error contract, `error_handling.md` §7).
+        #
+        # Matched two ways because the dialects disagree: **Postgres** names the
+        # violated constraint, **SQLite** does not — it spells out the columns
+        # ("UNIQUE constraint failed: accessrequest.listing_id, ..."). Checking
+        # only the constraint name passed review and then turned every duplicate
+        # into a 500 on SQLite, which is the database we actually run on today.
+        # A dialect-specific string check is exactly the kind of thing the
+        # Postgres swap breaks, so it recognises both forms rather than betting
+        # on one.
+        detail = str(getattr(exc, "orig", exc)).lower()
+        is_duplicate_pair = "uq_accessrequest_listing_buyer" in detail or (
+            "unique" in detail and "listing_id" in detail and "buyer_id" in detail
+        )
+        if not is_duplicate_pair:
+            raise
         raise Conflict(
             "An access request for this listing already exists",
             code="access_request_exists",
@@ -213,6 +244,32 @@ def get_listing_private(
     if private is None:                     # a listing with no private row yet
         raise NotFound("Listing not found")
     return private
+
+
+@router.get("/listings/{listing_id}/documents", response_model=list[DocumentRead])
+def list_listing_documents(
+    listing: Listing = Depends(require_private_access),
+    session: Session = Depends(get_session),
+) -> list[ListingDocument]:
+    """The data room's file index (spec 005 E6).
+
+    **Behind the same gate as the files themselves** — the list of what a seller
+    has uploaded is itself confidential: filenames alone ("2024-tax-notice.pdf",
+    "acme-holdings-cap-table.pdf") leak both identity and circumstance, so this
+    cannot be a lighter boundary than the download it feeds.
+
+    Added during M5's branch review. Without it, `GET .../documents/{doc_id}`
+    was unreachable in practice: the only place a `doc_id` appeared was the
+    upload response, which only the seller ever sees — so an approved buyer got
+    an empty data room and user story 2 went unmet. The component test could not
+    catch it because it passes `documents` in as a prop, supplying exactly what
+    the real app did not.
+    """
+    return session.exec(
+        select(ListingDocument)
+        .where(ListingDocument.listing_id == listing.id)
+        .order_by(ListingDocument.uploaded_at.desc(), ListingDocument.id.desc())
+    ).all()
 
 
 # ── The two queues (spec 005 F1-F3, G1-G3) ───────────────────────────────────

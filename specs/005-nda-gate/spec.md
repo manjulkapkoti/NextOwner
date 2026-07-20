@@ -17,8 +17,9 @@
 
 **Scope fold-ins** (`docs/milestones.md` § Scope fold-ins → M5), each carried below as criteria:
 revocation endpoint (`approved → revoked`, seller-only); `nda_version` recorded at signature;
-the access-request list shows buyer profile + verification status; `GET /my/access-requests`
-(buyer side). *Notification events are **not** emitted as rows — see § Out of scope.*
+the access-request list shows buyer profile (**verification status is *not* shipped — see
+D5; M10 owns that field**); `GET /my/access-requests` (buyer side). *Notification events are
+**not** emitted as rows — see § Out of scope.*
 
 ---
 
@@ -91,7 +92,7 @@ satisfied in appearance by a field that means nothing.
 
 **D6 — Decisions get an append-only `accessrequestevent` table. — OWNER-APPROVED 2026-07-20.**
 Constitution Article 2 #5 requires *"offers and access decisions get timestamped event rows"*,
-and `security.md` §106 reads that as already satisfied by `access_request.decided_at`. **That
+and `security.md` § *Audit & logging* (in §2) reads that as already satisfied by `access_request.decided_at`. **That
 reading predates the revocation fold-in and no longer holds:** with `revoke` in the state
 machine a row travels `requested → approved → revoked`, and a single `decided_at`/`decided_by_id`
 pair holds only the **last** decision — so revoking silently overwrites the record of when the
@@ -101,7 +102,7 @@ the question an audit trail exists to answer, and precisely the moment someone a
 So M5 mirrors M3's `listingevent`: one append-only row per completed transition, carrying
 actor, action, `from_status`, `to_status` and a timestamp. This is also what M8 expects to
 find — its fold-in says *"start from `listing_event` and ask the same question of M5/M6/M7's
-events before inventing a schema."* `security.md` §106 is corrected as part of this milestone.
+events before inventing a schema."* `security.md` § *Audit & logging* is corrected as part of this milestone.
 
 **D7 — The seller's queue is `GET /api/my/listings/{id}/access-requests`. — OWNER-APPROVED 2026-07-20.**
 `design_implementation.md` M5 specifies `GET /access-requests?listing_id=…`, written before M4
@@ -148,6 +149,7 @@ Each GIVEN/WHEN/THEN below becomes **exactly one test** (constitution Article 3 
 - **C9** GIVEN the seller approves a request, WHEN the audit table is read, THEN one `accessrequestevent` row exists carrying the deciding seller as `actor_id`, `action: "approved"`, `from_status: "requested"`, `to_status: "approved"` and a timestamp — with `actor_id` derived from the JWT, never the body (D6).
 - **C10** GIVEN a request that was approved at time T and is later revoked, WHEN the audit table is read, THEN **both** rows survive and the approval's timestamp T is still readable — revocation must not erase when access was granted. *This is D6's whole reason to exist; it fails against a design that only stores the last decision.*
 - **C11** GIVEN any sequence of decisions on a request, WHEN the audit table is read, THEN no row has ever been updated or deleted — the trail is append-only (mirrors M3's `listingevent` discipline, spec 003 D4).
+- **C12** — GIVEN no credentials, WHEN `approve`, `deny` or `revoke` is called, THEN 401. *(Added during the branch review 2026-07-20. The behaviour was already correct, but nothing asserted it: this spec specified 401 for four of its six route families and silently skipped the decision routes and the seller's queue, so a refactor could have made the only door to a data room unauthenticated with the suite still green. `security.md` §8's "new route → wrong identity" row caught it, by walking the matrix route-by-route rather than trusting the dependency chain.)*
 
 ### D — The gate: `require_private_access` on private data ⭐
 
@@ -171,6 +173,10 @@ Each GIVEN/WHEN/THEN below becomes **exactly one test** (constitution Article 3 
 - **E3** — GIVEN a buyer whose access was `revoked`, WHEN they download the document, THEN 403.
 - **E4** — GIVEN the owner, WHEN they download their own document, THEN 200 — M2's behaviour is preserved.
 - **E5** — GIVEN a non-owner and a never-published listing, WHEN they download its document, THEN 404 — M2's `test_e2` still passes **unchanged** (§ Decisions D1).
+- **E6** — GIVEN an approved buyer, WHEN they `GET /api/listings/{id}/documents`, THEN 200 with the listing's document index (id + filename), so the files E1 asserts they may download are actually reachable.
+- **E7** — GIVEN a buyer whose request is `requested`, `denied` or `revoked`, WHEN they list the documents, THEN 403 — filenames alone leak identity and circumstance ("acme-holdings-cap-table.pdf"), so the index sits behind the **same** gate as the files, never a lighter one.
+
+*E6/E7 were added during the branch review 2026-07-20. The independent appsec pass found that `GET .../documents/{doc_id}` had **no route that lists documents** — the only place a `doc_id` ever appeared was the upload response, which only the seller sees. An approved buyer therefore reached an empty data room and user story 2 went unmet, while J3 stayed green because the component test passes `documents` in as a prop — supplying precisely what the real application did not. **The lesson: a component test that injects its inputs cannot tell you those inputs exist.**
 
 ### F — The buyer's own requests (`GET /api/my/access-requests`)
 
@@ -183,6 +189,7 @@ Each GIVEN/WHEN/THEN below becomes **exactly one test** (constitution Article 3 
 - **G1** GIVEN a seller with a listing that has two requests, WHEN they fetch that listing's queue, THEN both are returned with each buyer's **profile** — display name, budget, target industries, experience. **No verification status: that half of FR-14 lands with M10** (D5).
 - **G2** GIVEN a user who does not own that listing, WHEN they fetch its queue, THEN **404** — the route is guarded by the existing `get_owned_listing`, so "not yours" and "doesn't exist" stay indistinguishable (D7; spec 002's existence rule, inherited rather than re-decided).
 - **G3** GIVEN a request from a buyer, WHEN the seller fetches the queue, THEN the response contains **no buyer email** — the seller sees a profile, not contact details (PII minimization, `data_protection.md`).
+- **G4** — GIVEN no credentials, WHEN `GET /api/my/listings/{id}/access-requests` is called, THEN 401 (added with C12, same reason).
 
 ### Security & abuse
 
