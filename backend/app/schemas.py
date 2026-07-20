@@ -60,6 +60,12 @@ class UserRead(SQLModel):
     target_industries: str | None
     experience: str | None
     tos_accepted_at: datetime | None
+    # The frontend reads these off `/api/auth/me` to decide whether "Request
+    # access" opens the click-wrap modal or goes straight through (spec 005
+    # J1/J2). Safe on this model: it is the caller's own record, never a public
+    # or cross-user one.
+    nda_signed_at: datetime | None
+    nda_version: str | None
     created_at: datetime
 
 
@@ -256,3 +262,21 @@ class RejectRequest(SQLModel):
         if not v.strip():
             raise ValueError("A rejection reason is required")
         return v
+
+
+# ── M5 — access requests (NDA gate) ──────────────────────────────────────────
+
+class AccessRequestRead(SQLModel):
+    """A request as its own buyer, or its listing's seller, sees it.
+
+    Carries **no buyer identity** (spec 005 S3): the buyer already knows who
+    they are, and the seller gets a profile through `AccessRequestWithBuyer`,
+    never an email. Keeping this model free of identity fields means a leak
+    would have to be *added* deliberately rather than merely forgotten.
+    """
+
+    id: int
+    listing_id: int
+    status: str
+    created_at: datetime
+    decided_at: datetime | None

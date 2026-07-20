@@ -57,6 +57,21 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+def require_signed_nda(user: User = Depends(get_current_user)) -> User:
+    """Trust boundary: has this user signed the one platform-wide NDA? (FR-13)
+
+    Deliberately **separate** from `require_private_access`, even though both
+    guard the same data in the end. The signature is a property of the *user*;
+    the approval is a property of the *(listing, buyer) pair*. Fusing them would
+    put spec criteria B2 and D3 on one code path, where a single bug takes out
+    both — and the whole point of one-function-per-boundary is that a rule lives
+    in exactly one place and is tested directly.
+    """
+    if user.nda_signed_at is None:
+        raise Forbidden("Platform NDA not signed", code="nda_not_signed")
+    return user
+
+
 def get_owned_listing(
     listing_id: int,
     user: User = Depends(get_current_user),

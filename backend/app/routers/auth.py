@@ -91,6 +91,33 @@ def me(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+@router.post("/nda", response_model=UserRead)
+def sign_nda(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> User:
+    """FR-13 — sign the one platform-wide NDA (click-wrap), spec 005 A1-A4.
+
+    **Idempotent by design (spec 005 D4).** The first signature is the retained
+    legal record, so a second call is a no-op that returns the original stamp
+    rather than moving it. That is why this is a plain `if ... is None` instead
+    of an unconditional write: re-signing must not be able to rewrite when the
+    user accepted, or which text they accepted.
+
+    Both values are server-derived — the clock and `settings.nda_version` — so
+    there is deliberately **no request body**. A client that sends
+    `nda_signed_at` or `nda_version` is ignored entirely (A4, Article 2 #4):
+    FastAPI never reads a body this function does not declare.
+    """
+    if user.nda_signed_at is None:
+        user.nda_signed_at = _utcnow()
+        user.nda_version = settings.nda_version
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+    return user
+
+
 @router.post("/roles", response_model=UserRead)
 def add_role(
     body: RoleUpdate,
