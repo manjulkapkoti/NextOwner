@@ -7,28 +7,18 @@
 > file is the human-readable "you are here + ▶ next". Full design:
 > `docs/session_recovery.md`.
 
-**Milestone status:** M0–M4 ✅ merged. **App-shell (`pre-003`)** ✅ merged (#25), plus the public landing page (#26) and the register page (#27). **Design system** ✅ merged (#28). **Agentic workflow** ✅ merged (#32). **PR conventions guard** ✅ merged (#37).
-**In flight:** **M5 ⭐ (NDA + access gate)** on `feat/005-nda-gate` — **all 8 slices built and green**, spec + plan owner-approved, branch review complete (inline + an independent `appsec-engineer` pass on opus + a `docs-auditor` pass).
-**Open PRs:** none yet — the PR opens once the review fixes are committed.
+**Milestone status:** M0–M5 ✅ merged. **App-shell (`pre-003`)** ✅ merged (#25), plus the public landing page (#26) and the register page (#27). **Design system** ✅ merged (#28). **Agentic workflow** ✅ merged (#32). **PR conventions guard** ✅ merged (#37).
+**In flight:** nothing. **M5 ⭐ (NDA + access gate)** shipped the product's trust core: `require_private_access` guarding the private payload, the data-room index and document downloads; the platform-wide NDA signed once per user; per-listing access requests with a unique constraint on `(listing, buyer)`; seller-only approve/deny/revoke; and the append-only `accessrequestevent` audit.
+**Open PRs:** none.
 
 ## ▶ NEXT ACTION
-**Open the M5 PR** — the build and the review are both complete. Run `/open-pr`.
+**M6 — realtime chat**: **`/run-milestone chat`**
 
-Everything is committed and pushed on `feat/005-nda-gate` (HEAD `afdc85d`). **Paused here 2026-07-20 at the owner's request (usage limit), not blocked on anything.**
+M6 is the first WebSocket surface. Its scope fold-ins (`docs/milestones.md` § Scope fold-ins → M6) are already written: a conversation **unique per (listing, buyer)**, `last_read_at` per participant for unread counts, a **WebSocket error contract** (close codes for auth-fail / non-member / revocation / rate-cap, landing as an `error_handling.md` addendum), and message events for the FR-16 email fallback that M8 delivers.
 
-**State: green.** 198 backend + 71 frontend, `npm test` exit 0, ruff/eslint/tsc clean, 64/64 M5 criteria cited.
+**M5 leaves M6 two things to honour.** First, `design_implementation.md` says approving access also creates the `conversation` row — that belongs to M6, with the conversation model. Second, and more important: **revocation must re-deny the socket and history immediately** (`security.md` §1.5). M5 made `revoked` a real terminal state; M6 is where a live connection has to notice it. The in-memory `{conversation_id: [sockets]}` registry is single-instance **by construction** and fails *silently* behind a load balancer, so keep the fan-out behind a `publish(conversation_id, message)` port from day one — persist → publish → fan out, in that order.
 
-**Review outcome — no blocking findings.** The independent `appsec-engineer` pass (opus) and a `docs-auditor` pass both ran; every finding is either fixed or listed below. The bounded re-verification round ran once and its only standing objection (finding #1 half-fixed) is **now closed** by `afdc85d`.
-
-### Four non-blocking items the review left open — do these first on resume
-Each is small, each has a named reason, none holds the PR:
-
-1. **`test_default_deny.py` — assert `status_code in (401, 403)` instead of `!= 200`.** *(One line.)* Four routes take a required body (`POST /listings`, `PUT /listings/{id}`, `POST /listings/{id}/reject`, `POST /auth/roles`). Remove a gate from one and the anonymous call falls through to Pydantic and returns **422, not 200** — so the test stays green over an ungated route. A pass is not evidence of a gate for exactly the four mass-assignment-sensitive routes. It also explains why the sabotage looked clean: the sabotaged route was a bodyless GET, which *does* return 200.
-2. **Same file — say in the docstring that this proves *authentication* only.** A route that authenticates but forgets to authorize passes it. It is a floor; it must not be read as retiring the `security.md` §8 matrix.
-3. **`IntegrityError` in `access.py` — replace the string match with a re-query.** On the exception: roll back, `select` for an existing `(listing_id, buyer_id)` row, present → 409, absent → re-raise. The current matcher handles SQLite and stock Postgres/MySQL, but an Alembic naming convention that **renames the constraint** breaks both branches (Postgres quotes the name, never the columns) → a duplicate request 500s instead of 409. Same class as the bug `test_b3` caught, displaced to the Postgres swap.
-4. **`test_e7` docstring says "all three denied states" but does not probe `denied`.** Coverage is genuinely fine (D10's BFS reaches `denied` and runs parity there); the claim is one state wider than the walk. Add the probe or narrow the sentence.
-
-Also worth recording when convenient: `_check_state_parity`'s green result means *"the two gated routes agree in every reachable state"*, **not** *"their bodies are equivalent"* — `get_listing_private` 404s on a missing `ListingPrivate` row while `list_listing_documents` returns `[]`. That state is unreachable today because both the create path and the seed always write the row.
+M6 is **not** on the security-critical list, but `scripts/check_appsec_trigger.py` will almost certainly escalate it: it adds routes, a state machine, and websockets. Let the diff decide, as the constitution's 2026-07-19 amendment intends.
 
 ## Carryover notes
 - **What the M5 build actually established (slices 1–7), worth keeping:**
