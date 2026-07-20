@@ -50,7 +50,14 @@ For example:
 | **M12**   | `/start-milestone deal-completion`              | Deal completion — `under_offer` → sold / fell-through (re-list) + final price | 012  | seller-only transitions, 409 from non-`under_offer`, atomic offer+listing flip, **price derived from the accepted offer**, audit rows, NDA gate unweakened |
 | **E2E**   | after Phase D                                   | Playwright golden path: sign-up → gated data → offer → accept → sold (M12) | —    | the full trust chain green = a security regression check                                                                                            |
 
-> **⚠ Not yet sequenced — Payments & monetization.** The subscription / listing-fee **paywall** (at the *contact moment*, so logically ~M6 chat / M7 offers) and **escrow settlement** (post-accept) are **not** yet a numbered milestone. `product-lead` must scope + slot it. The security invariants are already captured (`docs/security.md` § Third-party vendors & webhooks — webhook signatures, idempotency, card/PAN off our servers, server-derived amounts, mock-mirrors-real); real Stripe/Escrow integration + PCI + KYC/AML stay deferred to `legal-compliance`. `docs/error_handling.md`'s Stripe/Escrow failure modes reference this pending milestone. *(2026-07-16: the **mocked** deal-close mechanics — sold / fell-through, invoice, asset-transfer checklist — are now owned by **M12**; this banner covers the real-money half. ⚠ Legal note per the research synthesis, risk #3: "in-platform Stripe escrow for small deals" is money transmission — `legal-compliance` must vet KYC/AML + licensing before any real implementation.)*
+> **⚠ Not yet sequenced — Payments & monetization.**
+> - The subscription / listing-fee **paywall** (at the *contact moment*, so logically ~M6 chat / M7 offers) and **escrow settlement** (post-accept) are **not** yet a numbered milestone.
+> - `product-lead` must scope + slot it.
+> - The security invariants are already captured (`docs/security.md` § Third-party vendors & webhooks — webhook signatures, idempotency, card/PAN off our servers, server-derived amounts, mock-mirrors-real).
+> - Real Stripe/Escrow integration + PCI + KYC/AML stay deferred to `legal-compliance`.
+> - `docs/error_handling.md`'s Stripe/Escrow failure modes reference this pending milestone.
+> - *(2026-07-16: the **mocked** deal-close mechanics — sold / fell-through, invoice, asset-transfer checklist — are now owned by **M12**; this banner covers the real-money half.)*
+> - ⚠ **Legal note** per the research synthesis, risk #3: "in-platform Stripe escrow for small deals" is money transmission — `legal-compliance` must vet KYC/AML + licensing before any real implementation.
 
 > **⚠ Not yet sequenced — Trust & safety / admin operations.** The fraud-report / flag-listing workflow, admin **user management**, and deal monitoring (FR-21, NFR *Trust & safety*) have no owning milestone — M3 builds only the curation queue. Post-MVP is acceptable; unowned is not. `product-lead` to slot alongside the payments milestone (both matter the moment real users arrive).
 
