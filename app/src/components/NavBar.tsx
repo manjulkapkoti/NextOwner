@@ -12,7 +12,7 @@
 // The breakpoint is CSS (`display`), not a JS media query: both branches stay
 // in the DOM so tests (and any non-matchMedia environment) see the inline row,
 // while the closed Menu renders nothing — so "Logout" is never ambiguous.
-import { useState, type MouseEvent } from 'react'
+import { useEffect, useState, type MouseEvent } from 'react'
 import {
   AppBar,
   Box,
@@ -25,8 +25,9 @@ import {
   Toolbar,
 } from '@mui/material'
 import { observer } from 'mobx-react-lite'
-import { Link as RouterLink, useNavigate } from 'react-router-dom'
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom'
 import { authStore } from '../stores/authStore'
+import { chatStore } from '../stores/chatStore'
 import { Wordmark } from './Wordmark'
 
 // Three stacked bars — a hamburger without pulling in an icon package for one
@@ -43,8 +44,21 @@ function MenuGlyph() {
 
 export const NavBar = observer(function NavBar() {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const menuOpen = Boolean(anchorEl)
+
+  // M6 — the unread badge (spec 006 J1). Refetched on route change: the same
+  // "poll/refetch on route change, fine for MVP" pattern the rest of the app
+  // already uses (design_implementation.md — no new live-update mechanism
+  // needed just for a nav badge).
+  useEffect(() => {
+    // Best-effort: a failed badge refresh is not worth surfacing to the
+    // user (or, in tests that don't stub fetch, worth an unhandled
+    // rejection) — the nav chrome degrades to "no badge", not an error.
+    if (authStore.isAuthenticated) chatStore.loadConversations().catch(() => {})
+  }, [pathname])
+  const unreadTotal = chatStore.conversations.reduce((sum, c) => sum + c.unread_count, 0)
 
   function handleLogout() {
     setAnchorEl(null)
@@ -120,6 +134,30 @@ export const NavBar = observer(function NavBar() {
                 <Button color="inherit" onClick={() => go('/my-listings')} sx={{ color: 'text.secondary' }}>
                   My listings
                 </Button>
+                <Button color="inherit" component={RouterLink} to="/messages" sx={{ color: 'text.secondary' }}>
+                  Messages
+                  {unreadTotal > 0 && (
+                    <Box
+                      component="span"
+                      sx={{
+                        ml: 0.75,
+                        minWidth: 20,
+                        height: 20,
+                        px: 0.5,
+                        borderRadius: 999,
+                        bgcolor: 'primary.main',
+                        color: 'primary.contrastText',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {unreadTotal}
+                    </Box>
+                  )}
+                </Button>
                 <Button color="inherit" onClick={handleLogout} sx={{ color: 'text.secondary' }}>
                   Logout
                 </Button>
@@ -145,6 +183,9 @@ export const NavBar = observer(function NavBar() {
               >
                 <MenuItem onClick={() => go('/sell')}>List a business</MenuItem>
                 <MenuItem onClick={() => go('/my-listings')}>My listings</MenuItem>
+                <MenuItem onClick={() => go('/messages')}>
+                  Messages{unreadTotal > 0 ? ` (${unreadTotal})` : ''}
+                </MenuItem>
                 <MenuItem onClick={handleLogout}>Logout</MenuItem>
               </Menu>
             </>

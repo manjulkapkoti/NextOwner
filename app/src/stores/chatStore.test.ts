@@ -111,7 +111,7 @@ describe('chatStore', () => {
   })
 
   it('markRead: POSTs the read receipt', async () => {
-    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }))
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
 
     await chatStore.markRead(1)

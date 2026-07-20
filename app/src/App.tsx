@@ -16,6 +16,8 @@ import { brandTint } from './theme'
 import { AccessRequestQueue } from './components/AccessRequestQueue'
 import { AdminQueue } from './components/AdminQueue'
 import { BrowseListings } from './components/BrowseListings'
+import { ChatWindow } from './components/ChatWindow'
+import { ConversationList } from './components/ConversationList'
 import { ListingDetail } from './components/ListingDetail'
 import { ListingWizard } from './components/ListingWizard'
 import { LoginForm } from './components/LoginForm'
@@ -231,6 +233,14 @@ function ListingRequestsRoute() {
   )
 }
 
+// M6 — chat: the conversation list is the one hub every conversation is
+// reachable from this milestone (spec 006 § Decisions D5 — no per-listing
+// deep link yet).
+function ChatWindowRoute() {
+  const { id } = useParams()
+  return <ChatWindow conversationId={Number(id)} />
+}
+
 export function AppShell() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -301,6 +311,31 @@ export function AppShell() {
             <RequireAuth>
               <Container maxWidth="md" sx={{ mt: 4 }}>
                 <ListingRequestsRoute />
+              </Container>
+            </RequireAuth>
+          }
+        />
+        {/* M6 — realtime chat (FR-16). The conversation list + window; the
+            server's require_conversation_member is the real boundary. */}
+        <Route
+          path="/messages"
+          element={
+            <RequireAuth>
+              <Container maxWidth="md" sx={{ mt: 4 }}>
+                <Typography variant="h5" component="h1" gutterBottom>
+                  Messages
+                </Typography>
+                <ConversationList />
+              </Container>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/messages/:id"
+          element={
+            <RequireAuth>
+              <Container maxWidth="md" sx={{ mt: 4 }}>
+                <ChatWindowRoute />
               </Container>
             </RequireAuth>
           }
