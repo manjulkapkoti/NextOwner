@@ -14,7 +14,7 @@ Money is `Money` (Decimal stored losslessly as text) — never float.
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import String, TypeDecorator
+from sqlalchemy import String, TypeDecorator, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -58,9 +58,14 @@ class User(SQLModel, table=True):
     target_industries: str | None = None
     experience: str | None = None
 
-    # Retained legal record
+    # Retained legal records. The NDA pair (M5) is the same class as the ToS
+    # pair: stamped once, never re-stamped, and `nda_version` records *which*
+    # text was signed (spec 005 D4). Re-signing is idempotent — the first
+    # signature is the record.
     tos_accepted_at: datetime | None = None
     tos_version: str | None = None
+    nda_signed_at: datetime | None = None
+    nda_version: str | None = None
 
     # Erasure-ready (data_protection.md §3) — anonymize-in-place, never hard-delete
     deleted_at: datetime | None = None
@@ -125,6 +130,70 @@ class ListingEvent(SQLModel, table=True):
     from_status: str
     to_status: str
     reason: str | None = None                              # required for rejections
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class AccessRequest(SQLModel, table=True):
+    """One buyer's request to see one listing's data room (M5, FR-13).
+
+    **The row `require_private_access` consults.** `status` is the state machine
+    — `requested → approved|denied` and `approved → revoked` — and, like every
+    other status in this codebase, it changes only inside an endpoint that
+    validates the move (Article 2 #3). `buyer_id` is derived from the JWT, never
+    from the request body (Article 2 #4).
+
+    The unique constraint on `(listing_id, buyer_id)` is FR-13's "one request per
+    buyer-listing pair" made a *database* guarantee rather than a check someone
+    can forget to write. It is also what makes a decided request **terminal**:
+    a denied or revoked buyer cannot re-request, and re-granting is deliberately
+    post-MVP (owner-approved 2026-07-20 — see FR-13 in `docs/requirements.md`).
+
+    `decided_at` / `decided_by_id` are the convenient denormalized "current"
+    answer. They are **not** the audit trail: a row that travels
+    `requested → approved → revoked` overwrites them, losing *when access was
+    granted*. `AccessRequestEvent` below is the history that survives that.
+    """
+
+    __table_args__ = (
+        UniqueConstraint("listing_id", "buyer_id", name="uq_accessrequest_listing_buyer"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    listing_id: int = Field(foreign_key="listing.id", index=True)
+    buyer_id: int = Field(foreign_key="user.id", index=True)     # server-derived from the JWT
+    status: str = Field(default="requested", index=True)
+    created_at: datetime = Field(default_factory=_utcnow)
+    decided_at: datetime | None = None
+    decided_by_id: int | None = Field(default=None, foreign_key="user.id")
+
+
+class AccessRequestEvent(SQLModel, table=True):
+    """Append-only audit of access decisions (M5, spec 005 D6).
+
+    A direct mirror of `ListingEvent`: one row per *completed* transition, so the
+    log records what happened rather than what was tried, and `actor_id` comes
+    from the JWT.
+
+    **Why this table exists at all** — the constitution (Article 2 #5) has always
+    required timestamped event rows for access decisions, and `security.md` read
+    that as satisfied by `access_request.decided_at`. That was true while the only
+    decisions were approve and deny: one decision per row, one timestamp. The
+    revocation fold-in invalidated it. Once a row can travel
+    `requested → approved → revoked`, a single `decided_at` holds only the *last*
+    decision — so revoking silently erased when the buyer gained access to the
+    financials, which is exactly the question an audit trail exists to answer.
+    **General rule recorded in `security.md` § Audit & logging: adding a
+    transition to a state machine can invalidate an audit design that was correct
+    for the old one.** Spec criterion C10 is the test that fails against the
+    superseded design.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    access_request_id: int = Field(foreign_key="accessrequest.id", index=True)
+    actor_id: int = Field(foreign_key="user.id")          # server-derived from the JWT
+    action: str                                            # requested | approved | denied | revoked
+    from_status: str
+    to_status: str
     created_at: datetime = Field(default_factory=_utcnow)
 
 
