@@ -11,6 +11,10 @@ export interface CurrentUser {
   is_seller: boolean
   is_admin: boolean
   display_name: string | null
+  // M5 — the platform NDA is signed once, ever (FR-13), so whether to show the
+  // click-wrap modal is a property of the *user*, not of any listing. Served on
+  // `/api/auth/me`; null means never signed.
+  nda_signed_at?: string | null
 }
 
 class AuthStore {

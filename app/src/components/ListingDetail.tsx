@@ -21,6 +21,8 @@ import { Link as RouterLink, useParams } from 'react-router-dom'
 import { ApiError, publicApi } from '../lib/api'
 import { listingTypeLabel } from '../lib/listingTypes'
 import type { PublicListing } from './ListingCard'
+import { RequestAccessPanel } from './RequestAccessPanel'
+import { authStore } from '../stores/authStore'
 
 function money(value: string): string {
   const n = Number(value)
@@ -136,23 +138,36 @@ export function ListingDetail() {
             </Typography>
           </Stack>
 
-          <Card
-            sx={{
-              p: 3,
-              bgcolor: 'action.hover',
-              border: '1px dashed',
-              borderColor: 'divider',
-              boxShadow: 'none',
-            }}
-          >
-            <Typography variant="h6" component="h2" sx={{ mb: 1 }}>
-              Locked until the NDA is signed
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              The company name, website, and detailed financials become available once you sign the
-              platform NDA and the seller approves your request.
-            </Typography>
-          </Card>
+          {/* M5 — the gate, live. An authenticated visitor gets the real panel
+              (request / pending / approved / denied); an anonymous one keeps the
+              static teaser, because this route is deliberately public (spec 004
+              F9) and the panel calls authenticated endpoints. Signing in is the
+              first step of asking for access, so the teaser is the honest
+              anonymous view rather than a degraded one. */}
+          {authStore.isAuthenticated ? (
+            <RequestAccessPanel listingId={Number(id)} />
+          ) : (
+            <Card
+              sx={{
+                p: 3,
+                bgcolor: 'action.hover',
+                border: '1px dashed',
+                borderColor: 'divider',
+                boxShadow: 'none',
+              }}
+            >
+              <Typography variant="h6" component="h2" sx={{ mb: 1 }}>
+                Locked until the NDA is signed
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                The company name, website, and detailed financials become available once you
+                sign the platform NDA and the seller approves your request.
+              </Typography>
+              <Button component={RouterLink} to="/login" variant="contained" sx={{ mt: 2 }}>
+                Sign in to request access
+              </Button>
+            </Card>
+          )}
         </Stack>
       )}
     </Container>

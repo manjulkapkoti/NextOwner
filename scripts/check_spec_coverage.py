@@ -25,6 +25,24 @@ one claims to. That is a real limit, not an oversight: proving semantic
 coverage needs a human, and this is the cheap mechanical half. A citation is
 also a much better anchor for review than the reviewer's memory of the spec.
 
+It also checks only ONE direction: spec → test. It cannot tell you that a test
+cites a criterion the spec does not define. **This is a known hole, and it has
+already bitten once**: during M5's branch review (2026-07-20) two criteria were
+lost from `specs/005-nda-gate/spec.md` before the commit while the tests citing
+them landed, and this script printed a clean `62/62`. A docs audit caught it;
+nothing mechanical would have.
+
+The reverse check was built and then **deliberately reverted**, because the
+citation convention cannot support it. `F7` means "MVP feature 7"
+(`requirements.md` F1–F12) in one test file and "criterion F7" (spec 004's
+frontend group) in another, and tokens like `HS256` are shaped exactly like
+criterion ids. The honest implementation produced 14 false positives against 0
+true ones — and a check that cries wolf is worse than no check, for the same
+reason `ci.yml` refuses to block on moderate npm advisories. Making it work
+needs a distinguishable citation syntax (e.g. `spec:005/C12`), which is a
+repo-wide convention change, not a milestone's business. Recorded here so the
+next person weighs the same trade-off with the measurement already done.
+
 Usage:
     python scripts/check_spec_coverage.py            # every spec
     python scripts/check_spec_coverage.py 001        # one milestone

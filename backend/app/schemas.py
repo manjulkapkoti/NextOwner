@@ -60,6 +60,12 @@ class UserRead(SQLModel):
     target_industries: str | None
     experience: str | None
     tos_accepted_at: datetime | None
+    # The frontend reads these off `/api/auth/me` to decide whether "Request
+    # access" opens the click-wrap modal or goes straight through (spec 005
+    # J1/J2). Safe on this model: it is the caller's own record, never a public
+    # or cross-user one.
+    nda_signed_at: datetime | None
+    nda_version: str | None
     created_at: datetime
 
 
@@ -256,3 +262,72 @@ class RejectRequest(SQLModel):
         if not v.strip():
             raise ValueError("A rejection reason is required")
         return v
+
+
+# ── M5 — access requests (NDA gate) ──────────────────────────────────────────
+
+class AccessRequestRead(SQLModel):
+    """A request as its own buyer, or its listing's seller, sees it.
+
+    Carries **no buyer identity** (spec 005 S3): the buyer already knows who
+    they are, and the seller gets a profile through `AccessRequestWithBuyer`,
+    never an email. Keeping this model free of identity fields means a leak
+    would have to be *added* deliberately rather than merely forgotten.
+    """
+
+    id: int
+    listing_id: int
+    status: str
+    created_at: datetime
+    decided_at: datetime | None
+
+
+class ListingPrivateRead(SQLModel):
+    """The data room — what the NDA gate unlocks (FR-15).
+
+    Standalone, **not** a subclass of `ListingRead`, for the same reason
+    `ListingPublic` is (spec 004 D2): inheritance would let a field added to the
+    owner's view silently join a gated payload. Here the duplication is cheap —
+    three fields — and the independence is the control.
+    """
+
+    listing_id: int
+    company_name: str
+    website_url: str
+    detailed_financials: str | None = None
+
+
+class BuyerProfile(SQLModel):
+    """What a seller learns about a buyer when deciding (FR-14).
+
+    **No email, by construction** (spec 005 G3/S3). The seller needs enough to
+    judge whether to open their books — budget, sector, experience — and contact
+    details are not that; chat (M6) is the channel, once they have decided. The
+    absence of the field *is* the control, exactly as with `UserRead` and
+    `password_hash`.
+
+    **No verification field either** (spec 005 D5). M10 owns buyer verification
+    and its fold-in already covers surfacing the badge here. A placeholder now
+    would be an unenforced flag, which `security.md` §7 M8 rightly calls
+    decoration.
+    """
+
+    display_name: str | None
+    budget: Decimal | None
+    target_industries: str | None
+    experience: str | None
+
+    @field_serializer("budget", when_used="json")
+    def _ser_budget(self, v: Decimal | None) -> str | None:
+        return None if v is None else str(v)
+
+
+class AccessRequestWithBuyer(SQLModel):
+    """A row in the seller's queue: the request plus who is asking."""
+
+    id: int
+    listing_id: int
+    status: str
+    created_at: datetime
+    decided_at: datetime | None
+    buyer: BuyerProfile

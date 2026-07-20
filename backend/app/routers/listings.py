@@ -20,7 +20,12 @@ from ..config import ALLOWED_UPLOAD_TYPES, settings
 from ..db import get_session
 from ..errors import InvalidTransition, NotFound, PayloadTooLarge, UnsupportedMediaType
 from ..models import Listing, ListingDocument, ListingEvent, ListingPrivate, User, _utcnow
-from ..permissions import get_current_user, get_owned_listing, require_admin
+from ..permissions import (
+    get_current_user,
+    get_owned_listing,
+    require_admin,
+    require_private_access,
+)
 from ..schemas import (
     DocumentRead,
     ListingCreate,
@@ -446,9 +451,19 @@ async def upload_document(
 @router.get("/listings/{listing_id}/documents/{doc_id}")
 def download_document(
     doc_id: int,
-    listing: Listing = Depends(get_owned_listing),
+    listing: Listing = Depends(require_private_access),
     session: Session = Depends(get_session),
 ) -> Response:
+    """Serve a data-room document (M2 upload, M5 gate).
+
+    **The dependency is the entire M5 change to this route** — `get_owned_listing`
+    became `require_private_access`, and nothing in the body moved. That is the
+    payoff of one-function-per-trust-boundary (Article 2 #1): the rule "owner, or
+    an approved buyer, and nobody else" is written once and *reused* here, rather
+    than reimplemented beside the file-serving code where the two copies could
+    drift apart. Spec 005 E1-E5 assert this route now answers exactly as the
+    private-data route does.
+    """
     doc = session.get(ListingDocument, doc_id)
     if doc is None or doc.listing_id != listing.id:
         raise NotFound("Document not found")

@@ -197,7 +197,14 @@ def listing_events(session):
 @pytest.fixture
 def force_status(session):
     """Force a listing's status directly in the DB (seeding a state a seller
-    can't reach alone — e.g. `live`, which needs admin approval at M3)."""
+    can't reach alone — e.g. `live`, which needs admin approval at M3).
+
+    **Does not set `published_at`** — it forces one column. M5's gate keys its
+    404-vs-403 existence rule on `published_at` (spec 005 D1), so a listing that
+    must be *genuinely* published belongs to `live_listing` below, which walks
+    the real admin path. Forcing `status="live"` here leaves `published_at` null,
+    which is a state the product never produces.
+    """
     from sqlalchemy import text
 
     def _force(listing_id, status):
@@ -207,3 +214,94 @@ def force_status(session):
         )
         session.commit()
     return _force
+
+
+# ── M5 NDA + access-gate helpers ─────────────────────────────────────────────
+#
+# M5 needs almost no DB seeding: every state in the access-request machine
+# (requested / approved / denied / revoked) is reachable through real endpoints,
+# so these fixtures compose the product's own routes. That is the testing_guide
+# ideal — a fixture that forges a state can hide a transition the product can't
+# actually perform.
+
+
+@pytest.fixture
+def sign_nda(client):
+    """Sign the platform NDA as the given user (spec 005 A1)."""
+    def _sign(headers):
+        return client.post("/api/auth/nda", headers=headers)
+    return _sign
+
+
+@pytest.fixture
+def live_listing(client, make_listing, admin_headers):
+    """A genuinely published listing: create → submit → admin approve.
+
+    Walks the real M2 + M3 path rather than forcing columns, so `published_at`
+    is set the way the product sets it. M5's gate distinguishes "never
+    published" (404 — still a secret) from "published" (403 — ask for access),
+    and a forced status would leave that untestable (spec 005 D1).
+    """
+    def _live(owner_headers, **overrides):
+        listing_id = make_listing(owner_headers, **overrides).json()["id"]
+        client.post(f"/api/listings/{listing_id}/submit", headers=owner_headers)
+        client.post(f"/api/listings/{listing_id}/approve", headers=admin_headers())
+        return listing_id
+    return _live
+
+
+@pytest.fixture
+def request_access(client, sign_nda):
+    """Sign the NDA (if needed) and request access to a listing (spec 005 B1)."""
+    def _request(listing_id, buyer_headers, sign=True):
+        if sign:
+            sign_nda(buyer_headers)
+        return client.post(
+            f"/api/listings/{listing_id}/access-request", headers=buyer_headers
+        )
+    return _request
+
+
+@pytest.fixture
+def granted_access(client, request_access):
+    """Drive a request all the way to `approved` through the real endpoints.
+
+    Returns the access-request id, so a test can carry on to deny/revoke.
+    """
+    def _grant(listing_id, buyer_headers, seller_headers):
+        req_id = request_access(listing_id, buyer_headers).json()["id"]
+        client.post(f"/api/access-requests/{req_id}/approve", headers=seller_headers)
+        return req_id
+    return _grant
+
+
+@pytest.fixture
+def access_events(session):
+    """Read the append-only audit rows for an access request, oldest first.
+
+    Mirrors `listing_events` (M3). Spec 005 C10 is the reason this table exists:
+    a revocation must not overwrite *when* access was granted, so the test reads
+    the history rather than the row's current `decided_at`.
+    """
+    from sqlalchemy import text
+
+    def _events(access_request_id):
+        rows = session.execute(
+            text(
+                "SELECT actor_id, action, from_status, to_status, created_at "
+                "FROM accessrequestevent WHERE access_request_id = :i ORDER BY id"
+            ),
+            {"i": access_request_id},
+        ).fetchall()
+        return [
+            {
+                "actor_id": r[0],
+                "action": r[1],
+                "from_status": r[2],
+                "to_status": r[3],
+                "created_at": r[4],
+            }
+            for r in rows
+        ]
+
+    return _events

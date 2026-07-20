@@ -87,8 +87,8 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
 - **M5 — NDA + access gate**
   - **Revocation endpoint** (`approved → revoked`, seller-only) — security.md §7 already requires "revocation re-denies"; this is the endpoint that makes that test possible.
   - **`nda_version`** recorded at signature (know *which* NDA text was signed — it is a retained legal record).
-  - **The access-request list shows the buyer profile + verification status** (FR-14 — depends on the M1 profile fold-in).
-  - **`GET /my/access-requests`** (buyer side) + emit notification events (requested / approved / denied).
+  - **The access-request list shows the buyer profile** (FR-14 — depends on the M1 profile fold-in). **The *verification status* half was deferred to M10** *(owner-approved 2026-07-20, spec 005 D5)*: no `verified` field exists yet, M10 owns it, and M10's own fold-in below already covers surfacing the badge here. M5 therefore satisfies FR-14 partially and says so.
+  - **`GET /my/access-requests`** (buyer side). **Notification events were NOT emitted** *(spec 005 § Out of scope)* — M5 writes `accessrequestevent` rows for decisions, and **M8 projects notifications from those**, exactly as it does from M3's `listingevent`. Same treatment M3's bullet received; recorded here so this section stops promising what the spec declined to deliver.
 - **M6 — chat:** conversation **unique per (listing, buyer)**; **`last_read_at` per participant** (unread counts); **WebSocket error contract** (close codes for auth-fail / non-member / revocation / rate-cap — lands as an `error_handling.md` addendum); emit message events for the FR-16 email fallback (delivered at M8).
   - **Broadcast behind a `publish(conversation_id, message)` port** (horizontal-scale blocker #3 — the worst of the three, 2026-07-16 amendment): the in-memory `{conversation_id: [sockets]}` dict is single-instance-only *by construction*, and behind a load balancer messages **fail silently** (buyer on instance A, seller on instance B — no error, just no delivery). Keep the dict; keep the routers ignorant of it, so a Redis / Postgres `LISTEN/NOTIFY` backplane drops in later. **Persist → publish → fan out**, in that order. See `design_implementation.md` § *Horizontal scale*.
 - **M7 — offers**
@@ -114,7 +114,7 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
 - [x] **Design system** — tokens (`theme.ts`) + brand assets + `StatusChip` + all six screens restyled *(frontend foundation, merged #28; **no spec folder** — an owner-directed design pass, not an FR-bearing milestone. Decisions live in `docs/design_system_spec.md`.)*
 - [x] **M3** — admin curation *(+ `listingevent` audit; notification events re-sequenced to M8 — § Scope fold-ins)*
 - [x] **M4** — marketplace browse *(+ keyword search, seed data, brand voice & landing copy — § Scope fold-ins)*
-- [ ] **M5** ⭐ — NDA + access gate *(+ revocation endpoint, `nda_version` — § Scope fold-ins)*
+- [x] **M5** ⭐ — NDA + access gate *(+ revocation endpoint, `nda_version`, `accessrequestevent` audit; FR-14's verification half deferred to M10 and notification events to M8 — § Scope fold-ins)*
 - [ ] **M6** — realtime chat *(+ unread counts, WS error contract — § Scope fold-ins)*
 - [ ] **M7** — offers / LOI *(+ counter model, sibling policy — § Scope fold-ins)*
 - [ ] **M8** — notifications engine + saved searches & alerts *(scope expanded)*

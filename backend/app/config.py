@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60           # short-lived; refresh deferred (security.md §9)
     tos_version: str = "2026-07-17"                  # which ToS text a registration accepted
 
+    # Which platform-NDA text a signature accepted (M5, spec 005 D4). Server-owned
+    # so the client can never influence what it is recorded as having signed;
+    # frozen onto the user at signature and never re-stamped, because the first
+    # signature is the retained legal record.
+    nda_version: str = "2026-07-20"
+
     # Auth-endpoint rate limiting (brute-force / credential stuffing / signup
     # spam — security.md §1.1 requires BOTH login and register).
     login_rate_limit_max: int = 5
