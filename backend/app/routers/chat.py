@@ -83,6 +83,19 @@ async def conversation_socket(
 
     await websocket.accept()
     chat_broker.register(conversation_id, user.id, websocket)
+
+    # Re-check immediately after registering, with no `await` between this and
+    # `register()` above — so no interleaving is possible in between. `accept()`
+    # is a real yield point: a revoke can commit and call `close_user` while this
+    # connection is mid-handshake, before it exists in the broker's registry for
+    # `close_user` to find. Without this second check, that TOCTOU window leaves
+    # a revoked buyer connected until they happen to disconnect on their own
+    # (branch review 2026-07-20 — appsec finding; spec 006 F1/S5).
+    if conversation_role_for(session, conversation, user) is None:
+        chat_broker.unregister(conversation_id, user.id, websocket)
+        await websocket.close(code=4004, reason="access_revoked")
+        return
+
     limiter_key = f"{conversation_id}:{user.id}"
 
     try:
@@ -91,6 +104,15 @@ async def conversation_socket(
                 raw = await websocket.receive_text()
             except WebSocketDisconnect:
                 break
+
+            # Rate-limit BEFORE validating content — a flood of invalid or
+            # oversized frames must cost the sender its budget too, or the
+            # cap is a no-op against exactly the abuse it exists for
+            # (security.md §6 "WebSocket message floods"). Every inbound
+            # frame counts, valid or not.
+            if not _chat_rate_limiter.check(limiter_key):
+                await websocket.close(code=4009, reason="rate_limited")
+                return
 
             try:
                 data = json.loads(raw)
@@ -104,10 +126,6 @@ async def conversation_socket(
             if len(text) > settings.chat_message_max_chars:
                 await websocket.send_json({"type": "error", "code": "message_too_long"})
                 continue
-
-            if not _chat_rate_limiter.check(limiter_key):
-                await websocket.close(code=4009, reason="rate_limited")
-                return
 
             message = Message(conversation_id=conversation_id, sender_id=user.id, text=text.strip())
             session.add(message)

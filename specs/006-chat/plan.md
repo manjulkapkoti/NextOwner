@@ -207,20 +207,28 @@ each one commit. No checkboxes: the red test list is the status (`pytest -q --lf
    `chat_broker.publish(...)` including the sender's own socket (D4). *Sequenced after slice 3
    because there is no point validating messages on a connection that can't yet be proven to
    reject the wrong caller.*
-   → **C1–C4, D1–D3, E1**.
+   → **C1–C4, D1–D3, E1–E2**. *(E2 added during the branch review 2026-07-20: the rate-limit check must run before content validation, not after — an invalid/oversized frame has to cost its sender the same budget a valid one does, or `continue`-ing past it dodges the limiter entirely.)*
 
 5. **Revocation applies live.** Edit `revoke_access_request` (`access.py`) to `async def` and
    `await chat_broker.close_user(...)` after the decision commits. *Only possible after slice 4
    — there must be a real, connected socket for revocation to close, or F1 is untestable.* Also
    land `conversation_role_for`'s live re-check here if it wasn't already exercised by a test —
    F2/F3 are what prove the re-check happens on **every** call, not once at connect.
-   → **F1–F4, S5**.
+   → **F1–F5, S5**. *(F5 added during the branch review 2026-07-20: the independent appsec pass
+   found that a revoke committing while a connect is mid-`accept()` — after the pre-accept
+   membership check passes but before the socket is registered — left the buyer connected, since
+   nothing re-checked membership after registration. Fixed with a second, synchronous re-check of
+   `conversation_role_for` immediately after `chat_broker.register(...)`, no `await` in between so
+   no further interleaving is possible; closes with `4004` if the re-check now fails. Verified by
+   removing the re-check and confirming F5 fails.)*
 
-   **Re-run M5's `test_access_decisions.py` (C1–C12) in full after this slice** — `revoke_access_request`
+   **Re-run M5's `test_access_decisions.py` (C1–C11) in full after this slice** — `revoke_access_request`
    is the one M5 endpoint this milestone edits, and "if you touch the gate, re-run the sabotage"
    (`progress.md` § M5 carryover) applies here too: temporarily remove the new `await
    chat_broker.close_user(...)` call and confirm **only** F1 goes red, nothing in M5's own suite
-   does — proof the edit added behavior without changing any of M5's.
+   does — proof the edit added behavior without changing any of M5's. *(C12's forbidden-path test
+   lives in `test_default_deny.py`'s route-table walk, not in this file — corrected 2026-07-20,
+   caught by the docs-auditor pass.)*
 
 6. **REST reads: history, mark-as-read, the conversation list.** `GET /conversations`,
    `GET /conversations/{id}/messages`, `POST /conversations/{id}/read`. *Read-only and

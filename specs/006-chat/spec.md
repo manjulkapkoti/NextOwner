@@ -125,6 +125,7 @@ Each GIVEN/WHEN/THEN below becomes **exactly one test** (constitution Article 3 
 ### E — Rate limiting (fatal — the connection ends)
 
 - **E1** GIVEN a connected user sending messages faster than the configured cap, WHEN the cap is exceeded, THEN the connection is closed with code `4009`; every message that landed **under** the cap was persisted and broadcast normally before the close (`security.md` §6 DoS surface, §7 M6 "message size/rate caps").
+- **E2** — *added during the branch review 2026-07-20.* GIVEN a connected user sending a flood of **invalid or oversized** frames faster than the cap, WHEN the cap is exceeded, THEN the connection is still closed with `4009` — an invalid frame costs the sender its rate budget exactly like a valid one, so a garbage flood cannot dodge the limiter that D1-D3's non-fatal handling would otherwise let it walk straight past. *(The first implementation validated content before rate-limiting, so `continue`-ing past an invalid frame never reached the check — E2 fails against that ordering.)*
 
 ### F — Revocation applies live (`security.md` §1.5, the M5→M6 carryover)
 
@@ -132,6 +133,7 @@ Each GIVEN/WHEN/THEN below becomes **exactly one test** (constitution Article 3 
 - **F2** GIVEN a buyer whose access was just revoked, WHEN they attempt to reconnect, THEN rejected with `4003` — a fresh attempt after revocation is indistinguishable from never having been a member (consistent with B3/B5, D2).
 - **F3** GIVEN a revoked buyer, WHEN they call `GET /api/conversations/{id}/messages` over REST, THEN `403` — the REST boundary re-checks membership on **every** call, not only at WS connect time, so a buyer who never opens the socket again is still cut off.
 - **F4** GIVEN a revoked buyer's conversation, WHEN the seller (the owner) continues to use it, THEN the seller's own access is unaffected (`200`) — revocation is buyer-scoped, not conversation-wide.
+- **F5** — *added during the branch review 2026-07-20 (independent appsec finding).* GIVEN a revoke that commits while a connect is mid-handshake — after the membership check that runs before `accept()` has already passed, but before the socket is registered with the broker — WHEN the connect proceeds, THEN it is still closed with `4004` rather than left open. `accept()` is a real `await` — a genuine yield point a revoke can land in — so the handshake re-checks membership a second time immediately after registering, with no `await` between register and the re-check, closing the window a single pre-`accept()` check leaves open. *Verify by removing the post-register re-check and confirming this fails — the connection stays open and exchanges a message despite the revoke.*
 
 ### G — Message history (REST)
 

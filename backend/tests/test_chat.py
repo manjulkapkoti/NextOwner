@@ -273,6 +273,28 @@ def test_e1_rate_cap_closes_the_connection(client, auth_headers, live_listing, c
     assert exc.value.code == 4009
 
 
+def test_e2_invalid_frames_also_consume_the_rate_budget(client, auth_headers, live_listing, chat_conversation, monkeypatch):
+    """An invalid/oversized frame must cost the sender its rate budget
+    exactly like a valid one — otherwise a garbage flood walks straight past
+    the limiter D1-D3's non-fatal handling would otherwise leave wide open
+    (branch review 2026-07-20)."""
+    from app.routers import chat as chat_router
+
+    monkeypatch.setattr(chat_router._chat_rate_limiter, "max_attempts", 3)
+    seller, buyer = _seller_and_buyer(auth_headers)
+    listing_id = live_listing(seller)
+    conv_id = chat_conversation(listing_id, buyer, seller)
+
+    with pytest.raises(WebSocketDisconnect) as exc:
+        with client.websocket_connect(_ws_url(conv_id, bearer_token(buyer))) as ws:
+            for _ in range(3):
+                ws.send_json({"text": ""})  # invalid — but still counted
+                ws.receive_json()
+            ws.send_json({"text": ""})  # the 4th invalid frame trips the cap
+            ws.receive_json()
+    assert exc.value.code == 4009
+
+
 # ── F — revocation applies live ──────────────────────────────────────────────
 
 
@@ -323,6 +345,55 @@ def test_f4_revocation_is_buyer_scoped_not_conversation_wide(client, auth_header
 
     res = client.get(f"/api/conversations/{conv_id}/messages", headers=seller)
     assert res.status_code == 200
+
+
+def test_f5_revoke_during_handshake_still_closes_the_socket(
+    client, auth_headers, live_listing, chat_conversation, monkeypatch, session
+):
+    """Independent appsec finding (branch review 2026-07-20): `accept()` is a
+    real `await` — a yield point a revoke can land in, between the pre-accept
+    membership check and the socket's registration with the broker. Simulated
+    deterministically rather than raced on real scheduler timing: the FIRST
+    call to `conversation_role_for` (the pre-accept check) revokes the row
+    directly on the same session as its side effect, mirroring "a revoke
+    committed during this connection's `await accept()`" — the SECOND call
+    (this fix's post-register re-check) then sees the now-revoked state and
+    must refuse.
+
+    Remove the post-register re-check in `chat.py` to see this fail — the
+    connection stays open despite the revoke.
+    """
+    from sqlalchemy import text
+
+    from app.routers import chat as chat_router
+    from app.permissions import conversation_role_for as real_role_for
+
+    seller, buyer = _seller_and_buyer(auth_headers)
+    listing_id = live_listing(seller)
+    conv_id = chat_conversation(listing_id, buyer, seller)
+    req_id = _access_request_id(client, buyer, listing_id)
+
+    calls = {"n": 0}
+
+    def racing_role_for(session_, conversation, user):
+        calls["n"] += 1
+        result = real_role_for(session_, conversation, user)
+        if calls["n"] == 1:
+            session.execute(text("UPDATE accessrequest SET status = 'revoked' WHERE id = :i"), {"i": req_id})
+            session.commit()
+        return result
+
+    monkeypatch.setattr(chat_router, "conversation_role_for", racing_role_for)
+
+    # The close (spec 006 F1's own pattern) happens **after** `accept()`, so
+    # the client's `__enter__` has already succeeded by the time it fires —
+    # a bare `with ...: pass` would never observe it. Only a `receive()`
+    # inside the block sees the close frame and raises.
+    with pytest.raises(WebSocketDisconnect) as exc:
+        with client.websocket_connect(_ws_url(conv_id, bearer_token(buyer))) as ws:
+            ws.receive_json()
+    assert exc.value.code == 4004
+    assert calls["n"] == 2  # the pre-accept check, then this fix's re-check
 
 
 # ── S5 — revocation reachability (a lighter D10 cousin, spec 006 S5) ────────
