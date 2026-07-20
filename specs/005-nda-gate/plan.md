@@ -180,6 +180,26 @@ each one commit. No checkboxes: the red test list is the status (`pytest -q --lf
    above exists to make this checkable.*
    → **D1–D10, S2, S6, S7, S8, X3**.
 
+   **Slice 5 is not done until D10 is verified and re-shaped — both, in this slice.**
+   *(a) Verify it:* revert the gate (make it consult `listing.status` instead of the access
+   request, or drop the revoke check) and confirm D10 **fails**. A reachability test nobody has
+   seen fail is a reachability test nobody has tested.
+   *(b) Re-shape it, only once (a) passes:* D10 currently enumerates **action sequences** —
+   8³ = 512 of them, **measured at 46s before the gate even existed**, and every one of those
+   3,072 assertion GETs starts doing real work in this slice. It is enumerating the wrong thing.
+   The reachable state space is ~30 states (request status × listing status × NDA signed), so
+   512 sequences re-walk the same few states while capping coverage at an **arbitrary depth of
+   3** — one action deeper than M3's actual bypass, which is far too thin a margin for this
+   milestone's most important test. Replace it with a **BFS over observed states to closure**:
+   from each newly-discovered state try all 8 actions, assert the invariant after each, stop
+   when no action reaches a new state. ~900 requests instead of ~6,100, and **no depth limit**.
+   *The trade-off to record in the docstring, not hide:* BFS assumes two paths reaching the same
+   *observable* state behave identically afterwards — an assumption the exhaustive product does
+   not make. Keep a depth-2 exhaustive product (64 sequences, cheap) alongside it as the
+   assumption-free backstop, and re-run (a) against the rewrite. **Prefix-sharing DFS is not the
+   fix** — it needs backtracking, and no HTTP call undoes `approve` or `close`, so replaying the
+   prefix is exactly what the product already does.
+
 6. **Re-gate document downloads** — swap `get_owned_listing` for `require_private_access` on
    the download route. *A separate slice from #5 on purpose: it proves the gate is **one
    function reused**, not a second implementation. If this slice needs new logic, the gate was
