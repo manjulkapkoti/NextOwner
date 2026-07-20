@@ -25,7 +25,14 @@
 ## ▶ NEXT ACTION
 **M7 — offers / LOI**: **`/start-milestone offers`**
 
-M7 is on the security-critical list (money/state-machine surface): approved-access **and** live-listing required to make an offer, an **atomic** accept (offer + listing flip in one transaction), seller-only decisions, `409` on an already-decided offer, and `offer_event` audit rows — mirrors M3's `listingevent`/M5's `accessrequestevent` pattern. Its scope fold-ins (`docs/milestones.md` § Scope fold-ins → M7) cover counter-offer mechanics and the sibling-offer policy (what happens to other pending offers on the same listing once one is accepted).
+M7 is on the security-critical list (money/state-machine surface):
+- Approved-access **and** live-listing required to make an offer.
+- An **atomic** accept (offer + listing flip in one transaction).
+- Seller-only decisions.
+- `409` on an already-decided offer.
+- `offer_event` audit rows — mirrors M3's `listingevent`/M5's `accessrequestevent` pattern.
+
+Its scope fold-ins (`docs/milestones.md` § Scope fold-ins → M7) cover counter-offer mechanics and the sibling-offer policy (what happens to other pending offers on the same listing once one is accepted).
 
 ## Carryover notes
 - **What the M6 build actually established (slices 1–7), worth keeping:**
