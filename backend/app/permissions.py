@@ -18,7 +18,7 @@ from sqlmodel import Session
 
 from .db import get_session
 from .errors import Forbidden, NotFound, Unauthorized
-from .models import Listing, User
+from .models import AccessRequest, Listing, User
 from .security import decode_access_token
 
 
@@ -70,6 +70,43 @@ def require_signed_nda(user: User = Depends(get_current_user)) -> User:
     if user.nda_signed_at is None:
         raise Forbidden("Platform NDA not signed", code="nda_not_signed")
     return user
+
+
+def require_request_decider(
+    request_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> AccessRequest:
+    """Trust boundary: may this caller decide this access request? (FR-14)
+
+    The request is authorized **through its listing** — load the row, load the
+    listing it belongs to, compare that listing's owner to the caller. Fetching
+    the row by id and trusting it would be the IDOR this guards against (spec
+    005 S1): a seller who owns *a* listing must not be able to decide a request
+    against *another* seller's listing by guessing an id.
+
+    Admin is **not** special-cased (C8). Curation is an admin power; deciding
+    who reads your data room is not. The seller alone holds this one.
+
+    **Returns 403 for a missing row as well as a foreign one — deliberately the
+    opposite choice from `get_owned_listing`'s 404-for-both above.** Both obey
+    `security.md` §1.4's actual rule, which is *be consistent within a
+    boundary*, and both refuse to become an existence oracle (S7: probing a real
+    id you don't own and a plainly nonexistent one must be indistinguishable).
+    They differ in which answer is the safe uniform one: a listing's existence is
+    the secret worth hiding, so that boundary hides behind "not found"; an access
+    request's id carries no such secret, and every caller who reaches here
+    without ownership deserves the same "you may not act on this" regardless of
+    whether the row is real.
+    """
+    access_request = session.get(AccessRequest, request_id)
+    if access_request is not None:
+        listing = session.get(Listing, access_request.listing_id)
+        if listing is not None and listing.owner_id == user.id:
+            return access_request
+    # One raise for every refusal — missing, foreign, or orphaned — so the three
+    # cases cannot drift into three distinguishable responses.
+    raise Forbidden("You may not decide this access request")
 
 
 def get_owned_listing(

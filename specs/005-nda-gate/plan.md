@@ -35,7 +35,7 @@ what makes B3's 409 a database guarantee rather than a check someone can forget.
 | `id` | `int` PK | |
 | `access_request_id` | FK, indexed | |
 | `actor_id` | FK `user.id` | **Server-derived from the JWT** (C9). |
-| `action` | `str` | `requested \| approved \| denied \| revoked` |
+| `action` | `str` | `approved \| denied \| revoked` — **decisions only** *(corrected at slice 4: this row originally listed `requested` too. Wrong, and criteria C9/C10 caught it — they expect one row after an approval and exactly two after approve-then-revoke. The table exists to protect values a later transition **overwrites**; `created_at` is never overwritten, so a `requested` event duplicates a fact that cannot drift.)* |
 | `from_status` / `to_status` | `str` | Self-contained: a reader knows what changed without replaying history. |
 | `created_at` | `datetime` | |
 

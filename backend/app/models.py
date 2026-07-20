@@ -191,7 +191,12 @@ class AccessRequestEvent(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     access_request_id: int = Field(foreign_key="accessrequest.id", index=True)
     actor_id: int = Field(foreign_key="user.id")          # server-derived from the JWT
-    action: str                                            # requested | approved | denied | revoked
+    # approved | denied | revoked — **decisions only.** Creating a request writes
+    # no event: this table protects values a later transition overwrites, and
+    # `AccessRequest.created_at` is never overwritten, so a `requested` row would
+    # duplicate a fact that cannot drift. M8 reads creation time off the request
+    # row itself.
+    action: str
     from_status: str
     to_status: str
     created_at: datetime = Field(default_factory=_utcnow)
