@@ -1,14 +1,25 @@
 # Progress — where we are + what's next
 
-> The semantic resume point. Updated by **`/checkpoint`** (manual, mid-milestone)
-> and automatically at each milestone's close (**`/dod`** step 6, pre-PR commit);
-> reconstructed and verified by **`/resume`** against git + tests. **Git is the
-> source of truth for what's _done_** (a merged PR = a finished milestone); this
-> file is the human-readable "you are here + ▶ next". Full design:
-> `docs/session_recovery.md`.
+> The semantic resume point.
+> - Updated by **`/checkpoint`** (manual, mid-milestone) and automatically at each milestone's close (**`/dod`** step 6, pre-PR commit).
+> - Reconstructed and verified by **`/resume`** against git + tests.
+> - **Git is the source of truth for what's _done_** (a merged PR = a finished milestone); this file is the human-readable "you are here + ▶ next".
+> - Full design: `docs/session_recovery.md`.
 
-**Milestone status:** M0–M5 ✅ merged. **App-shell (`pre-003`)** ✅ merged (#25), plus the public landing page (#26) and the register page (#27). **Design system** ✅ merged (#28). **Agentic workflow** ✅ merged (#32). **PR conventions guard** ✅ merged (#37).
-**In flight:** nothing. **M5 ⭐ (NDA + access gate)** shipped the product's trust core: `require_private_access` guarding the private payload, the data-room index and document downloads; the platform-wide NDA signed once per user; per-listing access requests with a unique constraint on `(listing, buyer)`; seller-only approve/deny/revoke; and the append-only `accessrequestevent` audit.
+**Milestone status:**
+- M0–M5 ✅ merged.
+- **App-shell** (`pre-003`) ✅ merged (#25), plus the public landing page (#26) and the register page (#27).
+- **Design system** ✅ merged (#28).
+- **Agentic workflow** ✅ merged (#32).
+- **PR conventions guard** ✅ merged (#37).
+
+**In flight:** nothing.
+**M5 ⭐ (NDA + access gate)** shipped the product's trust core:
+- `require_private_access` guarding the private payload, the data-room index and document downloads.
+- The platform-wide NDA signed once per user.
+- Per-listing access requests with a unique constraint on `(listing, buyer)`.
+- Seller-only approve/deny/revoke.
+- The append-only `accessrequestevent` audit.
 **Open PRs:** none.
 
 ## ▶ NEXT ACTION
