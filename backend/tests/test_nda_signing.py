@@ -15,7 +15,6 @@ only covers the row's creation and its own trust boundary
 
 from sqlalchemy import text
 
-
 # ── A — signing the platform NDA ─────────────────────────────────────────────
 
 def test_a1_signing_stamps_timestamp_and_server_version(client, auth_headers):

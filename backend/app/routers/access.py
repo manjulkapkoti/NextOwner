@@ -24,9 +24,14 @@ from sqlmodel import Session
 
 from ..db import get_session
 from ..errors import Conflict, Forbidden, InvalidTransition, NotFound
-from ..models import AccessRequest, AccessRequestEvent, Listing, User, _utcnow
-from ..permissions import get_current_user, require_request_decider, require_signed_nda
-from ..schemas import AccessRequestRead
+from ..models import AccessRequest, AccessRequestEvent, Listing, ListingPrivate, User, _utcnow
+from ..permissions import (
+    get_current_user,
+    require_private_access,
+    require_request_decider,
+    require_signed_nda,
+)
+from ..schemas import AccessRequestRead, ListingPrivateRead
 
 router = APIRouter(tags=["access"])
 
@@ -179,3 +184,26 @@ def revoke_access_request(
     looking at their queue.
     """
     return _decide("revoke", access_request, seller, session)
+
+
+# ── The data room (spec 005 D1-D10) ⭐ ────────────────────────────────────────
+
+
+@router.get("/listings/{listing_id}/private", response_model=ListingPrivateRead)
+def get_listing_private(
+    listing: Listing = Depends(require_private_access),
+    session: Session = Depends(get_session),
+) -> ListingPrivate:
+    """What the NDA gate unlocks (FR-15).
+
+    Read the signature: by the time this body runs, the caller has **already**
+    been proven to be the owner or an approved buyer — the endpoint does nothing
+    but fetch. That is the shape `design_implementation.md` §3.6 is describing
+    when it says an endpoint should read like a sentence, and it is why the gate
+    can be trusted: there is no second, endpoint-local check that could disagree
+    with it.
+    """
+    private = session.get(ListingPrivate, listing.id)
+    if private is None:                     # a listing with no private row yet
+        raise NotFound("Listing not found")
+    return private

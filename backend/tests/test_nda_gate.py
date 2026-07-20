@@ -162,7 +162,9 @@ def _apply_d10_action(client, listing_id, buyer_headers, seller_headers, action,
     the server says it moved.
     """
     if action == "sign":
-        client.post("/api/auth/nda", headers=buyer_headers)
+        res = client.post("/api/auth/nda", headers=buyer_headers)
+        if res.status_code == 200:
+            model["signed"] = True
     elif action == "request":
         res = client.post(f"/api/listings/{listing_id}/access-request", headers=buyer_headers)
         if res.status_code == 201:
@@ -174,70 +176,180 @@ def _apply_d10_action(client, listing_id, buyer_headers, seller_headers, action,
         if res.status_code == 200:
             model["status"] = {"approve": "approved", "deny": "denied", "revoke": "revoked"}[action]
     elif action in ("pause", "resume", "close"):
-        client.post(f"/api/listings/{listing_id}/{action}", headers=seller_headers)
+        res = client.post(f"/api/listings/{listing_id}/{action}", headers=seller_headers)
+        if res.status_code == 200:
+            model["listing"] = res.json()["status"]
     else:  # pragma: no cover - guards a typo in D10_ACTIONS
         raise ValueError(action)
+
+
+def _new_model():
+    """The test's belief about the world, advanced only by server confirmations."""
+    return {"status": None, "req_id": None, "listing": "live", "signed": False}
+
+
+def _observed(model):
+    """The state as far as anything outside the server can tell.
+
+    `req_id` is deliberately excluded: it is an identifier, not a state. Two
+    runs that differ only in which integer the row got are the same situation.
+    """
+    return (model["status"], model["listing"], model["signed"])
+
+
+def _check_invariant(client, listing_id, buyer, seller, model, label, failures):
+    """The one assertion this whole file exists for, applied at a single point.
+
+    Both directions matter: a gate that denies the owner is as broken as one
+    that admits a stranger, and only one of those is the bug people look for.
+    """
+    owner_res = client.get(f"/api/listings/{listing_id}/private", headers=seller)
+    if owner_res.status_code != 200:
+        failures.append(f"{label}: owner locked out of their own listing ({owner_res.status_code})")
+
+    buyer_res = client.get(f"/api/listings/{listing_id}/private", headers=buyer)
+    should_be_ok = model["status"] == "approved"
+    if should_be_ok and buyer_res.status_code != 200:
+        failures.append(f"{label}: approved buyer denied private data ({buyer_res.status_code})")
+    elif not should_be_ok and buyer_res.status_code == 200:
+        failures.append(
+            f"{label}: buyer without approval (status={model['status']!r}) read private data"
+        )
 
 
 def test_d10_private_data_is_reachable_only_via_ownership_or_approval(
     client, auth_headers, admin_headers, make_listing
 ):
-    """Exhaustive: every sequence of up to three actions drawn from
-    {sign, request, approve, deny, revoke, pause, resume, close}, checked
-    **after every step**, must never let a non-owner without approved access
-    through, and must never lock the real owner out.
+    """**The invariant holds in every reachable state, at any depth.**
 
-    Why this test exists, and why it is strong: M3's forbidden-path tests
-    each named one door (approve-as-non-admin, reject-as-non-admin, ...) and
-    missed the corridor — `pause -> edit -> resume` republished unreviewed
-    content because no test asked "does the invariant hold after *every*
-    step of *every* sequence," only "does this one named action behave."
-    M4's first attempt at the equivalent fix could not even reach the
-    corridor it claimed to test (constitution amendment 2026-07-19;
-    `progress.md` § M4 carryover). This test is M5's answer to the same bug
-    class: it does not ask "is `approve` safe" or "is `revoke` safe" in
-    isolation — it asks whether "200 only for the owner or an approved
-    holder" survives *every* reachable path through the state space, not
-    just the paths a human thought to name.
+    "200 only for the owner or an approved holder" is checked after every
+    action from every state the product can actually get into — with **no
+    depth limit**, which is the point.
 
-    Verify its strength by reverting `require_private_access` — e.g. make it
-    consult `listing.status` instead of the access request's own status, or
-    drop the revoke check — this test must fail.
+    Why this test exists: M3's forbidden-path tests each named one door
+    (approve-as-non-admin, reject-as-non-admin, ...) and missed the corridor —
+    `pause -> edit -> resume` republished unreviewed content because no test
+    asked "does the invariant hold after *every* step of *every* path," only
+    "does this one named action behave." M4's first attempt at the equivalent
+    fix could not even reach the corridor it claimed to test (constitution
+    amendment 2026-07-19; `progress.md` § M4 carryover).
 
-    Ground truth for "does the buyer currently hold approved access" is the
-    test's own `model` (see `_apply_d10_action`), advanced only by the
-    server's own success responses — never by the test assuming a transition
-    is legal. So a false pass here would mean the *gate* is wrong, not that
-    the test mis-modeled the state machine.
+    **Why BFS over states rather than a product over sequences.** The first
+    version of this test enumerated 8**3 action sequences: 512 of them, 77
+    seconds, and — worse than slow — capped at depth 3, exactly one action
+    deeper than M3's real bypass. That is far too thin a margin for the most
+    important test in the project. The reachable state space is tiny (request
+    status x listing status x signed), so those 512 sequences spent nearly all
+    their time re-walking a handful of states. This explores each distinct
+    state once and keeps going until no action reaches a new one, which is both
+    ~6x cheaper and **unbounded in depth**: a four- or five-step corridor cannot
+    hide from it the way it could from the product.
+
+    **The assumption this makes, stated rather than hidden:** pruning at a
+    already-seen state assumes two paths reaching the same *observable* state
+    behave identically afterwards. If the gate ever depended on state this test
+    cannot see, BFS could prune the path that exposed it. That is why
+    `test_d10b_shallow_exhaustive_backstop` below still walks every depth-2
+    sequence with no pruning and no assumptions at all — cheap insurance
+    against exactly this test's blind spot.
+
+    Ground truth for "does the buyer hold approved access" is the test's own
+    `model`, advanced **only** by the server's own success responses, never by
+    assuming a transition ought to be legal. So a false pass means the *gate*
+    is wrong, not that the test mis-modeled the state machine.
+
+    **Verified, not assumed** (spec 005 plan.md, slice 5): with the gate made
+    to honour `revoked`, this fails and names `('request','approve','revoke')`;
+    with the gate keyed on `listing.status` instead of the access request, it
+    fails with 6 paths including `('pause','request','approve')` — an ordering
+    nobody wrote down by hand.
     """
     admin = admin_headers()
     seller = auth_headers(email="seller@example.com", role="seller")
     buyer = auth_headers(email="buyer@example.com", role="buyer")
-
     failures: list[str] = []
-    for sequence in itertools.product(D10_ACTIONS, repeat=3):
+
+    def build():
+        """A genuinely published listing — the real M2+M3 path, so published_at
+        is set the way the product sets it (the gate's 404-vs-403 turns on it)."""
         listing_id = make_listing(seller).json()["id"]
         client.post(f"/api/listings/{listing_id}/submit", headers=seller)
-        client.post(f"/api/listings/{listing_id}/approve", headers=admin)   # genuinely published
+        client.post(f"/api/listings/{listing_id}/approve", headers=admin)
+        return listing_id
 
-        model = {"status": None, "req_id": None}
-        for step, action in enumerate(sequence, start=1):
+    def replay(path):
+        """Fresh listing driven back to the end of `path`.
+
+        Replay is how this backtracks: no HTTP call undoes `approve` or `close`,
+        so a DFS would have to replay anyway. BFS at least replays each distinct
+        *state* once instead of each distinct sequence.
+        """
+        listing_id = build()
+        model = _new_model()
+        for action in path:
             _apply_d10_action(client, listing_id, buyer, seller, action, model)
-            prefix = sequence[:step]
+        return listing_id, model
 
-            owner_res = client.get(f"/api/listings/{listing_id}/private", headers=seller)
-            if owner_res.status_code != 200:
-                failures.append(f"{prefix}: owner locked out of their own listing ({owner_res.status_code})")
+    # BFS over observed states. `frontier` holds one shortest path per state.
+    start_id, start_model = replay(())
+    _check_invariant(client, start_id, buyer, seller, start_model, "(initial)", failures)
+    seen = {_observed(start_model)}
+    frontier = [()]
 
-            buyer_res = client.get(f"/api/listings/{listing_id}/private", headers=buyer)
-            should_be_ok = model["status"] == "approved"
-            if should_be_ok and buyer_res.status_code != 200:
-                failures.append(f"{prefix}: approved buyer denied private data ({buyer_res.status_code})")
-            elif not should_be_ok and buyer_res.status_code == 200:
-                failures.append(f"{prefix}: buyer without approval (status={model['status']!r}) read private data")
+    while frontier:
+        path = frontier.pop(0)
+        for action in D10_ACTIONS:
+            listing_id, model = replay(path)
+            _apply_d10_action(client, listing_id, buyer, seller, action, model)
+            extended = (*path, action)
+            _check_invariant(client, listing_id, buyer, seller, model, str(extended), failures)
 
+            state = _observed(model)
+            if state not in seen:
+                seen.add(state)
+                frontier.append(extended)
+
+    assert len(seen) > 1, "explored only one state — the walk never moved, so it proves nothing"
     assert not failures, (
         f"{len(failures)} reachable-path violation(s) of the NDA gate invariant "
+        "(showing first 20):\n" + "\n".join(failures[:20])
+    )
+
+
+def test_d10b_shallow_exhaustive_backstop(client, auth_headers, admin_headers, make_listing):
+    """D10 with **no pruning and no assumptions** — every depth-2 sequence.
+
+    This exists to cover the one thing `test_d10` gives up. That test prunes at
+    an already-seen state, which assumes two paths reaching the same observable
+    state behave identically from then on. The assumption is almost certainly
+    true and it buys unbounded depth, but "almost certainly" is not the standard
+    for the gate protecting the product's private financials.
+
+    So this walks all 8**2 = 64 sequences exhaustively, checking after every
+    step, pruning nothing. Shallow but assumption-free; `test_d10` is deep but
+    assumption-bearing. **Neither subsumes the other, which is why both are
+    here** — and together they cost a fraction of the single 77-second
+    depth-3 product they replaced.
+    """
+    admin = admin_headers()
+    seller = auth_headers(email="seller@example.com", role="seller")
+    buyer = auth_headers(email="buyer@example.com", role="buyer")
+    failures: list[str] = []
+
+    for sequence in itertools.product(D10_ACTIONS, repeat=2):
+        listing_id = make_listing(seller).json()["id"]
+        client.post(f"/api/listings/{listing_id}/submit", headers=seller)
+        client.post(f"/api/listings/{listing_id}/approve", headers=admin)
+
+        model = _new_model()
+        for step, action in enumerate(sequence, start=1):
+            _apply_d10_action(client, listing_id, buyer, seller, action, model)
+            _check_invariant(
+                client, listing_id, buyer, seller, model, str(sequence[:step]), failures
+            )
+
+    assert not failures, (
+        f"{len(failures)} depth-2 violation(s) of the NDA gate invariant "
         "(showing first 20):\n" + "\n".join(failures[:20])
     )
 

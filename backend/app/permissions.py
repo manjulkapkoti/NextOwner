@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import jwt
 from fastapi import Depends, Request
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from .db import get_session
 from .errors import Forbidden, NotFound, Unauthorized
@@ -107,6 +107,61 @@ def require_request_decider(
     # One raise for every refusal — missing, foreign, or orphaned — so the three
     # cases cannot drift into three distinguishable responses.
     raise Forbidden("You may not decide this access request")
+
+
+def require_private_access(
+    listing_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Listing:
+    """⭐ **THE NDA GATE.** May this caller see this listing's data room?
+
+    The single function guarding every path to `ListingPrivate` and to the
+    documents behind it (`design_implementation.md` §3.6). One function, reused
+    by every route behind the boundary — so "a buyer without approved access is
+    denied" exists in exactly one place, and `test_nda_gate.py` tests it there.
+
+    **The resolution order is itself the security property:**
+
+    1. Listing missing → 404.
+    2. The **owner** always passes (D1). Their own data room needs no request.
+    3. An **`approved`** request for this exact `(listing, caller)` pair passes
+       (D2). Note what is *not* consulted here: `listing.status`. The gate is the
+       access request, so approval survives the seller pausing or closing the
+       listing (D9, spec D2) — and it will still hold when M12 marks a listing
+       `sold`, which `security.md` §7 M12 requires. `revoke` is the only way to
+       take access back, deliberately.
+    4. Everyone else is refused — but *how* depends on whether the listing is
+       public knowledge (spec 005 D1). **Never published → 404**, identical to a
+       listing that does not exist, because an unapproved draft is still a
+       secret and this route must not become the oracle M4's public route
+       refuses to be. **Published → 403** with `nda_access_required`, which is
+       not merely honest but necessary: the buyer's UI has to tell "gone" from
+       "ask for access", and a 404 there would make the request-access CTA
+       unbuildable.
+
+    Steps 3 and 4 are the milestone. Everything else in M5 exists to give them
+    something to check.
+    """
+    listing = session.get(Listing, listing_id)
+    if listing is None:
+        raise NotFound("Listing not found")
+    if listing.owner_id == user.id:
+        return listing
+
+    granted = session.exec(
+        select(AccessRequest).where(
+            AccessRequest.listing_id == listing_id,
+            AccessRequest.buyer_id == user.id,
+            AccessRequest.status == "approved",
+        )
+    ).first()
+    if granted is not None:
+        return listing
+
+    if listing.published_at is None:
+        raise NotFound("Listing not found")
+    raise Forbidden("NDA access not granted", code="nda_access_required")
 
 
 def get_owned_listing(

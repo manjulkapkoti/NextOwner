@@ -280,3 +280,18 @@ class AccessRequestRead(SQLModel):
     status: str
     created_at: datetime
     decided_at: datetime | None
+
+
+class ListingPrivateRead(SQLModel):
+    """The data room — what the NDA gate unlocks (FR-15).
+
+    Standalone, **not** a subclass of `ListingRead`, for the same reason
+    `ListingPublic` is (spec 004 D2): inheritance would let a field added to the
+    owner's view silently join a gated payload. Here the duplication is cheap —
+    three fields — and the independence is the control.
+    """
+
+    listing_id: int
+    company_name: str
+    website_url: str
+    detailed_financials: str | None = None
