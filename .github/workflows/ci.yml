@@ -140,6 +140,26 @@ jobs:
         run: python scripts/test_pr_conventions.py
       - name: Check commits and the PR body
         run: python scripts/check_pr_conventions.py --base ${{ github.base_ref }}
+      # A different guard, same reasoning: a squash-merge with no --body lets
+      # GitHub default to concatenating every branch commit onto main (M5,
+      # PR #38). Tested here — on every PR — for the same "false positive is a
+      # wall" reason; the actual merge-commit check is push-only, below.
+      - name: Test the squash-merge guard
+        run: python scripts/test_squash_merge_guard.py
+
+  # The squash-merge counterpart to status-freshness above: bound to the merge,
+  # not to a command anyone could skip. `.claude/hooks/guard_squash_merge.py`
+  # blocks the mistake before the merge command runs; this catches whatever
+  # reaches `main` another way (a browser merge, a different machine, a hook
+  # that never fired) — exactly the M5 / PR #38 failure, after the fact.
+  merge-commit-shape:
+    name: Merge commit shape (main only)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the squash-merge commit landed short
+        run: python scripts/check_last_main_commit.py
 
   backend:
     name: Backend (pytest)

@@ -19,7 +19,11 @@ Closes out a milestone: once its PR is approved, squash-merge it (if not already
 3. **Read the status** — `state` (OPEN | MERGED | CLOSED), `reviewDecision` (APPROVED | REVIEW_REQUIRED | CHANGES_REQUESTED), `mergeable` (MERGEABLE | CONFLICTING).
 
 4. **Decide:**
-   - **OPEN + MERGEABLE + (APPROVED, or the user explicitly said to close the feature)** → `gh pr merge <n> --squash --delete-branch`.
+   - **OPEN + MERGEABLE + (APPROVED, or the user explicitly said to close the feature)** → merge with an **explicit, short body** — one line, two at most:
+     ```bash
+     gh pr merge <n> --squash --delete-branch --body "<one short sentence — what this milestone shipped>"
+     ```
+     **Never bare `gh pr merge <n> --squash --delete-branch`.** With no `--body`, GitHub falls back to concatenating every commit on the branch into the commit that lands on `main` — a milestone branch here routinely carries 15–20 deliberately verbose slice/fix/docs commits, and it happened for real closing M5 (PR #38): a 262-line squash commit. `.claude/hooks/guard_squash_merge.py` now blocks the bare form; write the short body instead of routing around it. Full detail: `docs/git_strategy.md` § Squash-merge commit shape, memory `squash-merge-commit-message`.
    - **OPEN + CONFLICTING** → stop; do **not** merge. The branch is behind an updated `main` — run the **conflict-recovery loop** (§ below) on the branch, then retry.
    - **OPEN + CHANGES_REQUESTED, or not approved and no explicit go-ahead** → stop. Tell the user it needs approval first; never merge an unreviewed/blocked PR.
    - **Already MERGED** (they merged in the browser) → skip the merge; go straight to sync.
