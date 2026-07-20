@@ -57,6 +57,17 @@ export const RequestAccessPanel = observer(function RequestAccessPanel({
 
     try {
       await accessStore.loadPrivate(listingId)
+      // The file index, behind the same gate. Without this the data room
+      // renders empty however many documents the seller uploaded — the gap the
+      // M5 appsec review caught, which the new endpoint alone did not close.
+      // Failing here must not re-lock a room the gate already opened, so the
+      // index is best-effort: the payload is the access decision, the file list
+      // is a detail of it.
+      try {
+        await accessStore.loadDocuments(listingId)
+      } catch {
+        /* leave the list empty; the private payload is already authorized */
+      }
       setView('unlocked')
     } catch {
       // A 403 is the gate working. Which locked state to show depends on
@@ -109,7 +120,19 @@ export const RequestAccessPanel = observer(function RequestAccessPanel({
       <PrivateSection
         listingId={listingId}
         data={accessStore.privateData}
-        documents={documents}
+        // Mapped here rather than teaching `PrivateSection` the API's shape:
+        // the store speaks the server's language (`original_filename`), the
+        // display component speaks a display language (`filename`), and the
+        // translation lives at the one seam between them. The `documents` prop
+        // still wins when supplied, so a caller can inject its own list.
+        documents={
+          documents.length > 0
+            ? documents
+            : accessStore.documents.map((doc) => ({
+                id: doc.id,
+                filename: doc.original_filename,
+              }))
+        }
       />
     )
   }

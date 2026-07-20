@@ -73,6 +73,7 @@ function stubApi({
     code: 'nda_access_required',
     request_id: 'req_1',
   } as unknown,
+  documents = [] as { id: number; original_filename: string }[],
 } = {}) {
   authStore.user = meBody(ndaSignedAt) as unknown as typeof authStore.user
 
@@ -98,6 +99,9 @@ function stubApi({
     }
     if (url.match(/\/listings\/\d+\/private$/) && method === 'GET') {
       return jsonResponse(privateStatus, privateBody)
+    }
+    if (url.match(/\/listings\/\d+\/documents$/) && method === 'GET') {
+      return jsonResponse(200, documents)
     }
     return jsonResponse(404, { detail: 'unexpected call in test', code: 'not_found' })
   })
@@ -225,5 +229,28 @@ describe('RequestAccessPanel', () => {
 
     await waitFor(() => expect(screen.getByText(PRIVATE_DATA.company_name)).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /request access/i })).not.toBeInTheDocument()
+  })
+
+  // The gap the M5 appsec review found, and the reason it survived the first
+  // fix: the backend grew a document-index route, but nothing called it. This
+  // component renders `PrivateSection`, and the J3 test in PrivateSection's own
+  // file passes `documents` in **as a prop** — so it could never fail for a
+  // missing fetch. Asserting the network call is what closes that: a prop the
+  // app never supplies is not evidence the app works.
+  it('J3: fetches the data-room index on unlock so an approved buyer sees real documents', async () => {
+    const fetchMock = stubApi({
+      myAccessRequests: [{ id: 55, listing_id: 7, status: 'approved', created_at: '2026-07-17T00:00:00Z' }],
+      privateStatus: 200,
+      privateBody: PRIVATE_DATA,
+      documents: [{ id: 5, original_filename: 'financials.pdf' }],
+    })
+    renderPanel()
+
+    await waitFor(() => expect(screen.getByText(PRIVATE_DATA.company_name)).toBeInTheDocument())
+    // The index was actually requested...
+    const calls = fetchMock.mock.calls.map((c) => String(c[0]))
+    expect(calls.some((u) => u.match(/\/listings\/7\/documents$/))).toBe(true)
+    // ...and its contents reached the user, mapped to the display shape.
+    expect(await screen.findByRole('button', { name: /financials\.pdf/i })).toBeInTheDocument()
   })
 })

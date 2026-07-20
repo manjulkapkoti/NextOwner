@@ -18,6 +18,14 @@ export interface ListingPrivate {
   detailed_financials: string | null
 }
 
+export interface DataRoomDocument {
+  id: number
+  original_filename: string
+  content_type: string
+  size_bytes: number
+  uploaded_at: string
+}
+
 export interface MyAccessRequest {
   id: number
   listing_id: number
@@ -44,6 +52,7 @@ export type AccessStatus =
 class AccessStore {
   status: AccessStatus = 'idle'
   privateData: ListingPrivate | null = null
+  documents: DataRoomDocument[] = []
   myRequests: MyAccessRequest[] = []
 
   constructor() {
@@ -65,6 +74,21 @@ class AccessStore {
 
   requestFor(listingId: number): MyAccessRequest | undefined {
     return this.myRequests.find((row) => row.listing_id === listingId)
+  }
+
+  /** The data room's file index — fetched only once the gate has opened.
+   *
+   * Behind `require_private_access` server-side, exactly like the payload and
+   * the downloads. Added after the M5 appsec review found the download route
+   * unreachable in practice: a `doc_id` appeared nowhere a buyer could see, so
+   * an approved buyer got an empty data room. The endpoint alone did not fix
+   * that — this call is the other half.
+   */
+  async loadDocuments(listingId: number): Promise<void> {
+    const rows = (await api(`/listings/${listingId}/documents`)) as DataRoomDocument[]
+    runInAction(() => {
+      this.documents = rows
+    })
   }
 
   /** Fetch the data room. A 403 locks; only a real failure errors. */
@@ -114,6 +138,7 @@ class AccessStore {
   reset(): void {
     this.status = 'idle'
     this.privateData = null
+    this.documents = []
     this.myRequests = []
   }
 }
