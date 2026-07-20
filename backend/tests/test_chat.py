@@ -67,8 +67,9 @@ def test_a1_approval_creates_a_conversation(client, auth_headers, live_listing, 
 
 
 def test_a2_denied_request_creates_no_conversation(client, auth_headers, live_listing, request_access, session):
-    from app.models import Conversation
     from sqlmodel import select
+
+    from app.models import Conversation
 
     seller, buyer = _seller_and_buyer(auth_headers)
     listing_id = live_listing(seller)
@@ -378,8 +379,8 @@ def test_f5_revoke_during_handshake_still_closes_the_socket(
     """
     from sqlalchemy import text
 
-    from app.routers import chat as chat_router
     from app.permissions import conversation_role_for as real_role_for
+    from app.routers import chat as chat_router
 
     seller, buyer = _seller_and_buyer(auth_headers)
     listing_id = live_listing(seller)
@@ -421,8 +422,9 @@ def test_s5_access_reflects_only_the_current_status(client, auth_headers, live_l
     `conversation_role_for` on the conversation's mere existence instead of
     the access request's current status) to see this fail on the second half.
     """
-    from app.models import Conversation
     from sqlmodel import select
+
+    from app.models import Conversation
 
     seller, buyer = _seller_and_buyer(auth_headers)
     listing_id = live_listing(seller)

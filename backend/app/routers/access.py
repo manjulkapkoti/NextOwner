@@ -207,7 +207,9 @@ def approve_access_request(
     the defense-in-depth backstop, not the only line of defense.
     """
     result = _decide("approve", access_request, seller, session)
-    session.add(Conversation(listing_id=access_request.listing_id, buyer_id=access_request.buyer_id))
+    session.add(
+        Conversation(listing_id=access_request.listing_id, buyer_id=access_request.buyer_id)
+    )
     session.commit()
     return result
 
@@ -248,7 +250,9 @@ async def revoke_access_request(
         )
     ).first()
     if conversation is not None:
-        await chat_broker.close_user(conversation.id, access_request.buyer_id, code=4004, reason="access_revoked")
+        await chat_broker.close_user(
+            conversation.id, access_request.buyer_id, code=4004, reason="access_revoked"
+        )
     return result
 
 

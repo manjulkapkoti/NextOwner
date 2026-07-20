@@ -168,7 +168,9 @@ def list_conversations(
         is_seller = listing.owner_id == user.id
         counterpart_id = conversation.buyer_id if is_seller else listing.owner_id
         counterpart = session.get(User, counterpart_id)
-        last_read = conversation.seller_last_read_at if is_seller else conversation.buyer_last_read_at
+        last_read = (
+            conversation.seller_last_read_at if is_seller else conversation.buyer_last_read_at
+        )
 
         unread_query = select(func.count()).select_from(Message).where(
             Message.conversation_id == conversation.id, Message.sender_id != user.id
@@ -201,7 +203,9 @@ def list_conversations(
 def get_conversation_messages(
     conversation: Conversation = Depends(require_conversation_member),
     before: int | None = None,
-    limit: int = Query(default=settings.chat_history_page_limit, ge=1, le=settings.chat_history_page_limit),
+    limit: int = Query(
+        default=settings.chat_history_page_limit, ge=1, le=settings.chat_history_page_limit
+    ),
     session: Session = Depends(get_session),
 ) -> list[Message]:
     """The most recent page, newest first; `before` walks further back
