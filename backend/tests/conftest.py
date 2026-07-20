@@ -28,7 +28,7 @@ os.environ.setdefault("UPLOAD_DIR", tempfile.mkdtemp(prefix="nextowner-test-uplo
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 from sqlmodel.pool import StaticPool
 
 from app.db import get_session
@@ -36,6 +36,16 @@ from app.main import app
 
 TEST_JWT_SECRET = os.environ["JWT_SECRET"]
 TEST_JWT_ALG = os.environ["JWT_ALGORITHM"]
+
+
+def bearer_token(headers: dict) -> str:
+    """The raw JWT out of an `Authorization` header dict.
+
+    WebSocket handshakes carry the token as a query parameter (spec 006 D6 —
+    browsers cannot attach a custom header to a WS handshake), so chat tests
+    need the bare string `auth_headers` never hands back on its own.
+    """
+    return headers["Authorization"].removeprefix("Bearer ")
 VALID_PW = "correct horse battery staple"
 
 
@@ -83,6 +93,12 @@ def _fresh_rate_limiters():
 
     auth_router._login_limiter.backend = InMemoryRateLimiterBackend()
     auth_router._register_limiter.backend = InMemoryRateLimiterBackend()
+    try:
+        from app.routers import chat as chat_router
+
+        chat_router._chat_rate_limiter.backend = InMemoryRateLimiterBackend()
+    except ImportError:
+        pass  # M6 slice 1 hasn't landed yet — nothing to reset
     yield
 
 
@@ -305,3 +321,34 @@ def access_events(session):
         ]
 
     return _events
+
+
+# ── M6 chat helpers ──────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def chat_conversation(client, session, granted_access):
+    """Walk M5's real approval path, then read back the `Conversation` row M6's
+    approve endpoint creates (spec 006 A1). Returns the conversation id.
+
+    Reads the row directly rather than through an endpoint — there is no
+    product route that answers "what is the conversation id for this listing
+    and this buyer" (by design: entry to chat is the conversation list,
+    spec 006 D5), so a fixture reaching past the API here is exactly the
+    testing_guide exception for setup, not a hidden transition.
+    """
+
+    def _make(listing_id, buyer_headers, seller_headers):
+        granted_access(listing_id, buyer_headers, seller_headers)
+        from app.models import Conversation
+
+        buyer_id = client.get("/api/auth/me", headers=buyer_headers).json()["id"]
+        conversation = session.exec(
+            select(Conversation).where(
+                Conversation.listing_id == listing_id,
+                Conversation.buyer_id == buyer_id,
+            )
+        ).first()
+        return conversation.id if conversation is not None else None
+
+    return _make
