@@ -42,6 +42,36 @@ Rules:
 - **Never** include stack traces, SQL, exception class names, file paths, or private/identity fields in any error body (`security.md` §Info leakage).
 - `code` slugs are stable, lowercase, snake_case (`nda_access_required`, `invalid_transition`, `listing_not_live`, `offer_already_decided`).
 
+### 1.1 The WebSocket error contract (chat, M6)
+
+WebSockets have no response body to carry `{detail, code}` — a closing socket has a **close
+code** and an optional reason string instead, and an otherwise-open one can carry a small JSON
+error frame. Two different shapes for two different severities (spec 006 D1, `security.md` §1.5):
+
+**Close codes — the connection ends.** Custom, in the RFC 6455 private-use range (4000–4999):
+
+| Close code | Meaning | Raised when |
+|---|---|---|
+| `4001` | `auth_failed` | missing/expired/tampered token at connect — identity resolves before membership, so this is never confused with `4003` |
+| `4003` | `not_a_member` | authenticated but not a participant (including a revoked buyer's fresh attempt), or the conversation doesn't exist — one code for both, never an existence oracle |
+| `4004` | `access_revoked` | a **live** connection is force-closed because access was just revoked — distinct from `4003` on purpose: this answers "you were, and it just ended," not "you never were" |
+| `4009` | `rate_limited` | the per-connection message-rate cap was exceeded |
+
+Any other close code (`1000`/`1001` — a normal close, e.g. the user navigating away) is not part
+of this contract and the frontend shows nothing for it.
+
+**Error frames — the connection survives.** Sent over an otherwise-open socket, shaped
+`{"type": "error", "code": "..."}`:
+
+| Frame `code` | Meaning |
+|---|---|
+| `invalid_message` | the frame isn't valid JSON, or `text` is missing/blank/non-string |
+| `message_too_long` | `text` exceeds the configured cap (`chat_message_max_chars`) |
+
+Rules mirror §1's: codes are stable, lowercase, snake_case; nothing here ever carries stack
+traces, SQL, or private/identity fields; a spoofed `sender_id` in a message payload is never
+read, let alone echoed back in an error.
+
 ## 2. Backend pattern
 
 - **`backend/app/errors.py`** — a small hierarchy:
