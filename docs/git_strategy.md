@@ -111,6 +111,27 @@ A fourth job, **PR conventions**, runs `scripts/check_pr_conventions.py` on **pu
 
 Escape hatch for a deliberate one-off: put `pr-conventions: skip` in the command, matching the `--no-verify` convention. Run the check locally with `python scripts/check_pr_conventions.py --base main`.
 
+### Squash-merge commit shape — the fifth check (added 2026-07-20)
+
+The commit that lands on `main` at `/close-feature` must be **short — one line, two at most.** `gh pr merge --squash` with no explicit `--body` does not leave it blank; it falls back to GitHub's own default, which is the **full concatenation of every commit on the branch**. It happened for real closing M5 (PR #38): a twenty-commit branch — each commit deliberately verbose, per the convention below — landed on `main` as a single 262-line commit.
+
+**Two layers, same shape as PR conventions:**
+
+| Layer | Where | Catches |
+|---|---|---|
+| `.claude/hooks/guard_squash_merge.py` | `PreToolUse` on Bash | The mistake **before the merge runs**. Requires an explicit `-b`/`--body` (or `-F`/`--body-file`) on every `--squash` merge, and caps its content at one non-blank line — an empty body is fine, that is the "one line" case (title only). |
+| **Merge commit shape** CI job | Push to `main` only | The backstop for anything that reaches `main` another way — a browser merge, a different machine, a hook that never fired. Reads `git log -1 --format=%B HEAD` and fails if it exceeds 2 non-blank lines. |
+
+The hook's own tests (`scripts/test_squash_merge_guard.py`) run as a step in the **PR conventions** job above, for the same reason `test_pr_conventions.py` does: a guard that blocks a merge is a wall if it's wrong, so it gets tested before it's trusted. Escape hatch: `merge-body: skip` in the command.
+
+**In practice:** when running `/close-feature`, pass an explicit short body —
+
+```bash
+gh pr merge <n> --squash --delete-branch --body "One short summary line."
+```
+
+— or `--body ""` for the title alone. See memory `squash-merge-commit-message`.
+
 ## Conventions
 
 - **Branches:** `feat|fix|chore/NNN-slug` (e.g. `feat/001-auth-roles`).
