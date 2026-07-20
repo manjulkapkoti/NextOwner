@@ -69,7 +69,14 @@ describe('AccessRequestQueue', () => {
 
     await waitFor(() => expect(screen.getByText('Jordan Buyer')).toBeInTheDocument())
     expect(screen.getByText(/250,?000/)).toBeInTheDocument()
-    expect(screen.getByText(/saas/i)).toBeInTheDocument()
+    // Matches the target-industries line specifically. This assertion read
+    // `/saas/i` when first written, which was unsatisfiable: `experience`
+    // below is "Former operator of two SaaS exits", so a bare /saas/i matches
+    // *two* elements and `getByText` throws — the test could only have passed
+    // by NOT rendering target_industries, the very field FR-14 and criterion
+    // G1 require the seller to see. Narrowed rather than relaxed: it now pins
+    // both industries instead of one substring.
+    expect(screen.getByText(/saas, ecommerce/i)).toBeInTheDocument()
     expect(screen.getByText(/former operator of two saas exits/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /approve/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /deny/i })).toBeInTheDocument()

@@ -10,8 +10,10 @@ import {
   Routes,
   useLocation,
   useNavigate,
+  useParams,
 } from 'react-router-dom'
 import { brandTint } from './theme'
+import { AccessRequestQueue } from './components/AccessRequestQueue'
 import { AdminQueue } from './components/AdminQueue'
 import { BrowseListings } from './components/BrowseListings'
 import { ListingDetail } from './components/ListingDetail'
@@ -209,6 +211,26 @@ function LandingRoute() {
   )
 }
 
+// M5 — the seller's access-request queue for one listing (FR-14, spec 005 J4).
+// The route guard is UX only; the real boundary is the server's
+// `get_owned_listing` on the queue endpoint, which 404s a listing that is not
+// yours (spec 005 D7/G2).
+function ListingRequestsRoute() {
+  const { id } = useParams()
+  return (
+    <>
+      <Typography variant="h5" component="h1" gutterBottom>
+        Access requests
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        These buyers have asked to see this listing&apos;s private details. You choose who
+        does.
+      </Typography>
+      <AccessRequestQueue listingId={Number(id)} />
+    </>
+  )
+}
+
 export function AppShell() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -267,6 +289,20 @@ export function AppShell() {
                 <AdminQueue />
               </Container>
             </RequireAdmin>
+          }
+        />
+        {/* M5 — the seller decides who sees their data room (FR-14). Route-
+            guarded by RequireAuth for UX only; the real boundary is the
+            server's `get_owned_listing` on the queue endpoint, which 404s a
+            listing that is not yours (spec 005 D7/G2). */}
+        <Route
+          path="/my-listings/:id/requests"
+          element={
+            <RequireAuth>
+              <Container maxWidth="md" sx={{ mt: 4 }}>
+                <ListingRequestsRoute />
+              </Container>
+            </RequireAuth>
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />
