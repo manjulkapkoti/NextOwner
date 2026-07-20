@@ -593,10 +593,10 @@ def test_e7_the_document_index_is_behind_the_same_gate_as_the_files(
     """A filename is itself confidential (spec 005 E7).
 
     "acme-holdings-cap-table.pdf" leaks both identity and circumstance, so the
-    index must not be a lighter boundary than the download. Checked in all
-    three denied states, not just one, because the gate has three ways to say no
-    and a listing route that consulted only `requested` would still pass a
-    single-state test.
+    index must not be a lighter boundary than the download. Checked in every
+    state the gate can refuse from — `requested`, `revoked`, `denied`, and a
+    stranger with no request at all — because a listing route that consulted
+    only `requested` would still pass a single-state test.
     """
     seller, buyer = _seller_and_buyer(auth_headers)
     listing_id = live_listing(seller)
@@ -617,3 +617,17 @@ def test_e7_the_document_index_is_behind_the_same_gate_as_the_files(
     # a stranger who never asked
     stranger = auth_headers(email="stranger@example.com", role="buyer")
     assert client.get(f"/api/listings/{listing_id}/documents", headers=stranger).status_code == 403
+
+    # `denied` — the fourth refusal, on its own listing because a decided
+    # request is terminal (spec D3) and this buyer's row is already spent.
+    # Added after the re-verification round pointed out the docstring claimed a
+    # state the walk never entered: coverage was fine (D10's BFS reaches
+    # `denied`), but a test file that names a state should visit it.
+    other_listing = live_listing(seller)
+    _upload(client, other_listing, seller)
+    denied_buyer = auth_headers(email="denied@example.com", role="buyer")
+    denied_id = request_access(other_listing, denied_buyer).json()["id"]
+    client.post(f"/api/access-requests/{denied_id}/deny", headers=seller)
+    res = client.get(f"/api/listings/{other_listing}/documents", headers=denied_buyer)
+    assert res.status_code == 403
+    assert res.json()["code"] == "nda_access_required"

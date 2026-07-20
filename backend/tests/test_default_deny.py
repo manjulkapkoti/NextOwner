@@ -52,7 +52,27 @@ def _routes(client):
 
 
 def test_no_route_serves_data_without_a_token(client):
-    """No route outside the allowlist answers 200 to an anonymous caller."""
+    """Every non-public route **refuses** an anonymous caller — 401 or 403.
+
+    Note what is asserted: the refusal, not merely the absence of a 200. The
+    first version of this test checked `!= 200`, which is weaker than it looks.
+    Four routes take a required body (`POST /listings`, `PUT /listings/{id}`,
+    `POST /listings/{id}/reject`, `POST /auth/roles`); remove the gate from one
+    and the anonymous call falls through to Pydantic and returns **422** — not
+    200 — so the test would have stayed green over an ungated route, and those
+    four are exactly the mass-assignment-sensitive ones.
+
+    That also explains why the original sabotage check looked convincing: the
+    route sabotaged to prove this test works was a bodyless GET, which *does*
+    return 200 when ungated. The sabotage confirmed the mechanism on the easy
+    half and could not have surfaced this. (Same lesson as spec 004's S9 — a
+    check is only as strong as the case it can actually reach.)
+
+    **Scope, so nobody over-reads a green run:** this proves *authentication*
+    only. A route that authenticates but forgets to **authorize** — any logged-in
+    user reading another user's data — passes this cleanly. It is a floor, and
+    it does not retire `security.md` §8's touched→must-cover matrix.
+    """
     routes = _routes(client)
 
     # Guards against the check silently examining nothing — the failure mode
@@ -64,10 +84,15 @@ def test_no_route_serves_data_without_a_token(client):
     for method, path in routes:
         concrete = re.sub(r"\{[^}]+\}", "1", path)
         res = client.request(method, concrete)          # deliberately no auth header
-        if res.status_code == 200 and (method, path) not in PUBLIC_BY_DESIGN:
-            leaks.append(f"{method} {path} returned 200 without a token")
+        if (method, path) in PUBLIC_BY_DESIGN:
+            continue
+        if res.status_code not in (401, 403):
+            leaks.append(
+                f"{method} {path} answered {res.status_code} to an anonymous caller "
+                "(expected 401 or 403 — a gate should refuse before anything else runs)"
+            )
 
-    assert not leaks, "routes reachable unauthenticated:\n" + "\n".join(leaks)
+    assert not leaks, "routes that did not refuse an anonymous caller:\n" + "\n".join(leaks)
 
 
 def test_the_public_allowlist_matches_reality(client):

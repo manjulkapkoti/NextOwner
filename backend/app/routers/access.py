@@ -107,30 +107,30 @@ def create_access_request(
         # a prior SELECT — a check-then-insert would race two concurrent
         # requests into two rows (security.md §6 race conditions).
         session.commit()
-    except IntegrityError as exc:
+    except IntegrityError:
         session.rollback()
-        # Narrowed to the uniqueness violation. Catching every IntegrityError
-        # here would report "you already requested this" for an unrelated
-        # constraint failure — e.g. the listing row disappearing between the
-        # `session.get` above and this commit, which is a foreign-key error and
-        # a completely different situation. Never a leak, but a diagnostic that
-        # lies to whoever debugs it next. Anything else re-raises and becomes
-        # the generic 500 (the error contract, `error_handling.md` §7).
+        # Which constraint failed is answered by **asking the database**, not by
+        # reading the driver's prose. Catching every IntegrityError as "already
+        # requested" would misreport an unrelated failure — the listing row
+        # disappearing between the `session.get` above and this commit is a
+        # foreign-key error and a completely different situation. Never a leak,
+        # but a diagnostic that lies to whoever debugs it next.
         #
-        # Matched two ways because the dialects disagree: **Postgres** names the
-        # violated constraint, **SQLite** does not — it spells out the columns
-        # ("UNIQUE constraint failed: accessrequest.listing_id, ..."). Checking
-        # only the constraint name passed review and then turned every duplicate
-        # into a 500 on SQLite, which is the database we actually run on today.
-        # A dialect-specific string check is exactly the kind of thing the
-        # Postgres swap breaks, so it recognises both forms rather than betting
-        # on one.
-        detail = str(getattr(exc, "orig", exc)).lower()
-        is_duplicate_pair = "uq_accessrequest_listing_buyer" in detail or (
-            "unique" in detail and "listing_id" in detail and "buyer_id" in detail
-        )
-        if not is_duplicate_pair:
-            raise
+        # This was a string match twice, and both versions were wrong in a way
+        # only the next environment would reveal. Matching the Postgres
+        # constraint name 500'd every duplicate on SQLite (caught by `test_b3`).
+        # Matching both dialects' wordings still breaks when an Alembic naming
+        # convention **renames** the constraint at the Postgres swap: Postgres
+        # quotes the name and never the columns, so neither branch would fire.
+        # A re-query has no wording to bet on and no dialect to track.
+        duplicate = session.exec(
+            select(AccessRequest).where(
+                AccessRequest.listing_id == listing_id,
+                AccessRequest.buyer_id == user.id,
+            )
+        ).first()
+        if duplicate is None:
+            raise                      # some other constraint — let it 500 honestly
         raise Conflict(
             "An access request for this listing already exists",
             code="access_request_exists",
