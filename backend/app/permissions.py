@@ -18,7 +18,7 @@ from sqlmodel import Session, select
 
 from .db import get_session
 from .errors import Forbidden, NotFound, Unauthorized
-from .models import AccessRequest, Listing, User
+from .models import AccessRequest, Conversation, Listing, User
 from .security import decode_access_token
 
 
@@ -162,6 +162,59 @@ def require_private_access(
     if listing.published_at is None:
         raise NotFound("Listing not found")
     raise Forbidden("NDA access not granted", code="nda_access_required")
+
+
+def conversation_role_for(session: Session, conversation: Conversation, user: User) -> str | None:
+    """Trust boundary logic for chat (M6, spec 006), shared by two callers
+    that can't both use `Depends`: `require_conversation_member` below (REST,
+    raises) and the WebSocket handshake (`routers/chat.py`, which must
+    `close()` the socket rather than let an `AppError` propagate somewhere a
+    WebSocket has no JSON response to render it into).
+
+    A deliberate 5-line duplicate of `require_private_access`'s "approved
+    access" query (spec 006 plan.md), not a refactor of it — M6 must not be
+    able to introduce a regression in M5's crown-jewel gate by editing it.
+
+    The owner of the conversation's listing always passes, unconditionally
+    (mirrors D1 on the NDA gate). The buyer passes **only if** an `approved`
+    `AccessRequest` for this exact `(listing, buyer)` pair exists **right
+    now** — re-checked live on every call, not inferred from the conversation
+    row's mere existence, which is what makes F1-F3 (revocation applying
+    live, REST included) possible. Returns `None` for everyone else,
+    uniformly (spec 006 D2/S4) — never distinguishes "no such conversation"
+    from "not yours."
+    """
+    listing = session.get(Listing, conversation.listing_id)
+    if listing is not None and listing.owner_id == user.id:
+        return "seller"
+    if user.id == conversation.buyer_id:
+        approved = session.exec(
+            select(AccessRequest).where(
+                AccessRequest.listing_id == conversation.listing_id,
+                AccessRequest.buyer_id == user.id,
+                AccessRequest.status == "approved",
+            )
+        ).first()
+        if approved is not None:
+            return "buyer"
+    return None
+
+
+def require_conversation_member(
+    conversation_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Conversation:
+    """REST wrapper around `conversation_role_for` — the chat history and
+    read-receipt endpoints' trust boundary (spec 006 G3, H4)."""
+    conversation = session.get(Conversation, conversation_id)
+    if conversation is not None and conversation_role_for(session, conversation, user) is not None:
+        return conversation
+    # One raise for every refusal — missing, foreign, or revoked — mirroring
+    # `require_request_decider`'s reasoning: a conversation id carries no
+    # secret an unpublished listing would (D2), so this boundary never
+    # distinguishes "doesn't exist" from "not yours anymore."
+    raise Forbidden("You may not access this conversation", code="not_a_conversation_member")
 
 
 def get_owned_listing(
