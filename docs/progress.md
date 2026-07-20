@@ -12,9 +12,23 @@
 **Open PRs:** none yet — the PR opens once the review fixes are committed.
 
 ## ▶ NEXT ACTION
-**Open the M5 PR** — `/open-pr`. The build and the review are done; what remains is the PR itself, then human approval and `/close-feature`.
+**Open the M5 PR** — the build and the review are both complete. Run `/open-pr`.
 
-**Review outcome:** the appsec pass found **no blocking findings**. Its most valuable finding was non-blocking and real — criterion J3 was *green in test but dead in the product*: there was no route listing a listing's documents, so an approved buyer reached an empty data room and could never learn a `doc_id`. The component test passed `documents` in as a prop, supplying exactly what the app did not. Fixed by adding `GET /api/listings/{id}/documents` behind the same gate (criteria **E6/E7**). The docs audit found a status value in binding prose (`security.md` said revocation was `approved → denied`; the state machine has no such move) and two of my own notes that were confidently wrong in detail. All fixed.
+Everything is committed and pushed on `feat/005-nda-gate` (HEAD `afdc85d`). **Paused here 2026-07-20 at the owner's request (usage limit), not blocked on anything.**
+
+**State: green.** 198 backend + 71 frontend, `npm test` exit 0, ruff/eslint/tsc clean, 64/64 M5 criteria cited.
+
+**Review outcome — no blocking findings.** The independent `appsec-engineer` pass (opus) and a `docs-auditor` pass both ran; every finding is either fixed or listed below. The bounded re-verification round ran once and its only standing objection (finding #1 half-fixed) is **now closed** by `afdc85d`.
+
+### Four non-blocking items the review left open — do these first on resume
+Each is small, each has a named reason, none holds the PR:
+
+1. **`test_default_deny.py` — assert `status_code in (401, 403)` instead of `!= 200`.** *(One line.)* Four routes take a required body (`POST /listings`, `PUT /listings/{id}`, `POST /listings/{id}/reject`, `POST /auth/roles`). Remove a gate from one and the anonymous call falls through to Pydantic and returns **422, not 200** — so the test stays green over an ungated route. A pass is not evidence of a gate for exactly the four mass-assignment-sensitive routes. It also explains why the sabotage looked clean: the sabotaged route was a bodyless GET, which *does* return 200.
+2. **Same file — say in the docstring that this proves *authentication* only.** A route that authenticates but forgets to authorize passes it. It is a floor; it must not be read as retiring the `security.md` §8 matrix.
+3. **`IntegrityError` in `access.py` — replace the string match with a re-query.** On the exception: roll back, `select` for an existing `(listing_id, buyer_id)` row, present → 409, absent → re-raise. The current matcher handles SQLite and stock Postgres/MySQL, but an Alembic naming convention that **renames the constraint** breaks both branches (Postgres quotes the name, never the columns) → a duplicate request 500s instead of 409. Same class as the bug `test_b3` caught, displaced to the Postgres swap.
+4. **`test_e7` docstring says "all three denied states" but does not probe `denied`.** Coverage is genuinely fine (D10's BFS reaches `denied` and runs parity there); the claim is one state wider than the walk. Add the probe or narrow the sentence.
+
+Also worth recording when convenient: `_check_state_parity`'s green result means *"the two gated routes agree in every reachable state"*, **not** *"their bodies are equivalent"* — `get_listing_private` 404s on a missing `ListingPrivate` row while `list_listing_documents` returns `[]`. That state is unreachable today because both the create path and the seed always write the row.
 
 ## Carryover notes
 - **What the M5 build actually established (slices 1–7), worth keeping:**
