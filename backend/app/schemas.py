@@ -387,6 +387,11 @@ class OfferCreate(OfferTerms):
     """`POST /listings/{listing_id}/offers` body."""
 
 
+class OfferCounter(OfferTerms):
+    """`POST /offers/{offer_id}/counter` body — identical shape to
+    `OfferCreate` (D6): a counter is a fresh proposal, not a patch."""
+
+
 class OfferRead(SQLModel):
     """An offer as either of its two parties sees it (`GET /my/offers`,
     spec 007 F).

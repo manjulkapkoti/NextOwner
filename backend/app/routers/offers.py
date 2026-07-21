@@ -33,7 +33,7 @@ from ..permissions import (
     require_approved_buyer,
     require_offer_party,
 )
-from ..schemas import BuyerProfile, OfferCreate, OfferRead, OfferWithBuyer
+from ..schemas import BuyerProfile, OfferCounter, OfferCreate, OfferRead, OfferWithBuyer
 
 router = APIRouter(tags=["offers"])
 
@@ -207,6 +207,61 @@ def decline_offer(
     session.commit()
     session.refresh(offer)
     return offer
+
+
+@router.post("/offers/{offer_id}/counter", response_model=OfferRead)
+def counter_offer(
+    body: OfferCounter,
+    offer_and_role: tuple[Offer, str] = Depends(require_offer_party),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Offer:
+    """C1-C7 ⭐ — the original row becomes `countered` (terminal) and a new
+    **child** row is inserted (`parent_offer_id` = the original's id,
+    `proposed_by_role` = the countering party's role, `status="submitted"`,
+    same listing/buyer, the new terms). Two `offer_event` rows are written in
+    one transaction: the original's `countered` transition and the child's
+    own `submitted` creation.
+
+    **Returns the new child row** (not the original) — this lets the next
+    actor read `response.json()["id"]` to act on it directly (plan.md §
+    Build order, slice 5).
+    """
+    offer, role = offer_and_role
+    if role == offer.proposed_by_role:
+        raise Forbidden("You may not decide your own offer")   # bilateral half of B4/C6
+
+    if offer.status != "submitted":
+        raise InvalidTransition(
+            f"Cannot counter an offer that is {offer.status}", code="offer_already_decided"
+        )
+
+    now = _utcnow()
+    from_status = offer.status
+    offer.status = "countered"
+    offer.decided_at = now
+    offer.decided_by_id = user.id
+    session.add(offer)
+
+    child = Offer(
+        listing_id=offer.listing_id,
+        buyer_id=offer.buyer_id,
+        parent_offer_id=offer.id,
+        proposed_by_role=role,             # the countering party's role, never the body (S3)
+        status="submitted",
+        price=body.price,
+        structure=body.structure,
+        contingencies=body.contingencies,
+        proposed_close_date=body.proposed_close_date,
+    )
+    session.add(child)
+    session.flush()                        # assigns child.id without ending the transaction
+
+    _record(session, offer, user, "countered", from_status, "countered")
+    _record(session, child, user, "submitted", None, "submitted")
+    session.commit()
+    session.refresh(child)
+    return child
 
 
 # ── The buyer's own offers (spec 007 F1-F3) ──────────────────────────────────
