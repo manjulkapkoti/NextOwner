@@ -63,10 +63,11 @@ historical proposal immutable and gives FR-17's "both parties see offer history"
 literal answer: read every row in the chain.
 
 That still leaves a real question the fold-in doesn't answer: **who may act on the counter's new
-row?** Every binding doc (`design_implementation.md`, `security.md` §7, `testing_guide.md`,
-`progress.md`) says "seller-only decisions" — but every one of them was written before this spec
-existed to decide the counter-response mechanism, and all of them are describing the buyer's
-**initial** offer (the documented, tested, money-moving path where the atomic accept lives).
+row?** Several binding docs — `requirements.md` FR-17 ("sellers can accept, decline, or counter"),
+`design_implementation.md`, `security.md` §7, `testing_guide.md`, `progress.md` — phrase the
+decision as the seller's, but every one of them was written before this spec existed to decide
+the counter-response mechanism, and all of them describe the buyer's **initial** offer (the
+documented, tested, money-moving path where the atomic accept lives).
 None of them scope what happens when the seller is the one who just proposed terms. Two options:
 **(a)** keep decisions permanently seller-only, and make the buyer's only response to a counter a
 brand-new, unlinked `POST .../offers` call; **(b)** decision rights belong to **whoever did not
@@ -78,8 +79,11 @@ the buyer would have to retype full terms after every counter, for no security b
 "the counterparty of the proposer" is no more complex a check than `require_request_decider`
 already is. `proposed_by_role` (`"buyer" | "seller"`, server-derived, never client-set) records
 who authored a row's terms; the decision endpoints (`accept`/`decline`/`counter`) are usable only
-by the *other* role. This is what makes `countered` behavior-full rather than decorative, and it
-does not contradict any binding doc — none of them discuss the counter-response case at all.
+by the *other* role. This is what makes `countered` behavior-full rather than decorative. It
+**extends** FR-17 rather than contradicting it — none of those docs scoped the counter-response
+case — so this spec amends FR-17 and its restatements in place with dated notes (the same
+convention `requirements.md` already uses for FR-13/FR-14, and that D3 below uses for the route
+shape), rather than leaving copies of "seller-only" to drift against the shipped behavior.
 
 **D2 — Sibling-offer policy: auto-decline, not leave-pending.**
 The fold-in names the same two options it always does for this question: "auto-decline with
