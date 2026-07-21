@@ -6,12 +6,14 @@ list only client-settable fields, so mass-assignment of `is_admin`/`owner_id` is
 impossible **by schema**, not by runtime filtering (`security.md` §6).
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
 from pydantic import EmailStr, Field, field_serializer, field_validator
 from sqlmodel import SQLModel
+
+from .config import settings
 
 Role = Literal["buyer", "seller"]
 _MONEY_FIELDS = ("asking_price", "ttm_revenue", "ttm_profit", "mrr", "churn_pct")
@@ -361,3 +363,51 @@ class MessageRead(SQLModel):
     sender_id: int
     text: str
     created_at: datetime
+
+
+# ── M7 — offers / LOI ────────────────────────────────────────────────────────
+
+class OfferTerms(SQLModel):
+    """The structured terms shared by a fresh offer and a counter (spec 007
+    D6) — `OfferCreate`/`OfferCounter` are the same shape under two names.
+
+    No `listing_id`/`buyer_id`/`status`/`proposed_by_role` here: those come
+    from the path, the JWT, and the server — never the body (A6, S3).
+    """
+
+    price: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
+    structure: str = Field(min_length=1, max_length=settings.offer_structure_max_chars)
+    contingencies: str | None = Field(
+        default=None, max_length=settings.offer_contingencies_max_chars
+    )
+    proposed_close_date: date
+
+
+class OfferCreate(OfferTerms):
+    """`POST /listings/{listing_id}/offers` body."""
+
+
+class OfferRead(SQLModel):
+    """An offer as either of its two parties sees it (`GET /my/offers`,
+    spec 007 F).
+
+    **No `buyer_id`** (the caller already knows it's their own — mirrors
+    `AccessRequestRead`'s minimalism, spec 005) and **no `decided_by_id`**
+    ("who decided" is implied by role, not a raw id).
+    """
+
+    id: int
+    listing_id: int
+    parent_offer_id: int | None
+    proposed_by_role: str
+    status: str
+    price: Decimal
+    structure: str
+    contingencies: str | None
+    proposed_close_date: date
+    created_at: datetime
+    decided_at: datetime | None
+
+    @field_serializer("price", when_used="json")
+    def _ser_price(self, v: Decimal) -> str:
+        return str(v)

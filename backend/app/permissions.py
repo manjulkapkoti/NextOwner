@@ -17,8 +17,8 @@ from fastapi import Depends, Request
 from sqlmodel import Session, select
 
 from .db import get_session
-from .errors import Forbidden, NotFound, Unauthorized
-from .models import AccessRequest, Conversation, Listing, User
+from .errors import Forbidden, InvalidTransition, NotFound, Unauthorized
+from .models import AccessRequest, Conversation, Listing, Offer, User
 from .security import decode_access_token
 
 
@@ -215,6 +215,53 @@ def require_conversation_member(
     # secret an unpublished listing would (D2), so this boundary never
     # distinguishes "doesn't exist" from "not yours anymore."
     raise Forbidden("You may not access this conversation", code="not_a_conversation_member")
+
+
+def require_approved_buyer(
+    listing_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Listing:
+    """Trust boundary: may this caller open an offer on this listing? (M7,
+    spec 007 A1-A8, D5).
+
+    Mirrors `create_access_request`'s existing ordering exactly:
+
+    1. Listing missing, or never published and caller isn't the owner → 404
+       (D5, spec 005 D1) — an unpublished draft's existence stays a secret.
+    2. Caller is the owner → 403 (self-dealing, A4) — they already have the
+       data room; an offer on your own listing is meaningless.
+    3. No **approved** `AccessRequest` for `(listing, caller)` → 403
+       `nda_access_required` (A2). **Deliberately the same query
+       `require_private_access` runs, duplicated rather than reused** — the
+       same reason `conversation_role_for` duplicates it at M6: this boundary
+       must not be able to regress M5's crown-jewel gate by editing it.
+    4. `listing.status != "live"` → 409 `listing_not_live` (A3).
+
+    Returns the `Listing`. The D7 "one active offer" check and mass-assignment
+    defense (A6) are the endpoint's own job, not the gate's — D7 is a fact
+    about *offers*, not about this listing/buyer pair's eligibility to
+    negotiate at all.
+    """
+    listing = session.get(Listing, listing_id)
+    if listing is None or (listing.published_at is None and listing.owner_id != user.id):
+        raise NotFound("Listing not found")
+    if listing.owner_id == user.id:
+        raise Forbidden("You already have access to your own listing")
+
+    granted = session.exec(
+        select(AccessRequest).where(
+            AccessRequest.listing_id == listing_id,
+            AccessRequest.buyer_id == user.id,
+            AccessRequest.status == "approved",
+        )
+    ).first()
+    if granted is None:
+        raise Forbidden("NDA access not granted", code="nda_access_required")
+
+    if listing.status != "live":
+        raise InvalidTransition("Listing is not live", code="listing_not_live")
+    return listing
 
 
 def get_owned_listing(
