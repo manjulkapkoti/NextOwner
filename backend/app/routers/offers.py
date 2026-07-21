@@ -64,7 +64,7 @@ def _record(
 @router.post("/listings/{listing_id}/offers", response_model=OfferRead, status_code=201)
 def create_offer(
     body: OfferCreate,
-    listing=Depends(require_approved_buyer),
+    listing: Listing = Depends(require_approved_buyer),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> Offer:
