@@ -11,7 +11,7 @@ split: the anonymous card (`Listing`, served at M4) and the confidential data
 Money is `Money` (Decimal stored losslessly as text) — never float.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from sqlalchemy import String, TypeDecorator, UniqueConstraint
@@ -249,3 +249,68 @@ class ListingDocument(SQLModel, table=True):
     content_type: str
     size_bytes: int
     uploaded_at: datetime = Field(default_factory=_utcnow)
+
+
+class Offer(SQLModel, table=True):
+    """One proposal in a negotiation (M7, FR-17, spec 007 D1/D6).
+
+    A negotiation is a **chain** of rows linked by `parent_offer_id`, never a
+    single row mutated in place: a buyer's original ask and a seller's counter
+    are different proposals with different terms, and collapsing them into one
+    row would silently lose whichever one arrived first the moment a second
+    counter landed (spec D1).
+
+    `buyer_id` is the negotiation's buyer — read from the JWT at root creation
+    and carried unchanged onto every counter in the chain, never from the
+    request body (A6). `proposed_by_role` records who authored **this row's**
+    terms (`"buyer"` or `"seller"`), server-derived from which endpoint created
+    it — this is what `offer_role_for`'s bilateral decision check reads (D1).
+
+    `status` is `submitted → accepted|declined|withdrawn|countered`; all four
+    are terminal for this row, and `countered` additionally spawns a child row.
+    No unique constraint on `(listing_id, buyer_id)` — unlike `AccessRequest`,
+    many historical rows per pair are expected; D7's "at most one active
+    (`submitted`) offer per pair" is an application-level check at creation
+    time, not a DB constraint (old terminal rows must coexist with new ones).
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    listing_id: int = Field(foreign_key="listing.id", index=True)
+    buyer_id: int = Field(foreign_key="user.id", index=True)     # server-derived from the JWT
+    parent_offer_id: int | None = Field(default=None, foreign_key="offer.id")
+    proposed_by_role: str                                         # "buyer" | "seller"
+    status: str = Field(default="submitted", index=True)
+    price: Decimal = Field(sa_type=Money)
+    structure: str
+    contingencies: str | None = None
+    proposed_close_date: date
+    created_at: datetime = Field(default_factory=_utcnow)
+    decided_at: datetime | None = None
+    decided_by_id: int | None = Field(default=None, foreign_key="user.id")
+
+
+class OfferEvent(SQLModel, table=True):
+    """Append-only audit of an offer's negotiation (M7, spec 007 § Schema deltas).
+
+    A direct mirror of `ListingEvent`/`AccessRequestEvent`, with one deliberate
+    difference: **this table logs creation too** (`action="submitted"`,
+    `from_status=null`), which `AccessRequestEvent` deliberately does not.
+    `AccessRequestEvent` exists only to preserve values a later decision
+    overwrites on the *same* row; `OfferEvent` is asked to serve a second job —
+    it is the narrative of a multi-row negotiation thread (FR-17's "both
+    parties see offer history"), and a thread's first chapter ("buyer proposed
+    X") is a fact worth a row of its own, because the *next* row in the chain
+    is what changes next, unlike `AccessRequest` where the same row's
+    `decided_at` is what changes. Every `Offer` row this milestone creates —
+    root or counter-spawned child — gets its own `action="submitted"` event at
+    the moment it's inserted.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    offer_id: int = Field(foreign_key="offer.id", index=True)
+    actor_id: int = Field(foreign_key="user.id")          # server-derived from the JWT
+    # submitted | accepted | declined | withdrawn | countered | auto_declined
+    action: str
+    from_status: str | None = None        # null only for action="submitted"
+    to_status: str
+    created_at: datetime = Field(default_factory=_utcnow)
