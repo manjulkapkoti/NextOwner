@@ -27,8 +27,13 @@ from sqlmodel import Session, select
 from ..db import get_session
 from ..errors import Conflict, Forbidden, InvalidTransition
 from ..models import Listing, Offer, OfferEvent, User, _utcnow
-from ..permissions import get_current_user, require_approved_buyer, require_offer_party
-from ..schemas import OfferCreate, OfferRead
+from ..permissions import (
+    get_current_user,
+    get_owned_listing,
+    require_approved_buyer,
+    require_offer_party,
+)
+from ..schemas import BuyerProfile, OfferCreate, OfferRead, OfferWithBuyer
 
 router = APIRouter(tags=["offers"])
 
@@ -125,9 +130,9 @@ def accept_offer(
     One transaction: `offer.status` and `listing.status` are re-loaded and
     guarded **here**, never trusted from anywhere earlier (B8, S6,
     `security.md` §6 race conditions) — a 409 leaves every row untouched. On
-    success, the offer flips to `accepted` and the listing flips to
-    `under_offer` together. (The sibling auto-decline sweep — D2, E1-E4 — is
-    added on top of this same transaction in the next slice.)
+    success, the offer flips to `accepted`, the listing flips to
+    `under_offer`, and every OTHER currently-`submitted` offer on the listing
+    is auto-declined in the same commit (D2, E1-E4) — one write, or none.
     """
     offer, role = offer_and_role
     if role == offer.proposed_by_role:
@@ -150,6 +155,27 @@ def accept_offer(
     session.add(offer)
     session.add(listing)
     _record(session, offer, user, "accepted", "submitted", "accepted")
+
+    # Sibling sweep (D2, E1-E4): every OTHER offer on this listing that is
+    # currently `submitted` — regardless of who proposed it — is declined in
+    # the same transaction. An honest, immediate, auditable "no" rather than a
+    # future accept attempt 409ing with no explanation ever given to the buyer
+    # who placed it. Never reaches a row that is already terminal (E3) or a
+    # different row in the accepting buyer's own history (E4) — both are
+    # excluded by `status == "submitted"` alone.
+    siblings = session.exec(
+        select(Offer).where(
+            Offer.listing_id == listing.id,
+            Offer.status == "submitted",
+            Offer.id != offer.id,
+        )
+    ).all()
+    for sibling in siblings:
+        sibling.status = "declined"
+        sibling.decided_at = now
+        sibling.decided_by_id = user.id     # the accepting seller caused it
+        session.add(sibling)
+        _record(session, sibling, user, "auto_declined", "submitted", "declined")
 
     session.commit()
     session.refresh(offer)
@@ -202,3 +228,61 @@ def my_offers(
         .where(Offer.buyer_id == user.id)
         .order_by(Offer.created_at.desc(), Offer.id.desc())
     ).all()
+
+
+# ── The seller's queue (spec 007 G1-G4) ──────────────────────────────────────
+#
+# Pulled forward from its originally-planned slice 7 (plan.md § Build order):
+# the sibling auto-decline sweep above (D2, E1-E4) and the concurrent-accept
+# invariant (S6) can only be *asserted* through this endpoint — every one of
+# those tests reads the seller's queue to see a sibling's post-sweep status.
+# Implementing the sweep without a way to observe it would leave it untested,
+# so the read half of G moves here; the rest of slice 7's scope (F1-F3's own
+# dedicated criteria, S2/S4/S7) is unaffected and still lands in its own slice.
+
+
+@router.get("/my/listings/{listing_id}/offers", response_model=list[OfferWithBuyer])
+def listing_offers(
+    listing: Listing = Depends(get_owned_listing),
+    session: Session = Depends(get_session),
+) -> list[OfferWithBuyer]:
+    """The seller's queue for one listing — every buyer's full thread (G1-G4).
+
+    **Guarded by the existing `get_owned_listing`** (mirrors spec 005 D7),
+    which is why this route 404s for a non-owner rather than 403ing (G2) — a
+    draft's existence stays hidden from a stranger exactly as spec 005
+    established.
+
+    The buyer is projected into `BuyerProfile` — never returned as a `User`
+    (G3, no email).
+    """
+    rows = session.exec(
+        select(Offer, User)
+        .join(User, User.id == Offer.buyer_id)
+        .where(Offer.listing_id == listing.id)
+        .order_by(Offer.created_at.desc(), Offer.id.desc())
+    ).all()
+
+    return [
+        OfferWithBuyer(
+            id=offer.id,
+            listing_id=offer.listing_id,
+            buyer_id=offer.buyer_id,
+            parent_offer_id=offer.parent_offer_id,
+            proposed_by_role=offer.proposed_by_role,
+            status=offer.status,
+            price=offer.price,
+            structure=offer.structure,
+            contingencies=offer.contingencies,
+            proposed_close_date=offer.proposed_close_date,
+            created_at=offer.created_at,
+            decided_at=offer.decided_at,
+            buyer=BuyerProfile(
+                display_name=buyer.display_name,
+                budget=buyer.budget,
+                target_industries=buyer.target_industries,
+                experience=buyer.experience,
+            ),
+        )
+        for offer, buyer in rows
+    ]

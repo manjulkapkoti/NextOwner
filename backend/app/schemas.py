@@ -411,3 +411,38 @@ class OfferRead(SQLModel):
     @field_serializer("price", when_used="json")
     def _ser_price(self, v: Decimal) -> str:
         return str(v)
+
+
+class OfferWithBuyer(SQLModel):
+    """A row in the seller's per-listing queue (`GET /my/listings/{id}/offers`,
+    spec 007 G1).
+
+    Standalone, **not** a subclass of `OfferRead` — the same independence
+    `AccessRequestWithBuyer`/`ListingPublic` keep from their own base shapes
+    (spec 004 D2): a seller-only view is a different trust boundary than the
+    buyer's own read, so growing one must never silently grow the other.
+    **Carries `buyer_id`** (unlike `OfferRead`) alongside the nested
+    `BuyerProfile` — this view is seller-only, so the id is not a leak, and
+    the frontend needs it to group rows into per-buyer threads.
+
+    No verification field on `buyer` — same D5 deferral to M10 spec 005
+    already made.
+    """
+
+    id: int
+    listing_id: int
+    buyer_id: int
+    parent_offer_id: int | None
+    proposed_by_role: str
+    status: str
+    price: Decimal
+    structure: str
+    contingencies: str | None
+    proposed_close_date: date
+    created_at: datetime
+    decided_at: datetime | None
+    buyer: BuyerProfile
+
+    @field_serializer("price", when_used="json")
+    def _ser_price(self, v: Decimal) -> str:
+        return str(v)
