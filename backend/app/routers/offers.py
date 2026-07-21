@@ -25,9 +25,9 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
 from ..db import get_session
-from ..errors import Conflict
-from ..models import Offer, OfferEvent, User
-from ..permissions import get_current_user, require_approved_buyer
+from ..errors import Conflict, Forbidden, InvalidTransition
+from ..models import Listing, Offer, OfferEvent, User, _utcnow
+from ..permissions import get_current_user, require_approved_buyer, require_offer_party
 from ..schemas import OfferCreate, OfferRead
 
 router = APIRouter(tags=["offers"])
@@ -105,6 +105,79 @@ def create_offer(
     session.add(offer)
     session.flush()                        # assigns offer.id without ending the transaction
     _record(session, offer, user, "submitted", None, "submitted")
+    session.commit()
+    session.refresh(offer)
+    return offer
+
+
+# ── The seller's decision on a buyer-proposed offer (spec 007 B ⭐) ──────────
+
+
+@router.post("/offers/{offer_id}/accept", response_model=OfferRead)
+def accept_offer(
+    offer_and_role: tuple[Offer, str] = Depends(require_offer_party),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Offer:
+    """Accept ⭐ — the atomic money path (spec 007 B1, B7-B8, plan.md § The
+    atomic accept + sibling auto-decline).
+
+    One transaction: `offer.status` and `listing.status` are re-loaded and
+    guarded **here**, never trusted from anywhere earlier (B8, S6,
+    `security.md` §6 race conditions) — a 409 leaves every row untouched. On
+    success, the offer flips to `accepted` and the listing flips to
+    `under_offer` together. (The sibling auto-decline sweep — D2, E1-E4 — is
+    added on top of this same transaction in the next slice.)
+    """
+    offer, role = offer_and_role
+    if role == offer.proposed_by_role:
+        raise Forbidden("You may not decide your own offer")   # B4
+
+    # Re-loaded fresh, never trusted from when the offer was created (B8/S6).
+    listing = session.get(Listing, offer.listing_id)
+    if offer.status != "submitted":
+        raise InvalidTransition(
+            f"Cannot accept an offer that is {offer.status}", code="offer_already_decided"
+        )
+    if listing is None or listing.status != "live":
+        raise InvalidTransition("Listing is not live", code="listing_not_live")
+
+    now = _utcnow()
+    offer.status = "accepted"
+    offer.decided_at = now
+    offer.decided_by_id = user.id
+    listing.status = "under_offer"
+    session.add(offer)
+    session.add(listing)
+    _record(session, offer, user, "accepted", "submitted", "accepted")
+
+    session.commit()
+    session.refresh(offer)
+    return offer
+
+
+@router.post("/offers/{offer_id}/decline", response_model=OfferRead)
+def decline_offer(
+    offer_and_role: tuple[Offer, str] = Depends(require_offer_party),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Offer:
+    """B2 — declines, terminal, and touches nothing outside this one row."""
+    offer, role = offer_and_role
+    if role == offer.proposed_by_role:
+        raise Forbidden("You may not decide your own offer")   # B4
+
+    if offer.status != "submitted":
+        raise InvalidTransition(
+            f"Cannot decline an offer that is {offer.status}", code="offer_already_decided"
+        )
+
+    from_status = offer.status
+    offer.status = "declined"
+    offer.decided_at = _utcnow()
+    offer.decided_by_id = user.id
+    session.add(offer)
+    _record(session, offer, user, "declined", from_status, "declined")
     session.commit()
     session.refresh(offer)
     return offer

@@ -12,6 +12,8 @@ of these. They are deliberately small and boring; boring is the point.
 
 from __future__ import annotations
 
+from typing import Literal
+
 import jwt
 from fastapi import Depends, Request
 from sqlmodel import Session, select
@@ -262,6 +264,54 @@ def require_approved_buyer(
     if listing.status != "live":
         raise InvalidTransition("Listing is not live", code="listing_not_live")
     return listing
+
+
+def offer_role_for(session: Session, offer: Offer, user: User) -> Literal["buyer", "seller"] | None:
+    """Trust boundary logic for offers (M7, spec 007), named and shaped after
+    M6's `conversation_role_for` on purpose: two callers need a *role*, not a
+    boolean, and both need to reason about it before choosing which action is
+    theirs to take (accept/decline/counter vs. withdraw).
+
+    Loads the offer's listing; the owner is always `"seller"`. Otherwise,
+    `user.id == offer.buyer_id` is `"buyer"`. Anyone else is `None`, uniformly
+    (D5) — never distinguishes "no such offer" from "not yours."
+
+    **Does not** re-check approved access here — an offer, once it exists, is
+    decided by the two parties named on it; approval already gated its
+    *creation* (`require_approved_buyer`), and re-deriving it here would let a
+    later revocation silently invalidate a pending offer with no criterion
+    asking for that (out of scope).
+    """
+    listing = session.get(Listing, offer.listing_id)
+    if listing is not None and listing.owner_id == user.id:
+        return "seller"
+    if user.id == offer.buyer_id:
+        return "buyer"
+    return None
+
+
+def require_offer_party(
+    offer_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> tuple[Offer, str]:
+    """REST wrapper around `offer_role_for` — every decision/withdraw route's
+    trust boundary (M7, spec 007 B/C/D).
+
+    Loads the `Offer` (`None` → `Forbidden`, never `NotFound` — D5 mirrors
+    `require_request_decider`'s uniform-403 reasoning: an offer id carries no
+    secret an unpublished listing would). Raises `Forbidden` for anyone
+    `offer_role_for` does not recognize; otherwise returns `(offer, role)` so
+    the caller (the router) can apply the bilateral rule the gate itself does
+    not decide (accept/decline/counter vs. withdraw).
+    """
+    offer = session.get(Offer, offer_id)
+    role = offer_role_for(session, offer, user) if offer is not None else None
+    if offer is None or role is None:
+        # One raise for every refusal — missing, foreign, or orphaned — so the
+        # cases cannot drift into distinguishable responses (S5).
+        raise Forbidden("You may not act on this offer")
+    return offer, role
 
 
 def get_owned_listing(
