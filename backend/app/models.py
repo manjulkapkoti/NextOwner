@@ -14,7 +14,7 @@ Money is `Money` (Decimal stored losslessly as text) — never float.
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
-from sqlalchemy import String, TypeDecorator, UniqueConstraint
+from sqlalchemy import Index, String, TypeDecorator, UniqueConstraint, text
 from sqlmodel import Field, SQLModel
 
 
@@ -268,11 +268,30 @@ class Offer(SQLModel, table=True):
 
     `status` is `submitted → accepted|declined|withdrawn|countered`; all four
     are terminal for this row, and `countered` additionally spawns a child row.
-    No unique constraint on `(listing_id, buyer_id)` — unlike `AccessRequest`,
-    many historical rows per pair are expected; D7's "at most one active
-    (`submitted`) offer per pair" is an application-level check at creation
-    time, not a DB constraint (old terminal rows must coexist with new ones).
+    No *plain* unique constraint on `(listing_id, buyer_id)` — unlike
+    `AccessRequest`, many historical rows per pair are expected. D7's "at most
+    one active (`submitted`) offer per pair" is enforced by a **partial** unique
+    index (`WHERE status = 'submitted'`), so terminal rows coexist freely while
+    two live offers cannot; the endpoint's application-level pre-check gives the
+    common case a clean 409, and the index is the concurrent-create backstop
+    (`security.md` §6 — the check-then-insert TOCTOU a prior read can't close).
     """
+
+    __table_args__ = (
+        # A PARTIAL unique index, not a plain one: it constrains only rows with
+        # `status = 'submitted'`, so an old declined/withdrawn/countered offer
+        # for the same pair is unaffected. SQLite has supported partial indexes
+        # since 3.8.0 (2013), Postgres far longer — the two `*_where` kwargs give
+        # the identical DB-level guarantee on both, surviving the eventual swap.
+        Index(
+            "uq_offer_one_active_per_pair",
+            "listing_id",
+            "buyer_id",
+            unique=True,
+            sqlite_where=text("status = 'submitted'"),
+            postgresql_where=text("status = 'submitted'"),
+        ),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     listing_id: int = Field(foreign_key="listing.id", index=True)

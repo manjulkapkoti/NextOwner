@@ -22,6 +22,8 @@ row**. Decision rights on `accept`/`decline`/`counter` belong to whoever did
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..db import get_session
@@ -108,9 +110,22 @@ def create_offer(
         proposed_close_date=body.proposed_close_date,
     )
     session.add(offer)
-    session.flush()                        # assigns offer.id without ending the transaction
-    _record(session, offer, user, "submitted", None, "submitted")
-    session.commit()
+    try:
+        # The SELECT above answers the common case with a clean 409; the partial
+        # unique index (`Offer.__table_args__`) is the race backstop for two
+        # concurrent creates that both pass that SELECT — the same
+        # check-then-insert TOCTOU `create_access_request` closes with a DB
+        # constraint rather than a prior read (`security.md` §6). `Offer` has
+        # exactly one unique constraint, so an IntegrityError here is that
+        # duplicate.
+        session.flush()                    # assigns offer.id without ending the transaction
+        _record(session, offer, user, "submitted", None, "submitted")
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise Conflict(
+            "An active offer already exists on this listing", code="offer_already_active"
+        ) from None
     session.refresh(offer)
     return offer
 
@@ -138,44 +153,65 @@ def accept_offer(
     if role == offer.proposed_by_role:
         raise Forbidden("You may not decide your own offer")   # B4
 
-    # Re-loaded fresh, never trusted from when the offer was created (B8/S6).
-    listing = session.get(Listing, offer.listing_id)
-    if offer.status != "submitted":
+    now = _utcnow()
+    # Compare-and-swap, not read-then-write. The WHERE clauses are evaluated
+    # against committed DB state at write time, so two concurrent accepts can't
+    # both pass a stale start-of-request snapshot and both commit (B8/S6,
+    # `security.md` §6). A read-then-write guard is a TOCTOU: production hands
+    # each request its **own** Session (`db.py`), so the earlier per-request
+    # read is a snapshot, not a lock. `SELECT ... FOR UPDATE` is not an option —
+    # SQLite drops it silently (false confidence); a rowcount-checked
+    # conditional UPDATE closes the window on both SQLite and the later Postgres.
+    accepted = session.execute(
+        update(Offer)
+        .where(Offer.id == offer.id, Offer.status == "submitted")
+        .values(status="accepted", decided_at=now, decided_by_id=user.id)
+        .execution_options(synchronize_session=False)
+    )
+    if accepted.rowcount != 1:
         raise InvalidTransition(
             f"Cannot accept an offer that is {offer.status}", code="offer_already_decided"
         )
-    if listing is None or listing.status != "live":
+
+    flipped = session.execute(
+        update(Listing)
+        .where(Listing.id == offer.listing_id, Listing.status == "live")
+        .values(status="under_offer")
+        .execution_options(synchronize_session=False)
+    )
+    if flipped.rowcount != 1:
+        # The listing left `live` between this offer's creation and now (the
+        # seller paused it, or another accept already won the race for this
+        # listing) — nothing this transaction did may stand, so roll the offer
+        # CAS above back too before refusing.
+        session.rollback()
         raise InvalidTransition("Listing is not live", code="listing_not_live")
 
-    now = _utcnow()
-    offer.status = "accepted"
-    offer.decided_at = now
-    offer.decided_by_id = user.id
-    listing.status = "under_offer"
-    session.add(offer)
-    session.add(listing)
     _record(session, offer, user, "accepted", "submitted", "accepted")
 
-    # Sibling sweep (D2, E1-E4): every OTHER offer on this listing that is
-    # currently `submitted` — regardless of who proposed it — is declined in
-    # the same transaction. An honest, immediate, auditable "no" rather than a
-    # future accept attempt 409ing with no explanation ever given to the buyer
-    # who placed it. Never reaches a row that is already terminal (E3) or a
-    # different row in the accepting buyer's own history (E4) — both are
-    # excluded by `status == "submitted"` alone.
+    # Sibling sweep (D2, E1-E4): every OTHER offer on this listing still
+    # `submitted` is declined in the same transaction — an honest, immediate,
+    # auditable "no". Each decline is itself a compare-and-swap, so a sibling a
+    # concurrent request just moved out of `submitted` is left untouched (its
+    # rowcount is 0, no event written), never double-decided. Terminal rows
+    # (E3) and the accepting buyer's own history (E4) are excluded by
+    # `status == "submitted"` to begin with.
     siblings = session.exec(
         select(Offer).where(
-            Offer.listing_id == listing.id,
+            Offer.listing_id == offer.listing_id,
             Offer.status == "submitted",
             Offer.id != offer.id,
         )
     ).all()
     for sibling in siblings:
-        sibling.status = "declined"
-        sibling.decided_at = now
-        sibling.decided_by_id = user.id     # the accepting seller caused it
-        session.add(sibling)
-        _record(session, sibling, user, "auto_declined", "submitted", "declined")
+        swept = session.execute(
+            update(Offer)
+            .where(Offer.id == sibling.id, Offer.status == "submitted")
+            .values(status="declined", decided_at=now, decided_by_id=user.id)
+            .execution_options(synchronize_session=False)
+        )
+        if swept.rowcount == 1:                      # the accepting seller caused it
+            _record(session, sibling, user, "auto_declined", "submitted", "declined")
 
     session.commit()
     session.refresh(offer)
@@ -193,17 +229,19 @@ def decline_offer(
     if role == offer.proposed_by_role:
         raise Forbidden("You may not decide your own offer")   # B4
 
-    if offer.status != "submitted":
+    # Compare-and-swap (see `accept_offer`) — a concurrent second decline finds
+    # the row no longer `submitted` and 409s rather than double-deciding.
+    declined = session.execute(
+        update(Offer)
+        .where(Offer.id == offer.id, Offer.status == "submitted")
+        .values(status="declined", decided_at=_utcnow(), decided_by_id=user.id)
+        .execution_options(synchronize_session=False)
+    )
+    if declined.rowcount != 1:
         raise InvalidTransition(
             f"Cannot decline an offer that is {offer.status}", code="offer_already_decided"
         )
-
-    from_status = offer.status
-    offer.status = "declined"
-    offer.decided_at = _utcnow()
-    offer.decided_by_id = user.id
-    session.add(offer)
-    _record(session, offer, user, "declined", from_status, "declined")
+    _record(session, offer, user, "declined", "submitted", "declined")
     session.commit()
     session.refresh(offer)
     return offer
@@ -231,17 +269,21 @@ def counter_offer(
     if role == offer.proposed_by_role:
         raise Forbidden("You may not decide your own offer")   # bilateral half of B4/C6
 
-    if offer.status != "submitted":
+    now = _utcnow()
+    # Compare-and-swap the parent to `countered` BEFORE inserting the child, so
+    # (a) a concurrent second counter finds it no longer `submitted` and 409s
+    # instead of spawning a rival child, and (b) the pair never momentarily
+    # holds two `submitted` rows, which the D7 partial-unique index forbids.
+    countered = session.execute(
+        update(Offer)
+        .where(Offer.id == offer.id, Offer.status == "submitted")
+        .values(status="countered", decided_at=now, decided_by_id=user.id)
+        .execution_options(synchronize_session=False)
+    )
+    if countered.rowcount != 1:
         raise InvalidTransition(
             f"Cannot counter an offer that is {offer.status}", code="offer_already_decided"
         )
-
-    now = _utcnow()
-    from_status = offer.status
-    offer.status = "countered"
-    offer.decided_at = now
-    offer.decided_by_id = user.id
-    session.add(offer)
 
     child = Offer(
         listing_id=offer.listing_id,
@@ -257,7 +299,7 @@ def counter_offer(
     session.add(child)
     session.flush()                        # assigns child.id without ending the transaction
 
-    _record(session, offer, user, "countered", from_status, "countered")
+    _record(session, offer, user, "countered", "submitted", "countered")
     _record(session, child, user, "submitted", None, "submitted")
     session.commit()
     session.refresh(child)
@@ -276,17 +318,19 @@ def withdraw_offer(
     if role != offer.proposed_by_role:
         raise Forbidden("You may not withdraw an offer you did not propose")   # D2/D3
 
-    if offer.status != "submitted":
+    # Compare-and-swap (see `accept_offer`) — proposer-only, and a concurrent
+    # second withdraw finds the row no longer `submitted` and 409s.
+    withdrawn = session.execute(
+        update(Offer)
+        .where(Offer.id == offer.id, Offer.status == "submitted")
+        .values(status="withdrawn", decided_at=_utcnow(), decided_by_id=user.id)
+        .execution_options(synchronize_session=False)
+    )
+    if withdrawn.rowcount != 1:
         raise InvalidTransition(
             f"Cannot withdraw an offer that is {offer.status}", code="offer_already_decided"
         )
-
-    from_status = offer.status
-    offer.status = "withdrawn"
-    offer.decided_at = _utcnow()
-    offer.decided_by_id = user.id
-    session.add(offer)
-    _record(session, offer, user, "withdrawn", from_status, "withdrawn")
+    _record(session, offer, user, "withdrawn", "submitted", "withdrawn")
     session.commit()
     session.refresh(offer)
     return offer

@@ -26,11 +26,16 @@ deciding *and* the caller who proposed the very terms in question.
 | `decided_at` | `datetime \| None` | Server-stamped on any decision (accept/decline/withdraw/counter). |
 | `decided_by_id` | FK `user.id`, nullable | The deciding party — audit, not exposed on `OfferRead` (mirrors `AccessRequestRead`'s minimalism — spec 005). |
 
-No unique constraint on `(listing_id, buyer_id)` — unlike `AccessRequest`, many historical rows
-per pair are expected and correct. D7's "at most one active" rule is an **application-level**
-check at creation time (a query for an existing `submitted` row for the pair), not a DB
-constraint, because the constraint would have to exclude terminal rows and SQLite has no partial
-unique index worth the complexity here.
+No *plain* unique constraint on `(listing_id, buyer_id)` — unlike `AccessRequest`, many historical
+rows per pair are expected and correct. D7's "at most one active" rule is enforced two ways: an
+**application-level** pre-check at creation (a query for an existing `submitted` row for the pair)
+for a clean 409 on the common case, **backed by a partial unique index** (`WHERE status =
+'submitted'`) as the concurrent-create race backstop — a plain constraint would wrongly forbid
+terminal rows, but a *partial* index constrains only live offers. *(Corrected during M7's appsec
+review: an earlier draft claimed "SQLite has no partial unique index worth the complexity" — that
+is factually wrong. SQLite has supported partial indexes since 3.8.0 (2013), and SQLAlchemy exposes
+them via `Index(..., unique=True, sqlite_where=..., postgresql_where=...)`; the constraint the check
+alone couldn't race-proof is essentially free, so it is now in place — see `models.py` `Offer.__table_args__`.)*
 
 **`OfferEvent`** — new table, a direct mirror of `ListingEvent`/`AccessRequestEvent`, with one
 deliberate difference from `AccessRequestEvent` that the plan calls out explicitly:
