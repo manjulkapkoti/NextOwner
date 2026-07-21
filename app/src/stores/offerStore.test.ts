@@ -87,7 +87,7 @@ describe('offerStore', () => {
   })
 
   it('createOffer: POSTs the four OfferTerms fields to /listings/{id}/offers and folds the new row into myOffers', async () => {
-    const fetchMock = vi.fn<typeof fetch>(async (input) =>
+    const fetchMock = vi.fn<typeof fetch>(async (_input) =>
       jsonResponse(201, {
         id: 10,
         listing_id: 7,
@@ -104,7 +104,9 @@ describe('offerStore', () => {
     const row = await offerStore.createOffer(7, TERMS)
 
     expect(row.id).toBe(10)
-    const calls = fetchMock.mock.calls.map((c) => [String(c[0]), c[1]])
+    const calls = fetchMock.mock.calls.map(
+      (c) => [String(c[0]), c[1]] as [string, RequestInit | undefined],
+    )
     expect(calls.some(([url, init]) => url.includes('/listings/7/offers') && init?.method === 'POST')).toBe(
       true,
     )
