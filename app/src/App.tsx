@@ -19,9 +19,11 @@ import { BrowseListings } from './components/BrowseListings'
 import { ChatWindow } from './components/ChatWindow'
 import { ConversationList } from './components/ConversationList'
 import { ListingDetail } from './components/ListingDetail'
+import { ListingOffersQueue } from './components/ListingOffersQueue'
 import { ListingWizard } from './components/ListingWizard'
 import { LoginForm } from './components/LoginForm'
 import { MyListings } from './components/MyListings'
+import { MyOffers } from './components/MyOffers'
 import { NavBar } from './components/NavBar'
 import { RegisterForm } from './components/RegisterForm'
 import { RequireAdmin } from './components/RequireAdmin'
@@ -241,6 +243,26 @@ function ChatWindowRoute() {
   return <ChatWindow conversationId={Number(id)} />
 }
 
+// M7 — the seller's per-listing offers queue (spec 007 J3, FR-17). Route-
+// guarded by RequireAuth for UX only; the real boundary is the server's
+// `get_owned_listing` on the queue endpoint, which 404s a listing that is not
+// yours (spec 007 G2, mirroring spec 005's ListingRequestsRoute above).
+function ListingOffersRoute() {
+  const { id } = useParams()
+  return (
+    <>
+      <Typography variant="h5" component="h1" gutterBottom>
+        Offers
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        Every buyer&apos;s negotiation on this listing, oldest first. Accepting one
+        automatically declines every other pending offer.
+      </Typography>
+      <ListingOffersQueue listingId={Number(id)} />
+    </>
+  )
+}
+
 export function AppShell() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -336,6 +358,32 @@ export function AppShell() {
             <RequireAuth>
               <Container maxWidth="md" sx={{ mt: 4 }}>
                 <ChatWindowRoute />
+              </Container>
+            </RequireAuth>
+          }
+        />
+        {/* M7 — offers/LOI (FR-17). The buyer's cross-listing dashboard, and
+            the seller's per-listing queue; the offer panel itself lives on
+            /browse/:id (ListingDetail), gated the same way the data room is. */}
+        <Route
+          path="/my-offers"
+          element={
+            <RequireAuth>
+              <Container maxWidth="md" sx={{ mt: 4 }}>
+                <Typography variant="h5" component="h1" gutterBottom>
+                  Your offers
+                </Typography>
+                <MyOffers />
+              </Container>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/my-listings/:id/offers"
+          element={
+            <RequireAuth>
+              <Container maxWidth="md" sx={{ mt: 4 }}>
+                <ListingOffersRoute />
               </Container>
             </RequireAuth>
           }

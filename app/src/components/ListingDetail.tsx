@@ -5,6 +5,7 @@
 // same "not available" message here — the client must not become the existence
 // oracle the API deliberately isn't.
 import { useEffect, useState } from 'react'
+import { observer } from 'mobx-react-lite'
 import {
   Alert,
   Box,
@@ -21,7 +22,9 @@ import { Link as RouterLink, useParams } from 'react-router-dom'
 import { ApiError, publicApi } from '../lib/api'
 import { listingTypeLabel } from '../lib/listingTypes'
 import type { PublicListing } from './ListingCard'
+import { OfferForm } from './OfferForm'
 import { RequestAccessPanel } from './RequestAccessPanel'
+import { accessStore } from '../stores/accessStore'
 import { authStore } from '../stores/authStore'
 
 function money(value: string): string {
@@ -43,7 +46,7 @@ function Figure({ label, value }: { label: string; value: string }) {
   )
 }
 
-export function ListingDetail() {
+export const ListingDetail = observer(function ListingDetail() {
   const { id } = useParams()
   const [listing, setListing] = useState<PublicListing | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -145,7 +148,15 @@ export function ListingDetail() {
               first step of asking for access, so the teaser is the honest
               anonymous view rather than a degraded one. */}
           {authStore.isAuthenticated ? (
-            <RequestAccessPanel listingId={Number(id)} />
+            <>
+              <RequestAccessPanel listingId={Number(id)} />
+              {/* M7 — the offer panel (spec 007 J1, J2). Only once access is
+                  actually unlocked: an offer requires approved access
+                  server-side (`require_approved_buyer`, A2), so showing the
+                  form any earlier would just be inviting a 403
+                  `nda_access_required` this route guard already knows about. */}
+              {accessStore.status === 'unlocked' && <OfferForm listingId={Number(id)} />}
+            </>
           ) : (
             <Card
               sx={{
@@ -172,4 +183,4 @@ export function ListingDetail() {
       )}
     </Container>
   )
-}
+})
