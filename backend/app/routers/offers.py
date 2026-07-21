@@ -264,6 +264,34 @@ def counter_offer(
     return child
 
 
+@router.post("/offers/{offer_id}/withdraw", response_model=OfferRead)
+def withdraw_offer(
+    offer_and_role: tuple[Offer, str] = Depends(require_offer_party),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Offer:
+    """D1-D4 — the mirror image of accept/decline/counter: only the current
+    **proposer** of the live `submitted` row may withdraw it."""
+    offer, role = offer_and_role
+    if role != offer.proposed_by_role:
+        raise Forbidden("You may not withdraw an offer you did not propose")   # D2/D3
+
+    if offer.status != "submitted":
+        raise InvalidTransition(
+            f"Cannot withdraw an offer that is {offer.status}", code="offer_already_decided"
+        )
+
+    from_status = offer.status
+    offer.status = "withdrawn"
+    offer.decided_at = _utcnow()
+    offer.decided_by_id = user.id
+    session.add(offer)
+    _record(session, offer, user, "withdrawn", from_status, "withdrawn")
+    session.commit()
+    session.refresh(offer)
+    return offer
+
+
 # ── The buyer's own offers (spec 007 F1-F3) ──────────────────────────────────
 
 
