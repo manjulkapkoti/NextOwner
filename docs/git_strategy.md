@@ -12,7 +12,7 @@ A milestone (e.g., M1 auth) is the real-world equivalent of a ticket/feature —
 
 ### 2. "Commit only when green" becomes "merge to main only when green"
 
-The constitution originally said *commit only when green* — but on a feature branch you **want** to commit work-in-progress, including the **failing-tests-first** commit (that's core to SDD). The refinement: commit freely on the branch (red tests → implement → green); the **PR-merge to `main`** is the green gate. `main` stays always-green; the branch is where the red→green happens. *(Applied — logged as the 2026-07-14 amendment in `specs/000-constitution.md` Article 3 §3.)*
+The constitution originally said *commit only when green* — but on a feature branch you **want** to commit work-in-progress, including the **failing-tests-first** commit (that's core to SDD). The refinement: commit freely on the branch (red tests → implement → green); the **PR-merge to `main`** is the green gate. `main` stays always-green; the branch is where the red→green happens. *(Applied — the rule lives in `specs/000-constitution.md` Article 3 §3; the 2026-07-14 amendment that made it is in `specs/000-constitution-amendments.md`.)*
 
 ### 3. The orchestrator owns git; agents produce the code
 

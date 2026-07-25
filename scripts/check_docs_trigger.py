@@ -42,6 +42,12 @@ ROOT = Path(__file__).resolve().parent.parent
 # else in the repo is measured against them.
 BINDING = (
     r"^specs/000-constitution\.md$",
+    # The amendment log, split out of the constitution 2026-07-25. It is history
+    # rather than rules, but it is where a rule change records its reasoning —
+    # and the split commit itself shipped three misattributed provenance tags
+    # that an audit caught. A file that explains why the rules say what they say
+    # earns the same tripwire as the rules.
+    r"^specs/000-constitution-amendments\.md$",
     r"^CLAUDE\.md$",
     r"^docs/security\.md$",
     r"^docs/requirements\.md$",

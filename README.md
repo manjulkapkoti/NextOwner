@@ -12,7 +12,8 @@ NextOwner/
 │   │   └── diagGenerator/     # diagram sources + generator scripts (see its README)
 │   └── research/              # competitor teardowns (Acquire, Baton, Exitwise, Little Exits)
 ├── specs/                     # spec-driven development artifacts
-│   └── 000-constitution.md    # binding decisions: stack, principles, process, conventions
+│   ├── 000-constitution.md    # binding decisions: stack, principles, process, conventions
+│   └── 000-constitution-amendments.md  # why each rule says what it says (load on demand)
 ├── app/                       # React SPA        — shipped at Milestone 0
 ├── backend/                   # FastAPI backend  — shipped at Milestone 0
 └── seed/                      # demo-data script — arrives with M4 (marketplace browse)
@@ -27,6 +28,7 @@ NextOwner/
 | [`docs/research/acquire_design.md`](./docs/research/acquire_design.md) | The Acquire.com teardown: tech stack, architecture + component walkthrough, feature list. **Reference only — binding on nobody.**                                                          |
 | [`docs/testing_guide.md`](./docs/testing_guide.md)                 | Test framework setup + per-milestone test checklists (tests = executable acceptance criteria)                                                                                                 |
 | [`specs/000-constitution.md`](./specs/000-constitution.md)         | The rules every spec and line of code must follow                                                                                                                                             |
+| [`specs/000-constitution-amendments.md`](./specs/000-constitution-amendments.md) | **Why** each rule says what it says — every amendment with its evidence. Read before changing an Article; not loaded by default                                              |
 | [`docs/agentic_scope.md`](./docs/agentic_scope.md)                 | Post-MVP AI/agentic roadmap (deal-scout, diligence agent, …)                                                                                                                                  |
 | [`docs/research/synthesis.md`](./docs/research/synthesis.md)       | Cross-company synthesis: the market map, 7 category laws, stack comparison, decisions ledger, NextOwner's white space                                                                         |
 | [`docs/research/`](./docs/research/)                               | Individual competitor teardowns + [`cool_features.md`](./docs/research/cool_features.md) (adopted & backlog ideas)                                                                            |
