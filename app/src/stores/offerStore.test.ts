@@ -87,7 +87,7 @@ describe('offerStore', () => {
   })
 
   it('createOffer: POSTs the four OfferTerms fields to /listings/{id}/offers and folds the new row into myOffers', async () => {
-    const fetchMock = vi.fn<typeof fetch>(async (_input) =>
+    const fetchMock = vi.fn<typeof fetch>(async () =>
       jsonResponse(201, {
         id: 10,
         listing_id: 7,
