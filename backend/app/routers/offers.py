@@ -278,6 +278,14 @@ def counter_offer(
     # Checked before any write, so a 409 leaves the parent and the audit trail
     # untouched. `decline`/`withdraw` are deliberately NOT gated on liveness (D8):
     # they resolve/retract an existing row without creating a new commitment.
+    #
+    # This is a plain read, not a WHERE-clause CAS like `accept`'s listing flip
+    # (B8/S6). That leaves a theoretical microsecond TOCTOU — the listing could
+    # pause between this read and the child insert — accepted, not closed:
+    # unlike the accept race (two buyers competing for a scarce accept), no party
+    # gains anything by racing a counter onto a just-paused listing, and the only
+    # money-moving step, `accept`, remains a true CAS regardless of what a
+    # mistimed counter produced (appsec M7 re-verification, non-blocking).
     listing = session.get(Listing, offer.listing_id)
     if listing is None or listing.status != "live":
         raise InvalidTransition("Listing is not live", code="listing_not_live")
