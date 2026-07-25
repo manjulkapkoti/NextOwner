@@ -128,6 +128,17 @@ The Stripe / Persona / Escrow mocks are **production-shaped state machines** (co
 
 Each is a state in the mock, surfaced through the §1 contract (mapped to 402/409/502 as appropriate) and covered by the owning milestone's spec — the **payments milestone** (not yet sequenced — see `docs/milestones.md`) and M10 verification.
 
+### 5.1 Email / SMTP — the one vendor failure that must stay invisible (M8)
+
+Email (MailHog locally, an SMTP provider in production) is the first **outbound** dependency in the codebase, and it breaks the pattern above deliberately: **an email failure is never surfaced to the client at all.**
+
+- **It must not fail the business action.** `mailer.send_safe` swallows and logs every transport error, so an SMTP outage cannot turn an access approval, an offer accept, or a registration into a 500. Spec 008 F4 is the test.
+- **It must not become an enumeration oracle.** `POST /api/auth/forgot-password` returns the same `202` whether the address exists, does not exist, or exists but the mail bounced. A `502 mail_unavailable` here would leak precisely what the uniform response exists to hide — an attacker learns "this address is real, the send was attempted". Spec 008 X3 is the test.
+- **Sends fire after commit, not during.** Callers `queue_email(session, ...)`; the queue drains in SQLAlchemy's `after_commit` and is discarded on rollback. Email is the one effect a database rollback cannot retract, so a message is sent **if and only if** the fact it describes is durable — without this, `create_offer`'s `IntegrityError` path could tell a buyer their offer landed when it did not.
+- **The failure log records recipient and subject, never the body.** Bodies carry reset and verification links (`security.md` §7 M8 — never log a token).
+
+The general rule this milestone establishes: **a notification channel is not part of the transaction it describes.** It may fail silently; the action it reports may not.
+
 ## 6. Observability
 
 - Structured server-side logs keyed by **request id** (§2); log the error class + `code` + safe context, **never** secrets/PII.
