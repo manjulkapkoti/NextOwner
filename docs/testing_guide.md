@@ -322,7 +322,7 @@ Write these from the milestone spec *before* implementing (SDD). ☐ = one test 
 
 **M8 — Notifications engine + saved searches + account lifecycle** *(security-critical — account lifecycle moved here from M1, 2026-07-17)*
 - ☐ Approving a listing creates a notification for the matching saved search…
-- ☐ …and none for a non-matching one. (BackgroundTasks run synchronously under TestClient — assert right after the approve call.)
+- ☐ …and none for a non-matching one. (The fan-out is a **plain synchronous call** inside the approve endpoint — spec 008 D12 — so assert right after the approve call. This note used to say "BackgroundTasks run synchronously under TestClient"; no BackgroundTask is involved, and nothing here depends on TestClient behaviour.)
 - ☐ `GET /notifications` returns only the caller's notifications.
 - ☐ Password reset: a valid token sets the new password; ☐ the **same token used twice → rejected** (single-use); ☐ an **expired** token → rejected; ☐ a token for user A cannot reset user B.
 - ☐ `POST /auth/forgot-password` returns the **same response for a known and an unknown address** (no user enumeration — the M1 login rule, applied here).

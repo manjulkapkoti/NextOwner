@@ -34,7 +34,7 @@ Three nullable link FKs rather than a polymorphic `(kind, id)` pair: real refere
 
 ## New modules
 
-- **`backend/app/mailer.py`** — `EmailSender` (Protocol) / `SmtpEmailSender` / `InMemoryEmailSender`, plus the module-level `mailer`. Shaped exactly like `ratelimit.py` and `chat_broker.py` (spec D9). **Named `mailer.py`, not `email.py`**, so nothing in the package can be confused with the stdlib `email` package `smtplib` imports.
+- **`backend/app/mailer.py`** — `EmailSender` (Protocol) / `SmtpEmailSender` / `NullEmailSender`, the `Dispatcher` / `ThreadDispatcher` / `InlineDispatcher` trio that decides *where* a send runs, plus the module-level `mailer` and `dispatcher`. The test double is `RecordingEmailSender` and lives in `conftest.py` — it is a test artifact, not product code. Shaped exactly like `ratelimit.py` and `chat_broker.py` (spec D9). **Named `mailer.py`, not `email.py`**, so nothing in the package can be confused with the stdlib `email` package `smtplib` imports.
 - **`backend/app/notifications.py`** — `notify(...)` plus one small helper per event source, and `fan_out_saved_searches(session, listing)`. **This module is the trust boundary for recipient derivation** (D3): every recipient is computed here from the domain object, and no caller may pass one in.
 - **`backend/app/tokens.py`** — `new_token()` → `(raw, sha256_hash)`, and the two redeem-and-consume functions. Redemption is uniform-failure by construction: missing, expired, used, malformed and wrong-purpose all take the same return path (spec G12, H5, H6, X4).
 
