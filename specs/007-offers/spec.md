@@ -139,6 +139,22 @@ listing, which would make "the" offer an ambiguous phrase. Enforced as an applic
 at creation (not a DB constraint, since old terminal rows must coexist with the schema), refusing
 a second concurrent submission with `409 offer_already_active`.
 
+**D8 — Only the two *commitment-creating* actions require a `live` listing; the two *resolving*
+actions do not.** Surfaced by M7's independent appsec pass (Finding 1): of the four write paths,
+`create` (A3) and `accept` (B8) already re-checked listing liveness, but `counter` did not — yet a
+counter, by D1's own design, *creates a new priced `Offer` row*, exactly the class of new
+commitment A3 exists to forbid on a non-`live` listing. Leaving it ungated let a party spawn priced
+`submitted` rows on a paused/closed/`under_offer` listing indefinitely (the eventual `accept` still
+409s on the listing-status CAS, so no money moved wrongly — but the invariant in Article 2 #3 and A3
+was violated and stale `submitted` state accumulated). The rule this settles: **an offer action
+that creates a new commitment (`create`, `accept`, `counter`) requires the listing to be `live`; an
+action that only resolves or retracts an existing row (`decline`, `withdraw`) does not** — a buyer
+must always be able to withdraw, and a seller to decline, a lingering offer on a listing that has
+since left `live`. `counter` is now gated (B10); `decline`/`withdraw` are deliberately left open and
+pinned by B11, so the asymmetry is a stated decision, not an accidental omission. *(A product call
+the appsec pass explicitly flagged for the owner — recorded here rather than left implicit;
+overridable at review.)*
+
 ---
 
 ## Acceptance criteria
@@ -167,6 +183,8 @@ Each GIVEN/WHEN/THEN below becomes **exactly one test** (constitution Article 3 
 - **B7** GIVEN the seller accepts, WHEN the audit table is read, THEN an `offer_event` row exists: `actor_id`=the seller, `action="accepted"`, `from_status="submitted"`, `to_status="accepted"`.
 - **B8** GIVEN the listing's status has moved away from `live` between the offer's creation and the accept attempt (paused by the seller, or already flipped `under_offer` by a different offer's accept), WHEN accept is called, THEN 409 — the listing's current status is re-checked **inside** the accept transaction, not trusted from when the offer was created (`security.md` §6 race conditions).
 - **B9** GIVEN no credentials, WHEN any decision or withdraw route is called, THEN 401.
+- **B10** GIVEN a `submitted` offer whose listing has left `live` (the seller paused or closed it, or a different offer already flipped it `under_offer`), WHEN a party attempts to `counter` it, THEN 409 `listing_not_live`, and the 409 leaves everything untouched — no child row is spawned and the parent stays `submitted`. A counter *creates a new priced proposal* (D1), the same class of action A3 gates for the root offer and B8 re-checks inside `accept` — so it is gated identically (D8). *(Added after M7's independent appsec pass, which found `counter` was the one write path that created a new priced commitment without re-checking listing liveness — the "corridor" past an already-open thread, mirroring M3's own bypass-class lesson.)*
+- **B11** GIVEN a `submitted` offer on a listing that has left `live`, WHEN its proposer attempts to `withdraw` it, or its counterparty to `decline` it, THEN 200 — these two paths are deliberately **not** gated on liveness (D8): they only resolve or retract an existing row, creating no new commitment, so a buyer can always withdraw and a seller can always decline a lingering offer.
 
 ### C — Counter-offer mechanics ⭐ (D1 — the fold-in's crown jewel)
 

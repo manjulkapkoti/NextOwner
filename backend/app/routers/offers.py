@@ -269,6 +269,19 @@ def counter_offer(
     if role == offer.proposed_by_role:
         raise Forbidden("You may not decide your own offer")   # bilateral half of B4/C6
 
+    # A counter CREATES a new priced proposal (D1) — the same class of action
+    # `require_approved_buyer` gates on `live` for the root offer (A3), and that
+    # `accept` re-checks inside its own transaction (B8). Without this, a party
+    # could spawn priced `submitted` rows on a listing that has left `live`
+    # (paused/closed/under_offer) — the corridor past an already-open thread that
+    # every other door already blocks (spec 007 B10/D8; appsec M7 Finding 1).
+    # Checked before any write, so a 409 leaves the parent and the audit trail
+    # untouched. `decline`/`withdraw` are deliberately NOT gated on liveness (D8):
+    # they resolve/retract an existing row without creating a new commitment.
+    listing = session.get(Listing, offer.listing_id)
+    if listing is None or listing.status != "live":
+        raise InvalidTransition("Listing is not live", code="listing_not_live")
+
     now = _utcnow()
     # Compare-and-swap the parent to `countered` BEFORE inserting the child, so
     # (a) a concurrent second counter finds it no longer `submitted` and 409s
@@ -297,11 +310,22 @@ def counter_offer(
         proposed_close_date=body.proposed_close_date,
     )
     session.add(child)
-    session.flush()                        # assigns child.id without ending the transaction
-
-    _record(session, offer, user, "countered", "submitted", "countered")
-    _record(session, child, user, "submitted", None, "submitted")
-    session.commit()
+    try:
+        # Defense-in-depth mirror of `create_offer`'s own IntegrityError guard.
+        # The parent was CAS'd out of `submitted` above before this insert, so on
+        # SQLite (writes serialize) the D7 partial-unique index cannot currently
+        # be tripped here; the guard keeps the two insert paths symmetric and
+        # race-safe under Postgres row-locking, turning a would-be raw 500 into
+        # the same clean 409 `create_offer` returns.
+        session.flush()                    # assigns child.id without ending the transaction
+        _record(session, offer, user, "countered", "submitted", "countered")
+        _record(session, child, user, "submitted", None, "submitted")
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise Conflict(
+            "An active offer already exists on this listing", code="offer_already_active"
+        ) from None
     session.refresh(child)
     return child
 

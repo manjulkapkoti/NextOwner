@@ -84,7 +84,7 @@ offers/access-requests.
 | `POST /api/listings/{listing_id}/offers` | `require_approved_buyer` (new) | — → `submitted` |
 | `POST /api/offers/{offer_id}/accept` | `require_offer_party` + decision-rights check | `submitted` → `accepted` **+ listing** `live` → `under_offer` **+ sibling auto-decline** |
 | `POST /api/offers/{offer_id}/decline` | `require_offer_party` + decision-rights check | `submitted` → `declined` |
-| `POST /api/offers/{offer_id}/counter` | `require_offer_party` + decision-rights check | `submitted` → `countered`, **+ new child row** `submitted` |
+| `POST /api/offers/{offer_id}/counter` | `require_offer_party` + decision-rights check **+ listing `live`** | `submitted` → `countered`, **+ new child row** `submitted` (spawns a new priced commitment → gated on liveness, D8/B10) |
 | `POST /api/offers/{offer_id}/withdraw` | `require_offer_party` + proposer-rights check | `submitted` → `withdrawn` |
 | `GET /api/my/offers` | `get_current_user` (caller-scoped query) | — |
 | `GET /api/my/listings/{listing_id}/offers` | `get_owned_listing` *(existing — mirrors spec 005 D7)* | — |

@@ -123,17 +123,23 @@ def test_b5_deciding_an_already_decided_offer_is_409(
     assert retry.json()["code"] == "offer_already_decided"
 
 
-@pytest.mark.parametrize("action", ["accept", "decline"])
+@pytest.mark.parametrize("action", ["accept", "decline", "counter", "withdraw"])
 def test_b6_an_admin_who_does_not_own_the_listing_cannot_decide(
     client, auth_headers, admin_headers, live_listing, submitted_offer, action
 ):
-    """Admin is not special-cased on this boundary either (mirrors spec 005 C8)."""
+    """Admin is not special-cased on this boundary either (mirrors spec 005 C8).
+
+    Covers all four write actions — `offer_role_for` has no `is_admin` branch,
+    so an admin who is neither the listing's owner nor the offer's buyer is a
+    stranger to every one of them (appsec M7 Finding 3).
+    """
     seller, buyer = _seller_and_buyer(auth_headers)
     listing_id = live_listing(seller)
     offer_id = submitted_offer(listing_id, buyer, seller)
     admin = admin_headers()
 
-    res = client.post(f"/api/offers/{offer_id}/{action}", headers=admin)
+    body = VALID_OFFER if action == "counter" else None
+    res = client.post(f"/api/offers/{offer_id}/{action}", json=body, headers=admin)
     assert res.status_code == 403
 
 
@@ -191,6 +197,62 @@ def test_b9_no_credentials_on_any_decision_route_is_401(
     body = VALID_OFFER if action == "counter" else None
     res = client.post(f"/api/offers/{offer_id}/{action}", json=body)
     assert res.status_code == 401
+
+
+@pytest.mark.parametrize("cause", ["paused", "closed", "under_offer"])
+def test_b10_counter_requires_a_live_listing(
+    client, auth_headers, live_listing, submitted_offer, force_status, cause
+):
+    """A counter CREATES a new priced proposal (D1) — the same class of action
+    A3 gates on `live` for the root offer and B8 re-checks inside accept's
+    transaction. Once the listing leaves `live` (the seller paused/closed it, or
+    a different offer flipped it `under_offer`), a counter must 409 — otherwise a
+    party can spawn priced `submitted` commitments on a dead listing, the
+    corridor past an already-open thread that each door already blocks (appsec M7
+    Finding 1, spec 007 B10/D8). The 409 must leave everything untouched: no
+    child row created, the parent still `submitted`.
+    """
+    seller, buyer = _seller_and_buyer(auth_headers)
+    listing_id = live_listing(seller)
+    offer_id = submitted_offer(listing_id, buyer, seller)
+
+    if cause == "paused":
+        client.post(f"/api/listings/{listing_id}/pause", headers=seller)
+    elif cause == "closed":
+        client.post(f"/api/listings/{listing_id}/close", headers=seller)
+    else:
+        force_status(listing_id, "under_offer")
+
+    res = client.post(f"/api/offers/{offer_id}/counter", json=VALID_OFFER, headers=seller)
+    assert res.status_code == 409
+    assert res.json()["code"] == "listing_not_live"
+
+    rows = client.get("/api/my/offers", headers=buyer).json()
+    assert all(r.get("parent_offer_id") is None for r in rows), "no child row may be spawned"
+    assert next(r for r in rows if r["id"] == offer_id)["status"] == "submitted"
+
+
+@pytest.mark.parametrize("action,actor_role", [("decline", "seller"), ("withdraw", "buyer")])
+def test_b11_decline_and_withdraw_do_not_require_a_live_listing(
+    client, auth_headers, live_listing, submitted_offer, action, actor_role
+):
+    """Spec 007 D8 — the deliberate opposite of B10: `decline` and `withdraw`
+    only RESOLVE or RETRACT an existing row (no new commitment is created), so
+    they stay available after the listing leaves `live` — a buyer must be able to
+    withdraw a paused listing's offer, a seller to decline a lingering one. This
+    pins the decision so the absence of a liveness check on these two paths is
+    stated and regression-guarded, not an accidental omission (appsec M7 Finding
+    1's product call).
+    """
+    seller, buyer = _seller_and_buyer(auth_headers)
+    listing_id = live_listing(seller)
+    offer_id = submitted_offer(listing_id, buyer, seller)
+    client.post(f"/api/listings/{listing_id}/pause", headers=seller)
+
+    actor = seller if actor_role == "seller" else buyer
+    res = client.post(f"/api/offers/{offer_id}/{action}", headers=actor)
+    assert res.status_code == 200
+    assert res.json()["status"] == ("declined" if action == "decline" else "withdrawn")
 
 
 # ── C — counter-offer mechanics ⭐ ─────────────────────────────────────────────
