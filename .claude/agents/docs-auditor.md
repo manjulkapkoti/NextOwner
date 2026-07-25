@@ -37,7 +37,7 @@ Findings only, ordered by severity, each one checkable in seconds:
 ```
 [CONTRADICTION] docs/progress.md:26
   says: "M3 is security-critical … gets the independent appsec pass"
-  but:  specs/000-constitution.md:118 lists "M1/M2/M5/M7/M8/M10"
+  but:  specs/000-constitution.md Article 3 §3 lists "M1/M2/M5/M7/M8/M10"
   why it matters: the constitution is binding; a reader following progress.md
                   applies the wrong review gate.
 ```
