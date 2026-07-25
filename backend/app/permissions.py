@@ -20,7 +20,15 @@ from sqlmodel import Session, select
 
 from .db import get_session
 from .errors import Forbidden, InvalidTransition, NotFound, Unauthorized
-from .models import AccessRequest, Conversation, Listing, Offer, User
+from .models import (
+    AccessRequest,
+    Conversation,
+    Listing,
+    Notification,
+    Offer,
+    SavedSearch,
+    User,
+)
 from .security import decode_access_token
 
 
@@ -312,6 +320,47 @@ def require_offer_party(
         # cases cannot drift into distinguishable responses (S5).
         raise Forbidden("You may not act on this offer")
     return offer, role
+
+
+def get_owned_notification(
+    notification_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Notification:
+    """Trust boundary: is this notification the caller's own? (M8, spec E5/S8)
+
+    Returns **404 for both** "no such id" and "exists but not yours", the same
+    choice `get_owned_listing` makes below and for the same reason: this is the
+    caller's own inbox, so the two cases must be indistinguishable or the id
+    space becomes an oracle for how much traffic other users are getting (S8).
+
+    The contrast with `require_request_decider`'s uniform *403* is deliberate
+    and both obey `security.md` §1.4's real rule — *be consistent within a
+    boundary*. They differ in which uniform answer is safe: an access-request
+    id carries no secret, so "you may not act on this" is honest there; a
+    notification id is only ever meaningful to one person, so "not found" is
+    the truthful answer to everyone else.
+    """
+    notification = session.get(Notification, notification_id)
+    if notification is None or notification.recipient_id != user.id:
+        raise NotFound("Notification not found")
+    return notification
+
+
+def get_owned_saved_search(
+    saved_search_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> SavedSearch:
+    """Trust boundary: is this saved search the caller's own? (M8, spec A4)
+
+    Same 404-for-both shape as `get_owned_notification` above, same reasoning —
+    a saved search is a private artifact of one account.
+    """
+    saved_search = session.get(SavedSearch, saved_search_id)
+    if saved_search is None or saved_search.user_id != user.id:
+        raise NotFound("Saved search not found")
+    return saved_search
 
 
 def get_owned_listing(
