@@ -492,17 +492,29 @@ class RecordingEmailSender:
 
 @pytest.fixture(autouse=True)
 def outbox():
-    """Swap the module-level mailer for a recorder; yield it for assertions."""
+    """Swap the module-level mailer for a recorder; yield it for assertions.
+
+    **Both seams are swapped, and the dispatcher one is load-bearing.**
+    Production runs sends on a worker pool (`ThreadDispatcher`) so a blocking
+    SMTP call never sits on the request thread — or, worse, on the `async`
+    WebSocket handler's event loop. Under that dispatcher a test asserting
+    `outbox.sent` immediately after a request would race the worker and flake.
+    `InlineDispatcher` makes the send happen before the request returns, which
+    is what every F/G/H assertion depends on.
+    """
     recorder = RecordingEmailSender()
     try:
         from app import mailer as mailer_module
     except ImportError:
         yield recorder                      # slice 1 hasn't landed — nothing to swap
         return
-    original = mailer_module.mailer
+    original_mailer = mailer_module.mailer
+    original_dispatcher = mailer_module.dispatcher
     mailer_module.mailer = recorder
+    mailer_module.dispatcher = mailer_module.InlineDispatcher()
     yield recorder
-    mailer_module.mailer = original
+    mailer_module.mailer = original_mailer
+    mailer_module.dispatcher = original_dispatcher
 
 
 @pytest.fixture

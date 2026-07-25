@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import smtplib
+from concurrent.futures import ThreadPoolExecutor
 from email.message import EmailMessage
 from typing import Protocol
 
@@ -96,6 +97,48 @@ def send_safe(to: str, subject: str, body: str) -> bool:
 _PENDING = "nextowner_pending_emails"
 
 
+class Dispatcher(Protocol):
+    """Where a queued send actually runs. The second seam in this module."""
+
+    def submit(self, fn: object, *args: object) -> None: ...
+
+
+class InlineDispatcher:
+    """Runs the send on the calling thread. Used by tests, so assertions are
+    deterministic — and never in production, for the reason below."""
+
+    def submit(self, fn, *args) -> None:  # type: ignore[no-untyped-def]
+        fn(*args)
+
+
+class ThreadDispatcher:
+    """Runs sends on a small worker pool — **the production default.**
+
+    `SmtpEmailSender.send` is a blocking socket call with a 5-second timeout,
+    and the drain below is triggered by `session.commit()`. Left inline, that
+    put a blocking network call on whatever thread committed, including the
+    **`async` WebSocket handler** in `routers/chat.py`: one slow SMTP server
+    would stall every live chat socket on that worker for up to five seconds,
+    against an NFR of sub-second message delivery.
+
+    It also removed a timing side-channel from `forgot-password`: with the send
+    inline, the known-address path paid an SMTP round trip that the
+    unknown-address path did not, so response latency answered the question the
+    uniform 202 exists to refuse (`security.md` §6 — enumeration by timing, the
+    rule M1's login already honours with its dummy-hash).
+
+    Per-instance state, like `ratelimit.py` and `chat_broker.py` before it: a
+    real queue replaces this by constructing a different dispatcher, not by
+    editing any caller.
+    """
+
+    def __init__(self, max_workers: int = 4) -> None:
+        self._pool = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="mail")
+
+    def submit(self, fn, *args) -> None:  # type: ignore[no-untyped-def]
+        self._pool.submit(fn, *args)
+
+
 def queue_email(session: SASession, to: str, subject: str, body: str) -> None:
     """Hold a message until this session's transaction commits."""
     session.info.setdefault(_PENDING, []).append((to, subject, body))
@@ -104,7 +147,7 @@ def queue_email(session: SASession, to: str, subject: str, body: str) -> None:
 @event.listens_for(SASession, "after_commit")
 def _flush_pending_emails(session: SASession) -> None:
     for to, subject, body in session.info.pop(_PENDING, []):
-        send_safe(to, subject, body)
+        dispatcher.submit(send_safe, to, subject, body)
 
 
 @event.listens_for(SASession, "after_soft_rollback")
@@ -113,3 +156,4 @@ def _drop_pending_emails(session: SASession, previous_transaction: object) -> No
 
 
 mailer: EmailSender = SmtpEmailSender() if settings.email_enabled else NullEmailSender()
+dispatcher: Dispatcher = ThreadDispatcher()

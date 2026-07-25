@@ -14,6 +14,8 @@ established way of keeping an external or per-instance effect swappable. The
 from __future__ import annotations
 
 import smtplib
+import threading
+import time
 
 from tests.conftest import VALID_PW
 
@@ -114,3 +116,45 @@ def test_f6_no_smtp_socket_is_ever_opened(client, monkeypatch, outbox):
 
     assert res.status_code == 201
     assert outbox.to("nosocket@example.com") != []
+
+
+def test_f7_a_slow_transport_does_not_block_the_committing_thread(session, monkeypatch):
+    """F7 — the send runs on the dispatcher's pool, not the caller's thread.
+
+    Added by the branch review. `SmtpEmailSender.send` blocks for up to five
+    seconds, and `after_commit` fires it — so with an inline dispatcher that
+    block lands on whatever thread committed, **including the `async` WebSocket
+    handler**, stalling every live chat socket on the worker. This pins the
+    property the other F criteria never ask about: not *whether* mail is sent,
+    but *where the send runs*.
+
+    Uses the real `ThreadDispatcher` deliberately — the `outbox` fixture swaps
+    in the inline one for every other test, so this is the single place the
+    production dispatch path is exercised.
+    """
+    from app import mailer as mailer_module
+
+    started = threading.Event()
+    release = threading.Event()
+
+    class BlockingSender:
+        def send(self, to: str, subject: str, body: str) -> None:
+            started.set()
+            release.wait(10)          # stands in for a hung SMTP server
+
+    monkeypatch.setattr(mailer_module, "mailer", BlockingSender())
+    monkeypatch.setattr(mailer_module, "dispatcher", mailer_module.ThreadDispatcher())
+
+    mailer_module.queue_email(session, "slow@example.com", "subject", "body")
+    began = time.monotonic()
+    session.commit()
+    elapsed = time.monotonic() - began
+
+    try:
+        assert started.wait(5), "the send never ran — the dispatcher dropped it"
+        assert elapsed < 1.0, (
+            f"commit blocked {elapsed:.2f}s waiting on the transport — "
+            "the send ran inline, which is what stalls the WebSocket event loop"
+        )
+    finally:
+        release.set()                 # never leave the pool thread parked

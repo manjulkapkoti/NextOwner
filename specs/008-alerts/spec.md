@@ -117,6 +117,9 @@ The load-bearing sentence for the whole milestone: **a notification is a deliver
 - **F4** — GIVEN an `EmailSender` that raises on send, WHEN the domain action runs, THEN the action still returns its normal 2xx and the in-app notification still exists (email failure never fails the business action).
 - **F5** — GIVEN any dispatched email, WHEN its body and subject are inspected, THEN they contain no password hash, no JWT, and no `ListingPrivate` field.
 - **F6** — GIVEN the test suite, WHEN any email-producing endpoint is exercised, THEN no SMTP connection is attempted (the port is swapped for `InMemoryEmailSender`).
+- **F7** — GIVEN the production dispatcher and a transport that blocks, WHEN a queued notification is committed, THEN the committing thread returns without waiting for the send to finish.
+
+> **F7 was added during the branch review**, after the inline pass found that `SmtpEmailSender.send` — a blocking socket call with a 5-second timeout — was reachable from the **`async` WebSocket handler** via `notify_message` → `commit` → `after_commit`. One slow SMTP server would have stalled every live chat socket on that worker, against the sub-second delivery NFR, and it also gave `forgot-password` a timing side-channel (the known-address path paid an SMTP round trip the unknown-address path did not — the enumeration-by-timing `security.md` §6 names, which M1's login already defends with its dummy hash). **The class of question the other F criteria were not asking:** they all assert *that* a message is sent, and none asks *where the send runs*. F7 is that question.
 
 ### G — Password reset (security-critical)
 
