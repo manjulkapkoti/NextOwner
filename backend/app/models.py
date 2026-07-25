@@ -67,6 +67,13 @@ class User(SQLModel, table=True):
     nda_signed_at: datetime | None = None
     nda_version: str | None = None
 
+    # M8. A timestamp, not a bool, matching the two pairs above — one stored
+    # source of truth for the fact; `UserRead` derives the boolean the API
+    # exposes. Spec D6: this gates outbound *notification* mail and nothing
+    # else yet (transactional mail must still reach an unverified address, or
+    # verification could never bootstrap).
+    email_verified_at: datetime | None = None
+
     # Erasure-ready (data_protection.md §3) — anonymize-in-place, never hard-delete
     deleted_at: datetime | None = None
 
@@ -306,6 +313,121 @@ class Offer(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
     decided_at: datetime | None = None
     decided_by_id: int | None = Field(default=None, foreign_key="user.id")
+
+
+class Notification(SQLModel, table=True):
+    """One delivered notification (M8, spec 008 D1/D2/D3, FR-22).
+
+    **A delivery record, not an audit row.** `ListingEvent`,
+    `AccessRequestEvent` and `OfferEvent` remain the immutable history; this
+    table is a *projection* of them, mutable (`read_at`), per-recipient, and
+    safely deletable. It must never become a second, drifting account of what
+    happened — when the two disagree, the event tables are the fact.
+
+    **It carries no private payload (D2).** `title` is composed server-side
+    from public data only (`listing.headline` is on `ListingPublic`;
+    `company_name` is not), and no message body, offer price, or
+    `ListingPrivate` value is ever copied in. That is what makes a stale row
+    safe: a buyer whose access was revoked may still hold a notification, but
+    following it lands on `require_private_access` / `conversation_role_for`
+    and is refused (spec S1). Copying content in here would have quietly built
+    a bypass around M5's crown-jewel gate.
+
+    `recipient_id` is **always derived server-side** from the domain object
+    (`notifications.py`), never from a request body — Article 2 #4 applied to
+    the one field that decides who reads this.
+
+    The three nullable link FKs are the click-through target, kept as real
+    foreign keys rather than a polymorphic `(kind, id)` pair: referential
+    integrity, and it is what lets the "don't alert twice for one listing"
+    rule (spec B7) be a **partial unique index** instead of a check someone can
+    forget — the same construction `Offer` already uses for its one-active-
+    offer rule, so both survive the Postgres swap.
+    """
+
+    __table_args__ = (
+        # Partial: constrains only `listing_matched` rows, so the many other
+        # notification types about the same listing (approved, offer, message)
+        # are unaffected. M3's edit→`pending_review`→approve corridor makes a
+        # second publication genuinely reachable, and without this each pass
+        # would re-alert every matching buyer.
+        Index(
+            "uq_notification_one_alert_per_listing",
+            "recipient_id",
+            "listing_id",
+            unique=True,
+            sqlite_where=text("type = 'listing_matched'"),
+            postgresql_where=text("type = 'listing_matched'"),
+        ),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    recipient_id: int = Field(foreign_key="user.id", index=True)   # server-derived
+    type: str = Field(index=True)
+    title: str                                                      # public data only
+    listing_id: int | None = Field(default=None, foreign_key="listing.id", index=True)
+    conversation_id: int | None = Field(default=None, foreign_key="conversation.id")
+    offer_id: int | None = Field(default=None, foreign_key="offer.id")
+    read_at: datetime | None = Field(default=None)                  # the one mutable field
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class SavedSearch(SQLModel, table=True):
+    """A buyer's stored browse filters (M8, FR-11).
+
+    `filters_json` is a JSON blob (the shape `ListingPrivate.detailed_financials`
+    already established) and is **never interpolated into SQL**: it is parsed
+    back through the same Pydantic model M4's browse route validates, and
+    matching re-uses that predicate builder. That is what makes "a filter can
+    only ever name a public column" a schema fact rather than an allow-list
+    someone maintains (spec S5) — reaching into `ListingPrivate` here would
+    turn saved searches into the identity oracle M4's keyword search refuses to
+    be.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)         # server-derived
+    name: str
+    filters_json: str
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class PasswordResetToken(SQLModel, table=True):
+    """A single-use password-reset grant (M8, security.md §7 M8).
+
+    **Deliberately a separate table from `EmailVerificationToken`** rather than
+    one table with a `purpose` column (spec 008 D4): two tables make
+    cross-purpose redemption *structurally* impossible instead of dependent on
+    every lookup remembering to filter. The codebase already prefers
+    duplication over sharing when a boundary is at stake —
+    `conversation_role_for` duplicates the NDA-gate query so M6 cannot regress
+    M5 — and this is the same trade for the same reason.
+
+    `token_hash` is **SHA-256 of a 256-bit `secrets.token_urlsafe(32)`**, not
+    bcrypt (D5): there is no low-entropy guess space for a slow KDF to defend,
+    so bcrypt would add latency to every redemption and buy nothing. Hashing at
+    all is the point — a leaked database must not yield usable tokens.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    token_hash: str = Field(unique=True, index=True)      # never the raw token
+    expires_at: datetime
+    used_at: datetime | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class EmailVerificationToken(SQLModel, table=True):
+    """A single-use address-confirmation grant (M8). Twin of
+    `PasswordResetToken` above — see its docstring for why these are two tables
+    and not one (spec 008 D4)."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    token_hash: str = Field(unique=True, index=True)
+    expires_at: datetime
+    used_at: datetime | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 class OfferEvent(SQLModel, table=True):
