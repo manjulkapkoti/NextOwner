@@ -14,6 +14,32 @@
     "e2e:screens": "playwright test e2e/screens.spec.ts",
     "e2e:a11y": "playwright test e2e/a11y.spec.ts"
   },
+  "comment:overrides": [
+    "GHSA-mh99-v99m-4gvg (brace-expansion DoS, high) reaches us only through the",
+    "eslint toolchain. This override swaps the one vulnerable copy that can be",
+    "patched safely: typescript-estree's nested brace-expansion 5.0.7 -> 5.0.8,",
+    "whose engines ('20 || >=22') still allow our pinned Node 20.13.1.",
+    "",
+    "Three things that look like fixes and are NOT — all tested, not guessed:",
+    "1. A blanket brace-expansion override. v5's CommonJS entry exports",
+    "   { expand }, not the function, so minimatch@3's require() call throws",
+    "   and the linter dies.",
+    "2. minimatch@^10 into @eslint/eslintrc. Its bundle does",
+    "   `const { Minimatch } = minimatch__default['default']`, undefined in v10.",
+    "3. @eslint/config-array@^0.23.5 (which would drop one more advisory by",
+    "   moving to minimatch@10). It requires Node ^20.19 || ^22.13 || >=24, and",
+    "   this project is pinned to Node 20.13.1 — CI's 'node-version: 20' would",
+    "   resolve a newer Node than the dev machine and hide the mismatch.",
+    "",
+    "What remains: eslint@9 -> minimatch@^3.1.2 -> brace-expansion@1, whose",
+    "latest 1.x IS the vulnerable version. There is no patched 1.x. The only",
+    "real fix is eslint 10, a major bump deliberately deferred. See ci.yml."
+  ],
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "brace-expansion": "^5.0.8"
+    }
+  },
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
@@ -22,6 +48,7 @@
     "@mui/material": "^6.4.0",
     "mobx": "^6.13.5",
     "mobx-react-lite": "^4.1.0",
+    "nextowner": "file:..",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^6.28.0"
