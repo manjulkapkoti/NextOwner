@@ -29,6 +29,9 @@ import smtplib
 from email.message import EmailMessage
 from typing import Protocol
 
+from sqlalchemy import event
+from sqlalchemy.orm import Session as SASession
+
 from .config import settings
 
 logger = logging.getLogger("nextowner.mailer")
@@ -75,6 +78,38 @@ def send_safe(to: str, subject: str, body: str) -> bool:
         logger.warning("email dispatch failed [to=%s subject=%s]", to, subject)
         return False
     return True
+
+
+# ── send-after-commit ────────────────────────────────────────────────────────
+#
+# Email is the one effect in this codebase that a database rollback cannot take
+# back. Sending inline would mean a buyer can be told their offer was accepted
+# by a transaction that then failed its unique constraint and rolled away —
+# `create_offer` and `counter_offer` both have exactly that path
+# (`IntegrityError` → `session.rollback()`).
+#
+# So callers **queue** onto the session and the queue drains in SQLAlchemy's
+# `after_commit`, which by definition only fires when the work actually landed.
+# `after_soft_rollback` throws the queue away. The result is that a mail is
+# sent if and only if the fact it describes is durable.
+
+_PENDING = "nextowner_pending_emails"
+
+
+def queue_email(session: SASession, to: str, subject: str, body: str) -> None:
+    """Hold a message until this session's transaction commits."""
+    session.info.setdefault(_PENDING, []).append((to, subject, body))
+
+
+@event.listens_for(SASession, "after_commit")
+def _flush_pending_emails(session: SASession) -> None:
+    for to, subject, body in session.info.pop(_PENDING, []):
+        send_safe(to, subject, body)
+
+
+@event.listens_for(SASession, "after_soft_rollback")
+def _drop_pending_emails(session: SASession, previous_transaction: object) -> None:
+    session.info.pop(_PENDING, None)
 
 
 mailer: EmailSender = SmtpEmailSender() if settings.email_enabled else NullEmailSender()

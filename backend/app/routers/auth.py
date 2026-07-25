@@ -14,12 +14,27 @@ from sqlmodel import Session, select
 
 from ..config import settings
 from ..db import get_session
-from ..errors import Conflict, RateLimited, Unauthorized
+from ..errors import BadRequest, Conflict, RateLimited, Unauthorized
+from ..mailer import queue_email
 from ..models import User, _utcnow
 from ..permissions import get_current_user
 from ..ratelimit import RateLimiter
-from ..schemas import LoginResponse, RoleUpdate, UserRead, UserRegister
+from ..schemas import (
+    ForgotPasswordRequest,
+    LoginResponse,
+    ResetPasswordRequest,
+    RoleUpdate,
+    UserRead,
+    UserRegister,
+    VerifyEmailRequest,
+)
 from ..security import create_access_token, hash_password, verify_password
+from ..tokens import (
+    issue_email_verification,
+    issue_password_reset,
+    redeem_email_verification,
+    redeem_password_reset,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -60,9 +75,31 @@ def register(
         tos_version=settings.tos_version,
     )
     session.add(user)
+    session.flush()                      # assigns user.id for the token row
+    # M8 (spec F3, S9): mail the confirmation link. This is **transactional**
+    # mail, so it deliberately bypasses the `email_verified` gate that governs
+    # notification mail — otherwise verification could never bootstrap. Note
+    # where it sits: after the duplicate-email 409 above, so re-registering
+    # someone else's address cannot be used to mail them on demand (S9).
+    _send_verification(session, user)
     session.commit()
     session.refresh(user)
     return user
+
+
+def _send_verification(session: Session, user: User) -> None:
+    """Issue a verification token and queue its email (shared by register and
+    resend). Queued, not sent — it goes out only if the transaction commits,
+    so a link can never reference a token row that rolled away."""
+    raw = issue_email_verification(session, user)
+    queue_email(
+        session,
+        user.email,
+        "Confirm your NextOwner email address",
+        "Confirm your address to start receiving NextOwner email:\n\n"
+        f"{settings.app_base_url}/verify-email?token={raw}\n\n"
+        f"This link expires in {settings.email_verification_token_ttl_hours} hours.\n",
+    )
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -133,3 +170,129 @@ def add_role(
     session.commit()
     session.refresh(user)
     return user
+
+
+# ── Account lifecycle (M8) — password reset + email verification ─────────────
+#
+# Moved here from M1 (2026-07-17) because these flows *are* email, and M8 is
+# where the email channel is built. `security.md` §7 M8 governs every line.
+
+_forgot_password_limiter = RateLimiter(
+    max_attempts=settings.forgot_password_rate_limit_max,
+    window_seconds=settings.forgot_password_rate_limit_window_seconds,
+)
+
+
+@router.post("/forgot-password", status_code=202)
+def forgot_password(
+    body: ForgotPasswordRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
+    """Request a reset link (spec G1, G2, G9, G13, X3).
+
+    **Returns the same 202 and the same body no matter what** — whether the
+    address is registered, anonymized, or belongs to nobody. That uniformity is
+    the entire security property: this endpoint is otherwise a free
+    "does an account exist here?" oracle, which is M1's login rule applied to a
+    second door.
+
+    The rate limit matters more here than on login, because the cost of abuse
+    lands on a **third party**: an attacker who can call this without bound
+    mails somebody else's inbox on demand.
+
+    An SMTP failure is swallowed by the queue's `send_safe` and never changes
+    the response — surfacing it would recreate the very oracle the uniform 202
+    exists to close (X3).
+    """
+    key = request.client.host if request.client else "unknown"
+    if not _forgot_password_limiter.check(key):
+        raise RateLimited("Too many password-reset requests — try again later")
+
+    user = session.exec(select(User).where(User.email == body.email)).first()
+    if user is not None and user.deleted_at is None:
+        raw = issue_password_reset(session, user)
+        queue_email(
+            session,
+            user.email,
+            "Reset your NextOwner password",
+            "Use this link to choose a new password:\n\n"
+            f"{settings.app_base_url}/reset-password?token={raw}\n\n"
+            f"It expires in {settings.password_reset_token_ttl_minutes} minutes. "
+            "If you didn't ask for this, you can ignore this email.\n",
+        )
+        session.commit()
+
+    # Identical for every caller. Nothing above may change what is returned.
+    return {"status": "accepted"}
+
+
+@router.post("/reset-password", response_model=UserRead)
+def reset_password(
+    body: ResetPasswordRequest,
+    session: Session = Depends(get_session),
+) -> User:
+    """Redeem a reset token and set a new password (spec G3-G8, G11, S7, X4).
+
+    The token arrives in the **body**, never the query string (spec D11): a URL
+    parameter is recorded by proxies, access logs, `Referer` headers and
+    browser history, which `security.md` §7 M8 rules out.
+
+    `redeem_password_reset` is the only thing that decides whose password this
+    changes. The body's other fields cannot influence it — an `email` a caller
+    adds is not a field of this schema and is ignored, so a token for user A
+    can never touch user B (G6).
+    """
+    user = redeem_password_reset(session, body.token)
+    if user is None:
+        # One refusal for missing, expired, used, malformed, and wrong-purpose.
+        raise BadRequest("Invalid or expired link", code="invalid_token")
+
+    user.password_hash = hash_password(body.password)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+@router.post("/verify-email", response_model=UserRead)
+def verify_email(
+    body: VerifyEmailRequest,
+    session: Session = Depends(get_session),
+) -> User:
+    """Confirm an address (spec H2-H6).
+
+    Reads only `EmailVerificationToken`, so a password-reset token cannot land
+    here (H5) — that is spec D4's two-table split doing the work rather than a
+    `purpose` check that a future edit could drop.
+    """
+    user = redeem_email_verification(session, body.token)
+    if user is None:
+        raise BadRequest("Invalid or expired link", code="invalid_token")
+
+    if user.email_verified_at is None:      # idempotent — the first stamp stands
+        user.email_verified_at = _utcnow()
+        session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+@router.post("/resend-verification", status_code=202)
+def resend_verification(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
+    """Send a fresh confirmation link (spec H7, H9).
+
+    Authenticated, unlike `forgot-password`, which is what makes a uniform
+    response unnecessary here: the caller already proved who they are, so a 409
+    for "already verified" reveals nothing they did not know and saves a
+    pointless email.
+    """
+    if user.email_verified_at is not None:
+        raise Conflict("This address is already verified", code="already_verified")
+
+    _send_verification(session, user)
+    session.commit()
+    return {"status": "accepted"}

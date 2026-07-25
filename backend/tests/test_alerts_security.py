@@ -200,7 +200,7 @@ def test_s9_re_registering_an_address_does_not_mail_its_owner(client, register, 
 
 def test_s10_every_notification_recipient_is_a_party_to_its_subject(
     client, session, auth_headers, admin_headers, make_listing, live_listing,
-    granted_access, submitted_offer, chat_conversation, user_id
+    make_offer, chat_conversation, user_id
 ):
     """S10 — the reachability invariant, in `test_nda_gate.py` D10's tradition.
 
@@ -295,7 +295,10 @@ def test_s10_every_notification_recipient_is_a_party_to_its_subject(
         ws.receive_json()
     check_invariant("message sent")
 
-    offer_id = submitted_offer(listing_id, buyer, seller)
+    # `make_offer`, not `submitted_offer`: access was already granted by
+    # `chat_conversation` above, and M5's unique constraint makes a second
+    # request for the same (listing, buyer) pair a 409.
+    offer_id = make_offer(listing_id, buyer).json()["id"]
     check_invariant("offer submitted")
     client.post(
         f"/api/offers/{offer_id}/counter",

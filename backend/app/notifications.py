@@ -27,6 +27,8 @@ from __future__ import annotations
 
 from sqlmodel import Session, select
 
+from .config import settings
+from .mailer import queue_email
 from .models import (
     AccessRequest,
     Conversation,
@@ -108,7 +110,36 @@ def notify(
         offer_id=offer_id,
     )
     session.add(notification)
+
+    # Second channel (FR-22 + FR-16's email fallback), gated on a **confirmed**
+    # address (spec D6, F1/F2). Unverified users keep the full in-app inbox;
+    # what they do not get is bulk mail to an address nobody has proven belongs
+    # to them — that is how a platform becomes a spam source, and how a typo'd
+    # address turns into someone else's problem. Transactional mail (verify,
+    # reset) deliberately bypasses this gate, or verification could never
+    # bootstrap.
+    if recipient.email_verified_at is not None:
+        queue_email(session, recipient.email, title, _email_body(title, notification))
     return notification
+
+
+def _email_body(title: str, notification: Notification) -> str:
+    """The mail body: the same public title, plus a link back into the app.
+
+    Carries **no** more than the notification row does (F5) — the row is
+    already the D2-safe projection, and an email is the one copy of a
+    notification that leaves our control entirely, so it is the last place to
+    start adding detail.
+    """
+    if notification.conversation_id is not None:
+        path = f"/messages/{notification.conversation_id}"
+    elif notification.offer_id is not None:
+        path = "/my/offers"
+    elif notification.listing_id is not None:
+        path = f"/listings/{notification.listing_id}"
+    else:
+        path = "/notifications"
+    return f"{title}\n\nOpen NextOwner: {settings.app_base_url}{path}\n"
 
 
 # ── per-event recipient derivation ───────────────────────────────────────────
