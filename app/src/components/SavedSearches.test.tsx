@@ -22,7 +22,7 @@ describe('SavedSearches', () => {
 
   it('J7: saving a search adds it to the list', async () => {
     const rows: unknown[] = []
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === 'POST') {
         const created = {
           id: 1,
