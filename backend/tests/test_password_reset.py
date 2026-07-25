@@ -200,3 +200,31 @@ def test_g13_a_soft_deleted_user_gets_no_token(client, register, session, outbox
     assert res.status_code == 202
     assert outbox.sent == []
     assert session.execute(text("SELECT count(*) FROM passwordresettoken")).scalar_one() == 0
+
+
+def test_g14_the_unknown_address_path_equalizes_its_cost(client, register, monkeypatch):
+    """G14 — no timing oracle: the not-found branch does the work anyway.
+
+    Spies on the equalization instead of timing the request. A wall-clock
+    assertion would be flaky in CI and would measure the machine more than the
+    code; the failure mode that actually threatens this property is a later
+    refactor deleting the call, which a spy catches deterministically and a
+    stopwatch might not.
+    """
+    from app.routers import auth as auth_router
+
+    calls: list[int] = []
+    original = auth_router.equalize_unknown_address_cost
+
+    def spy(session):
+        calls.append(1)
+        return original(session)
+
+    monkeypatch.setattr(auth_router, "equalize_unknown_address_cost", spy)
+
+    register(email="alice@example.com")
+    _forgot(client, "alice@example.com")
+    assert calls == [], "the known-address path must not need equalizing"
+
+    _forgot(client, "nobody@example.com")
+    assert calls == [1], "the unknown-address path skipped its cost equalization"

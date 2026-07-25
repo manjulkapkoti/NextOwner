@@ -136,6 +136,9 @@ The load-bearing sentence for the whole milestone: **a notification is a deliver
 - **G11** — GIVEN a valid reset token, WHEN it is posted with a password below the minimum length, THEN 422 and the password is unchanged.
 - **G12** — GIVEN a syntactically valid but nonexistent reset token, WHEN it is redeemed, THEN the response is identical to the expired-token response (no oracle for which tokens exist).
 - **G13** — GIVEN a soft-deleted (anonymized) user's address, WHEN `forgot-password` is called for it, THEN the same 202 is returned and no token row is created.
+- **G14** — GIVEN an address belonging to nobody, WHEN `forgot-password` is called, THEN the request still performs the cost-equalizing work that the known-address path would have done (no timing oracle).
+
+> **G14 was added by the independent appsec pass.** G2 pins that the *response* is identical; it says nothing about how long the response took. The known-address path hashes a token and does a DB write-and-commit that the unknown path skipped entirely, so latency answered the question the body refuses to — the enumeration-by-timing `security.md` §6 names, and which M1's login already defends against with `_DUMMY_HASH`. `milestones.md` § Scope fold-ins → M8 binds this endpoint to *"the same rule as M1's login"*, and that rule has always included timing. **The test spies on the equalization rather than measuring a clock**: a wall-time assertion would be flaky in CI, while the real failure mode is a later refactor quietly deleting the call.
 
 ### H — Email verification
 

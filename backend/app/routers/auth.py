@@ -8,8 +8,12 @@ latency reveals whether an account exists (`security.md` §6 — enumeration).
 
 from __future__ import annotations
 
+import hashlib
+import secrets
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import text
 from sqlmodel import Session, select
 
 from ..config import settings
@@ -183,6 +187,27 @@ _forgot_password_limiter = RateLimiter(
 )
 
 
+def equalize_unknown_address_cost(session: Session) -> None:
+    """Burn the work `forgot-password` would have done for a real account.
+
+    **The uniform 202 is only half of "no user enumeration."** M1's login
+    already learned this: it returns one error for both unknown-email and
+    wrong-password *and* verifies against `_DUMMY_HASH` so the two paths cost
+    the same time (`security.md` §6 — enumeration by timing). `forgot-password`
+    inherits that rule verbatim from `milestones.md` § Scope fold-ins → M8
+    ("the same rule as M1's login"), so it needs the same treatment: without
+    this, the known-address path pays a token hash plus a DB write-and-commit
+    that the unknown path skips, and response latency answers the question the
+    response body refuses to.
+
+    A named function rather than two inline statements so the equalization is
+    greppable and testable — G14 spies on it, because the failure mode here is
+    silent deletion during a later refactor, not a wrong answer.
+    """
+    hashlib.sha256(secrets.token_urlsafe(32).encode("utf-8")).hexdigest()
+    session.execute(text("SELECT 1"))          # one round trip, matching the write path's
+
+
 @router.post("/forgot-password", status_code=202)
 def forgot_password(
     body: ForgotPasswordRequest,
@@ -222,6 +247,8 @@ def forgot_password(
             "If you didn't ask for this, you can ignore this email.\n",
         )
         session.commit()
+    else:
+        equalize_unknown_address_cost(session)
 
     # Identical for every caller. Nothing above may change what is returned.
     return {"status": "accepted"}

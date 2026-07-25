@@ -152,7 +152,7 @@ SELLER SIDE                      PLATFORM                       BUYER SIDE
 │    • auth.py      — register/login, bcrypt hashing, JWT issue/verify     │
 │    • permissions.py      — permission dependencies ← THE NDA GATE LIVES HERE    │
 │    • routers/     — listings, admin, access, chat, offers, searches      │
-│    • BackgroundTasks — alert fan-out when a listing goes live            │
+│    • alert fan-out on approve (plain call, in-transaction — spec 008 D12) │
 │    • SQLModel ORM                                                        │
 │                   │                                                      │
 │                   ▼                                                      │
