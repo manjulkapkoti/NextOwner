@@ -101,6 +101,7 @@ Tests use fresh in-memory SQLite per test via `dependency_overrides`; they go th
 
 @specs/000-constitution.md
 
+- `specs/000-constitution-amendments.md` — **why** each Article says what it says: every amendment with its evidence and the near-miss that prompted it. **Deliberately not imported** (it's 16k characters of history). Read it before changing a rule, or when a rule looks wrong.
 - `docs/security.md` — **binding.** End-to-end threat model + security checklist; consult at every step (owner's #1 priority).
 - `docs/design_implementation.md` — **NextOwner's architecture (Part 3** — stack, data model, the NDA gate, horizontal scale**)** + the mental model (Part 5); the business from zero (Part 1); local dev setup (§3.1–3.4); milestone build guide (Part 4). **Start here for any implementation.**
 - `docs/milestones.md` — the milestone runbook + **§ Scope fold-ins** (per-milestone gap-review additions; read at spec time).
