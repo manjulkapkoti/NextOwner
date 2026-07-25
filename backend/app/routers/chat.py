@@ -22,6 +22,7 @@ from ..chat_broker import chat_broker
 from ..config import settings
 from ..db import get_session
 from ..models import Conversation, Listing, Message, User, _utcnow
+from ..notifications import notify_message
 from ..permissions import conversation_role_for, get_current_user, require_conversation_member
 from ..ratelimit import InMemoryRateLimiterBackend, RateLimiter
 from ..schemas import ConversationSummary, MessageRead
@@ -129,6 +130,12 @@ async def conversation_socket(
 
             message = Message(conversation_id=conversation_id, sender_id=user.id, text=text.strip())
             session.add(message)
+            # M8 (spec C7, C14): the *other* party gets an inbox row. The
+            # message body is deliberately not passed in — `notify_message`
+            # takes only the conversation and the sender, so there is no
+            # argument for a later edit to start interpolating content into a
+            # row that outlives revocation (spec D2, S1).
+            notify_message(session, conversation, user.id)
             session.commit()
             session.refresh(message)
 

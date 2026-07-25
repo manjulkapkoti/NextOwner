@@ -35,6 +35,7 @@ from ..models import (
     User,
     _utcnow,
 )
+from ..notifications import notify_access_decision, notify_access_requested
 from ..permissions import (
     get_current_user,
     get_owned_listing,
@@ -139,6 +140,12 @@ def create_access_request(
         ) from None
 
     session.refresh(access_request)
+    # M8 (spec C3): the *seller* learns a buyer is asking — the buyer already
+    # knows, having just asked. Unlike the audit note below, this is delivery,
+    # not history, so "the row already records it" is not a reason to skip it.
+    notify_access_requested(session, listing)
+    session.commit()
+    session.refresh(access_request)
     # No audit row here, deliberately. The event table exists to preserve values
     # a later transition would **overwrite** — `decided_at`/`decided_by_id` are
     # rewritten by every decision, which is why revocation could erase when
@@ -186,6 +193,11 @@ def _decide(
     access_request.decided_by_id = seller.id       # server identity, never the body
     session.add(access_request)
     _record(session, access_request, seller, to_status, from_status, to_status)
+    # M8 (spec C4-C6): every decision reaches the buyer it was made about.
+    # Written here rather than in each of the three routes, so a future fourth
+    # decision cannot be added without its notification — the same reason
+    # `_record` lives here.
+    notify_access_decision(session, access_request, action)
     session.commit()
     session.refresh(access_request)
     return access_request

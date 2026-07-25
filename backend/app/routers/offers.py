@@ -29,6 +29,7 @@ from sqlmodel import Session, select
 from ..db import get_session
 from ..errors import Conflict, Forbidden, InvalidTransition
 from ..models import Listing, Offer, OfferEvent, User, _utcnow
+from ..notifications import notify_offer
 from ..permissions import (
     get_current_user,
     get_owned_listing,
@@ -120,6 +121,7 @@ def create_offer(
         # duplicate.
         session.flush()                    # assigns offer.id without ending the transaction
         _record(session, offer, user, "submitted", None, "submitted")
+        notify_offer(session, offer, "submitted")           # M8 (spec C8)
         session.commit()
     except IntegrityError:
         session.rollback()
@@ -188,6 +190,7 @@ def accept_offer(
         raise InvalidTransition("Listing is not live", code="listing_not_live")
 
     _record(session, offer, user, "accepted", "submitted", "accepted")
+    notify_offer(session, offer, "accepted")                # M8 (spec C10)
 
     # Sibling sweep (D2, E1-E4): every OTHER offer on this listing still
     # `submitted` is declined in the same transaction — an honest, immediate,
@@ -212,6 +215,9 @@ def accept_offer(
         )
         if swept.rowcount == 1:                      # the accepting seller caused it
             _record(session, sibling, user, "auto_declined", "submitted", "declined")
+            # M8 (spec C12): the losing buyer is told, and told *why* — being
+            # silently dropped from a negotiation is the worst version of this.
+            notify_offer(session, sibling, "auto_declined")
 
     session.commit()
     session.refresh(offer)
@@ -242,6 +248,7 @@ def decline_offer(
             f"Cannot decline an offer that is {offer.status}", code="offer_already_decided"
         )
     _record(session, offer, user, "declined", "submitted", "declined")
+    notify_offer(session, offer, "declined")                # M8 (spec C11)
     session.commit()
     session.refresh(offer)
     return offer
@@ -328,6 +335,12 @@ def counter_offer(
         session.flush()                    # assigns child.id without ending the transaction
         _record(session, offer, user, "countered", "submitted", "countered")
         _record(session, child, user, "submitted", None, "submitted")
+        # M8 (spec C9): notify on the **child**, not the parent. The child
+        # carries the countering party's `proposed_by_role`, so
+        # `notify_offer`'s bilateral rule resolves the recipient to the other
+        # side — notifying on the parent would send it back to whoever just
+        # acted.
+        notify_offer(session, child, "countered")
         session.commit()
     except IntegrityError:
         session.rollback()
@@ -363,6 +376,7 @@ def withdraw_offer(
             f"Cannot withdraw an offer that is {offer.status}", code="offer_already_decided"
         )
     _record(session, offer, user, "withdrawn", "submitted", "withdrawn")
+    notify_offer(session, offer, "withdrawn")               # M8 (spec C13)
     session.commit()
     session.refresh(offer)
     return offer
