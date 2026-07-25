@@ -7,13 +7,19 @@
 > - Full design: `docs/session_recovery.md`.
 
 **Milestone status:**
-- M0–M6 ✅ merged.
+- M0–M7 ✅ merged.
 - **App-shell** (`pre-003`) ✅ merged (#25), plus the public landing page (#26) and the register page (#27).
 - **Design system** ✅ merged (#28).
 - **Agentic workflow** ✅ merged (#32).
 - **PR conventions guard** ✅ merged (#37).
 
 **In flight:** nothing.
+**M7 ⭐ (offers / LOI)** shipped the project's first money surface + first bilateral state machine:
+- Structured offers/LOI (`POST /listings/{id}/offers`) — approved-access **and** `live` listing required.
+- A counter-offer negotiation as a **chain of linked `Offer` rows** (`parent_offer_id`); decision rights follow whoever did **not** propose the current terms (D1) — not a fixed role.
+- The **atomic accept**: offer flip + listing → `under_offer` + sibling auto-decline, one compare-and-swap transaction, so two concurrent accepts can't both win (S6/B8).
+- Buyer withdraw (proposer-only), the append-only `offerevent` audit, and both read queues (`GET /my/offers`, `GET /my/listings/{id}/offers`).
+- **The independent appsec pass found a real bypass the green suite missed** — see Carryover.
 **M6 (realtime chat)** shipped the project's first WebSocket surface:
 - `WS /ws/conversations/{id}` — authenticates during the handshake; membership is re-checked live on every connect and every REST call, not cached, so revocation applies immediately.
 - A `Conversation`/`Message` schema, created only when a seller approves an M5 access request.
@@ -23,18 +29,21 @@
 **Open PRs:** none.
 
 ## ▶ NEXT ACTION
-**M7 — offers / LOI**: **`/start-milestone offers`**
+**M8 — notifications engine + saved searches & alerts + account lifecycle**: **`/start-milestone alerts`**
 
-M7 is on the security-critical list (money/state-machine surface):
-- Approved-access **and** live-listing required to make an offer.
-- An **atomic** accept (offer + listing flip in one transaction).
-- Seller-only decisions.
-- `409` on an already-decided offer.
-- `offer_event` audit rows — mirrors M3's `listingevent`/M5's `accessrequestevent` pattern.
+M8 is on the security-critical list — it's the milestone that turns every event the earlier milestones already emit into delivery, and it owns account-lifecycle tokens (account takeover if they leak):
+- Deliver **every** event M3/M5/M6/M7 emit (`listingevent`/`accessrequestevent`/message/`offerevent`) — in-app inbox + email via MailHog (FR-22 + the FR-16 fallback); **every delivery caller-scoped**, the fan-out must not cross users.
+- Saved-search matching fan-out (FR-22).
+- **Account lifecycle** (moved here from M1): password reset + email verification — tokens **single-use, short expiry, hashed at rest, uniform response (no user-enumeration), never logged**.
 
-Its scope fold-ins (`docs/milestones.md` § Scope fold-ins → M7) cover counter-offer mechanics and the sibling-offer policy (what happens to other pending offers on the same listing once one is accepted).
+Its scope fold-ins live in `docs/milestones.md` § Scope fold-ins → M8.
 
 ## Carryover notes
+- **What the M7 build + review actually established, worth keeping:**
+  - **The independent appsec pass found a real bypass the fully-green suite never asked about — the corridor-class bug, M3's lesson recurring.** All 8 crown-jewel invariants were confirmed enforced, but `counter` was the one write path that *created a new priced `Offer` row* (D1's design) without re-checking listing liveness, while `create` (A3) and `accept` (B8) both did. A seller could `close`/`pause` a listing with a pending offer, then `counter` it → 200, spawning a priced `submitted` row on a dead listing. Each door was gated; the corridor through an already-open thread was not. **The general rule, re-earned: when every door is checked, ask what the corridor between them skips — a reachability/negative test per *door* misses the sequence that walks through an already-open one.** Fixed (`counter` now 409s `listing_not_live` before any write), **sabotage-verified** (neutralize the guard → B10's three params fail), and re-verified by the same appsec agent in one bounded round (no objection).
+  - **D8 — the asymmetry that fell out of it, now a stated decision:** an offer action that *creates a new commitment* (`create`, `accept`, `counter`) requires the listing `live`; one that only *resolves/retracts* an existing row (`decline`, `withdraw`) does not. Not just convenient — *correct*: gating decline/withdraw would strand a buyer's `submitted` offer forever on a seller-paused listing (no expiry — deferred), a worse outcome than letting a purely-resolving action through. Pinned by B10 (gated) + B11 (deliberately open). Recorded in spec 007 D8 as an owner-overridable product call.
+  - **The counter liveness check is a plain read, not a WHERE-clause CAS** like accept's listing flip — a known, *accepted* microsecond TOCTOU (commented in `offers.py`): no party gains from racing a counter onto a just-paused listing, and the only money-moving step (`accept`) is still a true CAS. Recorded so it isn't "rediscovered" as a finding later.
+  - **The bilateral state machine (D1) is the milestone's structural first:** every prior state machine had one decider; an offer has two. `offer_role_for` returns a *role* (like M6's `conversation_role_for`), and the router applies two opposite one-line rules on it — `role != proposed_by_role` for decide, `role == proposed_by_role` for withdraw — so "is this caller a party at all?" is answered in exactly one place.
 - **What the M6 build actually established (slices 1–7), worth keeping:**
   - **The branch review found a real, live bug in the milestone's own headline invariant.** The independent appsec pass found that `await websocket.accept()` is a real yield point: a revoke could commit and call `chat_broker.close_user(...)` while a connect was between its pre-accept membership check and the socket's registration, leaving a revoked buyer connected until they happened to disconnect on their own — the exact opposite of "revocation applies live" (`security.md` §1.5). Fixed with a second, synchronous re-check of `conversation_role_for` immediately after `register()`, zero `await` in between so no further interleaving is possible. **Verified by sabotage in the strongest way yet in this project**: reverting the fix doesn't just fail an assertion — the regression test *hangs forever*, because the client is waiting on a close that a vulnerable server never sends. The hang **is** the proof; the same thing a real exploited buyer's tab would do.
   - **The self-found bug and the appsec-found bug were the same shape.** Before the branch review, the WS message loop validated content *before* checking the rate limiter, so a flood of invalid/oversized frames could `continue` past the check every time and never trip the cap — the DoS surface `security.md` §6 names by name ("WebSocket message floods"). **General rule for anything with an early-`continue`/early-`return` loop and a rate limiter: the limiter has to run before any branch that can skip it, or it only limits the well-behaved traffic it doesn't need to limit.**

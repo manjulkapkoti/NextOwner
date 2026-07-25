@@ -42,7 +42,7 @@ For example:
 | **M4**    | `/start-milestone marketplace-browse`           | Marketplace browse + anonymous cards (filters)                       | 004  | public `response_model` — no identity leak by schema, only `live` listings, pagination cap                                                          |
 | **M5** ⭐ | `/start-milestone nda-gate`                     | Platform NDA + access gate (**the trust core**)                      | 005  | every gate state tested (unsigned/none/requested/approved/owner/denied/revoked), unique constraint, seller-only approve, same gate on doc downloads |
 | **M6**    | `/start-milestone chat`                         | Realtime WebSocket chat                                              | 006  | authN on connect, membership authZ, sender from token (spoof ignored), XSS-safe render, history → 403 for non-members                               |
-| **M7**    | `/start-milestone offers`                       | Offers / LOI                                                         | 007  | approved-access + live required, **atomic** accept (offer + listing), seller-only decisions, 409 on decided, audit rows                             |
+| **M7**    | `/start-milestone offers`                       | Offers / LOI                                                         | 007  | approved-access + live required, **atomic** accept (offer + listing), proposer's counterparty decides (spec 007 D1), 409 on decided, audit rows                             |
 | **M8**    | `/start-milestone alerts`                       | Notifications engine + saved searches & alerts + **account lifecycle** *(scope expanded 2026-07-16; account lifecycle moved from M1 2026-07-17)* | 008  | every notification caller-scoped; the fan-out doesn't leak or cross users; **password-reset tokens: single-use, short expiry, hashed at rest, no user-enumeration, never logged** — this is auth surface, hence security-critical |
 | **M9**    | `/start-milestone watchlist`                    | Watchlist                                                            | 009  | every operation caller-scoped (you only see/edit your own)                                                                                          |
 | **M10**   | `/start-milestone buyer-verification`           | Manual buyer verification                                            | 010  | buyer can't self-verify (`verified` ignored/403), admin-only flip, upload safety                                                                    |
@@ -123,7 +123,7 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
 - [x] **M4** — marketplace browse *(+ keyword search, seed data, brand voice & landing copy — § Scope fold-ins)*
 - [x] **M5** ⭐ — NDA + access gate *(+ revocation endpoint, `nda_version`, `accessrequestevent` audit; FR-14's verification half deferred to M10 and notification events to M8 — § Scope fold-ins)*
 - [x] **M6** — realtime chat *(+ unread counts, WS error contract — § Scope fold-ins)*
-- [ ] **M7** — offers / LOI *(+ counter model, sibling policy — § Scope fold-ins)*
+- [x] **M7** ⭐ — offers / LOI *(+ counter model, sibling policy, `offerevent` audit; appsec-found counter-on-non-live bypass closed, D8 — § Scope fold-ins)*
 - [ ] **M8** — notifications engine + saved searches & alerts *(scope expanded)*
 - [ ] **M9** — watchlist
 - [ ] **M10** — buyer verification *(+ badge on profile, upload quota — § Scope fold-ins)*

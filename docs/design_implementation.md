@@ -471,8 +471,8 @@ Scaffold per Part 3. Prove the loop end to end: a `GET /health` endpoint returni
 
 ### Milestone 7 — Offers / LOI (F8)
 
-- "Make an offer" form → `POST /offers` validates (access approved? listing live?) and writes the offer plus an `offer_event` audit row.
-- `POST /offers/{id}/accept|decline|counter` — seller only, validates the current status, appends events.
+- "Make an offer" form → `POST /listings/{id}/offers` *(nested under the listing per spec 007 D3; this sketch's original flat `POST /offers` amended 2026-07-21)* validates (access approved? listing live?) and writes the offer plus an `offer_event` audit row.
+- `POST /offers/{id}/accept|decline|counter` — decided by the **counterparty of whoever proposed the current terms** (seller on a buyer's offer, buyer on a seller's counter — spec 007 D1), validates the current status, appends events.
 - Accepting flips `offer.status="accepted"` **and** `listing.status="under_offer"` in one DB transaction — the state machine in action, atomically.
 - MVP stops here; escrow/APA are mocked buttons on a "deal" page if you want the full lifecycle visible.
 

@@ -134,6 +134,11 @@ export const NavBar = observer(function NavBar() {
                 <Button color="inherit" onClick={() => go('/my-listings')} sx={{ color: 'text.secondary' }}>
                   My listings
                 </Button>
+                {/* M7 — offers/LOI (FR-17): the buyer's cross-listing thread
+                    history, the same "one hub" shape /messages already is. */}
+                <Button color="inherit" onClick={() => go('/my-offers')} sx={{ color: 'text.secondary' }}>
+                  My offers
+                </Button>
                 <Button color="inherit" component={RouterLink} to="/messages" sx={{ color: 'text.secondary' }}>
                   Messages
                   {unreadTotal > 0 && (
@@ -183,6 +188,7 @@ export const NavBar = observer(function NavBar() {
               >
                 <MenuItem onClick={() => go('/sell')}>List a business</MenuItem>
                 <MenuItem onClick={() => go('/my-listings')}>My listings</MenuItem>
+                <MenuItem onClick={() => go('/my-offers')}>My offers</MenuItem>
                 <MenuItem onClick={() => go('/messages')}>
                   Messages{unreadTotal > 0 ? ` (${unreadTotal})` : ''}
                 </MenuItem>

@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     chat_rate_limit_window_seconds: int = 10
     chat_history_page_limit: int = 50
 
+    # Offers / LOI (M7, spec 007 D6). Bound the two free-text terms fields at
+    # the boundary (security.md §2) — a floor of "some text" isn't needed since
+    # both are optional-length beyond structure's minimum, but an unbounded
+    # ceiling on user-entered deal terms is a DoS/storage surface like any other.
+    offer_structure_max_chars: int = 200
+    offer_contingencies_max_chars: int = 2000
+
     # Test-only: mount the /_debug/boom route (500-contract tests). Off in prod.
     enable_debug_routes: bool = False
 

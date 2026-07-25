@@ -12,13 +12,15 @@ of these. They are deliberately small and boring; boring is the point.
 
 from __future__ import annotations
 
+from typing import Literal
+
 import jwt
 from fastapi import Depends, Request
 from sqlmodel import Session, select
 
 from .db import get_session
-from .errors import Forbidden, NotFound, Unauthorized
-from .models import AccessRequest, Conversation, Listing, User
+from .errors import Forbidden, InvalidTransition, NotFound, Unauthorized
+from .models import AccessRequest, Conversation, Listing, Offer, User
 from .security import decode_access_token
 
 
@@ -215,6 +217,101 @@ def require_conversation_member(
     # secret an unpublished listing would (D2), so this boundary never
     # distinguishes "doesn't exist" from "not yours anymore."
     raise Forbidden("You may not access this conversation", code="not_a_conversation_member")
+
+
+def require_approved_buyer(
+    listing_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Listing:
+    """Trust boundary: may this caller open an offer on this listing? (M7,
+    spec 007 A1-A8, D5).
+
+    Mirrors `create_access_request`'s existing ordering exactly:
+
+    1. Listing missing, or never published and caller isn't the owner → 404
+       (D5, spec 005 D1) — an unpublished draft's existence stays a secret.
+    2. Caller is the owner → 403 (self-dealing, A4) — they already have the
+       data room; an offer on your own listing is meaningless.
+    3. No **approved** `AccessRequest` for `(listing, caller)` → 403
+       `nda_access_required` (A2). **Deliberately the same query
+       `require_private_access` runs, duplicated rather than reused** — the
+       same reason `conversation_role_for` duplicates it at M6: this boundary
+       must not be able to regress M5's crown-jewel gate by editing it.
+    4. `listing.status != "live"` → 409 `listing_not_live` (A3).
+
+    Returns the `Listing`. The D7 "one active offer" check and mass-assignment
+    defense (A6) are the endpoint's own job, not the gate's — D7 is a fact
+    about *offers*, not about this listing/buyer pair's eligibility to
+    negotiate at all.
+    """
+    listing = session.get(Listing, listing_id)
+    if listing is None or (listing.published_at is None and listing.owner_id != user.id):
+        raise NotFound("Listing not found")
+    if listing.owner_id == user.id:
+        raise Forbidden("You already have access to your own listing")
+
+    granted = session.exec(
+        select(AccessRequest).where(
+            AccessRequest.listing_id == listing_id,
+            AccessRequest.buyer_id == user.id,
+            AccessRequest.status == "approved",
+        )
+    ).first()
+    if granted is None:
+        raise Forbidden("NDA access not granted", code="nda_access_required")
+
+    if listing.status != "live":
+        raise InvalidTransition("Listing is not live", code="listing_not_live")
+    return listing
+
+
+def offer_role_for(session: Session, offer: Offer, user: User) -> Literal["buyer", "seller"] | None:
+    """Trust boundary logic for offers (M7, spec 007), named and shaped after
+    M6's `conversation_role_for` on purpose: two callers need a *role*, not a
+    boolean, and both need to reason about it before choosing which action is
+    theirs to take (accept/decline/counter vs. withdraw).
+
+    Loads the offer's listing; the owner is always `"seller"`. Otherwise,
+    `user.id == offer.buyer_id` is `"buyer"`. Anyone else is `None`, uniformly
+    (D5) — never distinguishes "no such offer" from "not yours."
+
+    **Does not** re-check approved access here — an offer, once it exists, is
+    decided by the two parties named on it; approval already gated its
+    *creation* (`require_approved_buyer`), and re-deriving it here would let a
+    later revocation silently invalidate a pending offer with no criterion
+    asking for that (out of scope).
+    """
+    listing = session.get(Listing, offer.listing_id)
+    if listing is not None and listing.owner_id == user.id:
+        return "seller"
+    if user.id == offer.buyer_id:
+        return "buyer"
+    return None
+
+
+def require_offer_party(
+    offer_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> tuple[Offer, str]:
+    """REST wrapper around `offer_role_for` — every decision/withdraw route's
+    trust boundary (M7, spec 007 B/C/D).
+
+    Loads the `Offer` (`None` → `Forbidden`, never `NotFound` — D5 mirrors
+    `require_request_decider`'s uniform-403 reasoning: an offer id carries no
+    secret an unpublished listing would). Raises `Forbidden` for anyone
+    `offer_role_for` does not recognize; otherwise returns `(offer, role)` so
+    the caller (the router) can apply the bilateral rule the gate itself does
+    not decide (accept/decline/counter vs. withdraw).
+    """
+    offer = session.get(Offer, offer_id)
+    role = offer_role_for(session, offer, user) if offer is not None else None
+    if offer is None or role is None:
+        # One raise for every refusal — missing, foreign, or orphaned — so the
+        # cases cannot drift into distinguishable responses (S5).
+        raise Forbidden("You may not act on this offer")
+    return offer, role
 
 
 def get_owned_listing(

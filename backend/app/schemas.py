@@ -6,12 +6,14 @@ list only client-settable fields, so mass-assignment of `is_admin`/`owner_id` is
 impossible **by schema**, not by runtime filtering (`security.md` §6).
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
 from pydantic import EmailStr, Field, field_serializer, field_validator
 from sqlmodel import SQLModel
+
+from .config import settings
 
 Role = Literal["buyer", "seller"]
 _MONEY_FIELDS = ("asking_price", "ttm_revenue", "ttm_profit", "mrr", "churn_pct")
@@ -361,3 +363,91 @@ class MessageRead(SQLModel):
     sender_id: int
     text: str
     created_at: datetime
+
+
+# ── M7 — offers / LOI ────────────────────────────────────────────────────────
+
+class OfferTerms(SQLModel):
+    """The structured terms shared by a fresh offer and a counter (spec 007
+    D6) — `OfferCreate`/`OfferCounter` are the same shape under two names.
+
+    No `listing_id`/`buyer_id`/`status`/`proposed_by_role` here: those come
+    from the path, the JWT, and the server — never the body (A6, S3).
+    """
+
+    price: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
+    structure: str = Field(min_length=1, max_length=settings.offer_structure_max_chars)
+    contingencies: str | None = Field(
+        default=None, max_length=settings.offer_contingencies_max_chars
+    )
+    proposed_close_date: date
+
+
+class OfferCreate(OfferTerms):
+    """`POST /listings/{listing_id}/offers` body."""
+
+
+class OfferCounter(OfferTerms):
+    """`POST /offers/{offer_id}/counter` body — identical shape to
+    `OfferCreate` (D6): a counter is a fresh proposal, not a patch."""
+
+
+class OfferRead(SQLModel):
+    """An offer as either of its two parties sees it (`GET /my/offers`,
+    spec 007 F).
+
+    **No `buyer_id`** (the caller already knows it's their own — mirrors
+    `AccessRequestRead`'s minimalism, spec 005) and **no `decided_by_id`**
+    ("who decided" is implied by role, not a raw id).
+    """
+
+    id: int
+    listing_id: int
+    parent_offer_id: int | None
+    proposed_by_role: str
+    status: str
+    price: Decimal
+    structure: str
+    contingencies: str | None
+    proposed_close_date: date
+    created_at: datetime
+    decided_at: datetime | None
+
+    @field_serializer("price", when_used="json")
+    def _ser_price(self, v: Decimal) -> str:
+        return str(v)
+
+
+class OfferWithBuyer(SQLModel):
+    """A row in the seller's per-listing queue (`GET /my/listings/{id}/offers`,
+    spec 007 G1).
+
+    Standalone, **not** a subclass of `OfferRead` — the same independence
+    `AccessRequestWithBuyer`/`ListingPublic` keep from their own base shapes
+    (spec 004 D2): a seller-only view is a different trust boundary than the
+    buyer's own read, so growing one must never silently grow the other.
+    **Carries `buyer_id`** (unlike `OfferRead`) alongside the nested
+    `BuyerProfile` — this view is seller-only, so the id is not a leak, and
+    the frontend needs it to group rows into per-buyer threads.
+
+    No verification field on `buyer` — same D5 deferral to M10 spec 005
+    already made.
+    """
+
+    id: int
+    listing_id: int
+    buyer_id: int
+    parent_offer_id: int | None
+    proposed_by_role: str
+    status: str
+    price: Decimal
+    structure: str
+    contingencies: str | None
+    proposed_close_date: date
+    created_at: datetime
+    decided_at: datetime | None
+    buyer: BuyerProfile
+
+    @field_serializer("price", when_used="json")
+    def _ser_price(self, v: Decimal) -> str:
+        return str(v)

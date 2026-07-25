@@ -373,3 +373,85 @@ def chat_conversation(client, session, granted_access):
         return conversation.id if conversation is not None else None
 
     return _make
+
+
+# ── M7 offer helpers ─────────────────────────────────────────────────────────
+#
+# Offers need almost no DB seeding either, same rationale as M5's access-gate
+# fixtures above: every state this milestone's negotiation reaches (submitted,
+# accepted, declined, withdrawn, countered) is produced by the product's own
+# endpoints, so composing them here — never forging a row `Offer(status=...)`
+# directly — means a fixture can never grant a test a state the app itself
+# cannot reach.
+
+# A complete, valid offer/counter body (spec 007 D6). `price` as a string —
+# the server parses Decimal, mirroring `VALID_LISTING`'s money fields.
+VALID_OFFER = {
+    "price": "450000.00",
+    "structure": "all cash",
+    "contingencies": "subject to financing and standard due diligence",
+    "proposed_close_date": "2026-10-01",
+}
+
+
+@pytest.fixture
+def make_offer(client):
+    """POST an offer on a listing with the given (already-approved) buyer's
+    headers; returns the response. Mirrors `make_listing`."""
+    def _make(listing_id, headers, **overrides):
+        return client.post(
+            f"/api/listings/{listing_id}/offers",
+            json={**VALID_OFFER, **overrides},
+            headers=headers,
+        )
+    return _make
+
+
+@pytest.fixture
+def submitted_offer(client, granted_access, make_offer):
+    """Drive a `live` listing + a buyer all the way to a `submitted` offer
+    through the real endpoints (spec 007 A1) — compose `granted_access` (NDA
+    sign + request + approve) then `POST .../offers`. Mirrors `granted_access`'s
+    own shape: takes an already-`live` listing id, buyer headers, seller
+    headers; returns the new offer's id, so a test can carry on to
+    accept/decline/counter/withdraw it.
+    """
+    def _submit(listing_id, buyer_headers, seller_headers, **overrides):
+        granted_access(listing_id, buyer_headers, seller_headers)
+        res = make_offer(listing_id, buyer_headers, **overrides)
+        return res.json()["id"]
+    return _submit
+
+
+@pytest.fixture
+def offer_events(session):
+    """Read the append-only audit rows for an offer, oldest first.
+
+    Mirrors `listing_events`/`access_events` exactly. Unlike `AccessRequestEvent`,
+    `OfferEvent` also logs *creation* (`action="submitted"`, `from_status=null`) —
+    plan.md § Schema deltas explains why: this table doubles as the negotiation's
+    own narrative (FR-17's "both parties see offer history"), not merely a record
+    of values a later transition would otherwise overwrite.
+    """
+    from sqlalchemy import text
+
+    def _events(offer_id):
+        rows = session.execute(
+            text(
+                "SELECT actor_id, action, from_status, to_status, created_at "
+                "FROM offerevent WHERE offer_id = :i ORDER BY id"
+            ),
+            {"i": offer_id},
+        ).fetchall()
+        return [
+            {
+                "actor_id": r[0],
+                "action": r[1],
+                "from_status": r[2],
+                "to_status": r[3],
+                "created_at": r[4],
+            }
+            for r in rows
+        ]
+
+    return _events
