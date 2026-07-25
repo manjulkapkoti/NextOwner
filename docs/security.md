@@ -108,6 +108,11 @@ Everything arriving from the browser is **hostile until proven otherwise** — a
 
 ### Dependencies & supply chain
 - Pin versions (`requirements.txt`, `package-lock.json`); run `pip audit` / `npm audit`; review any new dependency; keep FastAPI/Starlette/PyJWT/bcrypt patched.
+- **CI blocks on high/critical in *production* dependencies only** (`npm audit --audit-level=high --omit=dev`, 2026-07-25). Dev advisories are printed, not blocking — read them at each dependency bump. The reasoning, and the three "fixes" that break the toolchain, are in `.github/workflows/ci.yml` and `app/package.json`'s `comment:overrides`.
+- **Open advisory, accepted with a stated reason — `react-router` 6.x (2 moderate, reviewed 2026-07-25).** Both are unreachable in this app *today*, which is why we did not take a major router bump for them:
+  - *GHSA-337j-9hxr-rhxg* (constructor injection via `deserializeErrors()`) is an **SSR hydration** bug. This is a Vite SPA; there is no server-side render path.
+  - *GHSA-wrjc-x8rr-h8h6* (open redirect via a backslash in `<Link>`/`useNavigate`) needs an **attacker-controlled navigation target**. Every `navigate()` / `<Link to>` in `app/src` is a hardcoded literal or a server-assigned row id — there is no `?next=` / `returnTo` / post-login redirect parameter anywhere.
+  - **What must reopen this:** the whole 6.x line is in range (6.30.4 is the last 6.x; the fix is 7.18+), so this is a deferral, not a dismissal. **Re-evaluate the moment either premise breaks** — if SSR is ever introduced, or the first time a route target comes from a query parameter, user input, or any other value the server did not assign. A post-login "return to where you were" feature is the most likely trigger; if you build one, bump the router first.
 
 ### Third-party vendors & webhooks (mocked now, design for real later)
 - **Never trust the client's word that a payment/KYC/escrow event happened — trust the server-to-server webhook.** Verify webhook **signatures** (e.g. Stripe signing secret), enforce **idempotency**, and validate the payload. Build the **mocks to mirror this shape** (a mock webhook endpoint that still checks a signature/secret) so the real swap is a drop-in.
