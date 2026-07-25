@@ -5,8 +5,10 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NotificationInbox } from './NotificationInbox'
-import { NotificationBadge } from './NotificationBadge'
+import { NavBar } from './NavBar'
 import { notificationStore } from '../stores/notificationStore'
+import { chatStore } from '../stores/chatStore'
+import { authStore } from '../stores/authStore'
 
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -54,6 +56,8 @@ describe('NotificationInbox', () => {
     vi.unstubAllGlobals()
     localStorage.clear()
     notificationStore.reset()
+    chatStore.reset()
+    authStore.logout()
   })
 
   it('J1: lists the notifications and marks the unread ones', async () => {
@@ -72,11 +76,22 @@ describe('NotificationInbox', () => {
     )
   })
 
+  // Rendered through the real `NavBar` rather than an isolated badge
+  // component: the criterion is about what the nav bar shows, and testing the
+  // surface the user actually sees is what makes this more than a render test.
   it('J2: the nav badge shows the unread count from the API', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, { unread_count: 4 })))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input).includes('unread-count')
+          ? jsonResponse(200, { unread_count: 4 })
+          : jsonResponse(200, []),
+      ),
+    )
+    authStore.setToken('a.b.c')
     render(
       <MemoryRouter>
-        <NotificationBadge />
+        <NavBar />
       </MemoryRouter>,
     )
 

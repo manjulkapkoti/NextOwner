@@ -266,8 +266,8 @@ def fan_out_saved_searches(session: Session, listing: Listing) -> int:
     Returns how many notifications were written (used by the caller's logging,
     and it makes the function testable on its own terms).
     """
-    from .saved_search_matching import listing_matches, parse_filters
     from .models import SavedSearch
+    from .saved_search_matching import listing_matches, parse_filters
 
     written = 0
     for saved in session.exec(select(SavedSearch)).all():

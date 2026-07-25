@@ -16,8 +16,8 @@ from ..db import get_session
 from ..errors import Conflict
 from ..models import SavedSearch, User
 from ..permissions import get_current_user, get_owned_saved_search
-from ..schemas import SavedSearchCreate, SavedSearchRead
 from ..saved_search_matching import parse_filters
+from ..schemas import SavedSearchCreate, SavedSearchRead
 
 router = APIRouter(tags=["saved-searches"])
 
