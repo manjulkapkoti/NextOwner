@@ -10,6 +10,7 @@ the token-forging tests (C2–C4) agree on signing key + algorithm.
 """
 
 import os
+import re
 import tempfile
 
 # Must precede `import app.main` — pydantic-settings reads the environment at
@@ -114,6 +115,9 @@ def _fresh_rate_limiters():
 
     auth_router._login_limiter.backend = InMemoryRateLimiterBackend()
     auth_router._register_limiter.backend = InMemoryRateLimiterBackend()
+    for limiter in ("_forgot_password_limiter",):     # M8 — mails a third party on demand
+        if hasattr(auth_router, limiter):
+            getattr(auth_router, limiter).backend = InMemoryRateLimiterBackend()
     try:
         from app.routers import chat as chat_router
 
@@ -455,3 +459,166 @@ def offer_events(session):
         ]
 
     return _events
+
+
+# ── M8 notification / email / token helpers ──────────────────────────────────
+#
+# The email port (spec 008 D9) is swapped for a recorder in every test, so the
+# suite never opens an SMTP socket (F6). Same shape as `_fresh_rate_limiters`
+# above: module-level state reset per test, guarded by `hasattr` so the suite
+# still collects on the slices where `app.mailer` does not exist yet.
+
+
+class RecordingEmailSender:
+    """Test double for `EmailSender` — records instead of sending.
+
+    `should_raise` lets F4/X3 prove that a failing transport never fails the
+    business action: the domain call must still return its normal 2xx and the
+    in-app notification must still exist.
+    """
+
+    def __init__(self) -> None:
+        self.sent: list[dict] = []
+        self.should_raise = False
+
+    def send(self, to: str, subject: str, body: str) -> None:
+        if self.should_raise:
+            raise RuntimeError("smtp unavailable")
+        self.sent.append({"to": to, "subject": subject, "body": body})
+
+    def to(self, address: str) -> list[dict]:
+        return [m for m in self.sent if m["to"] == address]
+
+
+@pytest.fixture(autouse=True)
+def outbox():
+    """Swap the module-level mailer for a recorder; yield it for assertions.
+
+    **Both seams are swapped, and the dispatcher one is load-bearing.**
+    Production runs sends on a worker pool (`ThreadDispatcher`) so a blocking
+    SMTP call never sits on the request thread — or, worse, on the `async`
+    WebSocket handler's event loop. Under that dispatcher a test asserting
+    `outbox.sent` immediately after a request would race the worker and flake.
+    `InlineDispatcher` makes the send happen before the request returns, which
+    is what every F/G/H assertion depends on.
+    """
+    recorder = RecordingEmailSender()
+    try:
+        from app import mailer as mailer_module
+    except ImportError:
+        yield recorder                      # slice 1 hasn't landed — nothing to swap
+        return
+    original_mailer = mailer_module.mailer
+    original_dispatcher = mailer_module.dispatcher
+    mailer_module.mailer = recorder
+    mailer_module.dispatcher = mailer_module.InlineDispatcher()
+    yield recorder
+    mailer_module.mailer = original_mailer
+    mailer_module.dispatcher = original_dispatcher
+
+
+@pytest.fixture
+def inbox(client):
+    """The caller's own notifications, through the real endpoint."""
+    def _inbox(headers, **params):
+        return client.get("/api/notifications", headers=headers, params=params)
+    return _inbox
+
+
+@pytest.fixture
+def notification_rows(session):
+    """Raw notification rows for a recipient, oldest first.
+
+    Reads the table directly because C14/C15 assert on what was **stored** —
+    a response model that omits a field would hide a row that still carries it,
+    which is exactly the leak those criteria exist to catch.
+    """
+    from sqlalchemy import text
+
+    def _rows(recipient_id):
+        rows = session.execute(
+            text(
+                "SELECT id, type, title, listing_id, conversation_id, offer_id, "
+                "read_at, created_at FROM notification WHERE recipient_id = :r ORDER BY id"
+            ),
+            {"r": recipient_id},
+        ).mappings().all()
+        return [dict(r) for r in rows]
+
+    return _rows
+
+
+@pytest.fixture
+def user_id(client):
+    """The id behind a set of auth headers (via the real /me route)."""
+    def _id(headers):
+        return client.get("/api/auth/me", headers=headers).json()["id"]
+    return _id
+
+
+@pytest.fixture
+def token_rows(session):
+    """Raw rows from either token table — G7 asserts the raw token is absent."""
+    from sqlalchemy import text
+
+    def _rows(table):
+        rows = session.execute(
+            text(
+                f"SELECT id, user_id, token_hash, expires_at, used_at "  # noqa: S608 - fixed literals
+                f"FROM {table} ORDER BY id"
+            )
+        ).mappings().all()
+        return [dict(r) for r in rows]
+
+    return _rows
+
+
+@pytest.fixture
+def expire_token(session):
+    """Backdate a token's expiry — the only way to reach "expired" without
+    sleeping. Seeding a clock, not forging a transition (testing_guide §3.4)."""
+    from sqlalchemy import text
+
+    def _expire(table, token_id):
+        session.execute(
+            text(f"UPDATE {table} SET expires_at = :e WHERE id = :i"),  # noqa: S608
+            {"e": "2000-01-01 00:00:00", "i": token_id},
+        )
+        session.commit()
+    return _expire
+
+
+def _token_from(message: dict, path: str) -> str:
+    """Pull a one-time token out of a dispatched email's link.
+
+    Anchored on the **path** as well as the parameter, so a test cannot
+    accidentally redeem a reset token where it meant a verification one — the
+    cross-purpose confusion spec D4 exists to make impossible (H5/H6).
+    """
+    match = re.search(rf"{re.escape(path)}\?token=([A-Za-z0-9_\-]+)", message["body"])
+    assert match, f"no {path} link in the email body: {message['body']!r}"
+    return match.group(1)
+
+
+def reset_token_from(message: dict) -> str:
+    return _token_from(message, "/reset-password")
+
+
+def verification_token_from(message: dict) -> str:
+    return _token_from(message, "/verify-email")
+
+
+@pytest.fixture
+def verify_email(client, outbox):
+    """Walk a user through real email verification; returns their headers.
+
+    Composes the product's own routes (register already mailed the token) rather
+    than stamping `email_verified_at` directly — a fixture that forges the state
+    would hide a verification flow the app cannot actually perform.
+    """
+    def _verify(headers):
+        address = client.get("/api/auth/me", headers=headers).json()["email"]
+        token = verification_token_from(outbox.to(address)[-1])
+        client.post("/api/auth/verify-email", json={"token": token})
+        return headers
+    return _verify

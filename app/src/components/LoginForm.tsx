@@ -100,6 +100,15 @@ export function LoginForm() {
         </Button>
       </Box>
 
+      {/* M8 — self-serve recovery (FR-1). Placed under the form rather than
+          beside the password field: it is the exit for a failed login, so it
+          belongs where someone looks after the button did not work. */}
+      <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 2 }}>
+        <MuiLink component={RouterLink} to="/forgot-password">
+          Forgot your password?
+        </MuiLink>
+      </Typography>
+
       <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 3 }}>
         New here?{' '}
         <MuiLink component={RouterLink} to="/register" sx={{ fontWeight: 600 }}>

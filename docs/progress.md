@@ -7,13 +7,20 @@
 > - Full design: `docs/session_recovery.md`.
 
 **Milestone status:**
-- M0–M7 ✅ merged.
+- M0–M8 ✅ merged.
 - **App-shell** (`pre-003`) ✅ merged (#25), plus the public landing page (#26) and the register page (#27).
 - **Design system** ✅ merged (#28).
 - **Agentic workflow** ✅ merged (#32).
 - **PR conventions guard** ✅ merged (#37).
 
 **In flight:** nothing.
+**M8 ⭐ (notifications engine + saved searches + account lifecycle)** turned every event the earlier milestones emit into delivery, and closed the last auth gap:
+- A `notification` **projection** table fed from the rows M3/M5/M6/M7 already wrote — a delivery record, explicitly *not* a second audit trail (D1).
+- **Recipient derivation is the trust boundary** (`notifications.py`, D3): no caller passes a recipient, no body influences one.
+- Notification rows carry **no private payload** (D2) — so a stale row surviving a revocation leaks nothing and its click-through hits the real gate (S1).
+- Saved searches + a publication fan-out matching only on public columns (FR-11); alerts are forward-only and deduped by a partial unique index.
+- The **email channel** behind two ports (`EmailSender`, `Dispatcher`), gated on a verified address; transactional mail exempt (D6).
+- **Password reset + email verification** — two separate token tables so cross-purpose redemption is structurally impossible (D4).
 **M7 ⭐ (offers / LOI)** shipped the project's first money surface + first bilateral state machine:
 - Structured offers/LOI (`POST /listings/{id}/offers`) — approved-access **and** `live` listing required.
 - A counter-offer negotiation as a **chain of linked `Offer` rows** (`parent_offer_id`); decision rights follow whoever did **not** propose the current terms (D1) — not a fixed role.
@@ -29,16 +36,21 @@
 **Open PRs:** none.
 
 ## ▶ NEXT ACTION
-**M8 — notifications engine + saved searches & alerts + account lifecycle**: **`/start-milestone alerts`**
+**M9 — watchlist**: **`/start-milestone watchlist`**
 
-M8 is on the security-critical list — it's the milestone that turns every event the earlier milestones already emit into delivery, and it owns account-lifecycle tokens (account takeover if they leak):
-- Deliver **every** event M3/M5/M6/M7 emit (`listingevent`/`accessrequestevent`/message/`offerevent`) — in-app inbox + email via MailHog (FR-22 + the FR-16 fallback); **every delivery caller-scoped**, the fan-out must not cross users.
-- Saved-search matching fan-out (FR-22).
-- **Account lifecycle** (moved here from M1): password reset + email verification — tokens **single-use, short expiry, hashed at rest, uniform response (no user-enumeration), never logged**.
-
-Its scope fold-ins live in `docs/milestones.md` § Scope fold-ins → M8.
+The smallest milestone left (`design_implementation.md` Part 4 calls it "an hour") and deliberately so after M8's three-in-one:
+- `POST /watchlist/{listing_id}` / `DELETE /watchlist/{listing_id}` toggle, `GET /watchlist` joined to listings (FR-12).
+- **Every operation caller-scoped** — you only ever see or edit your own items; that is the whole security surface, so the forbidden-path tests are IDOR on each of the three routes.
+- Not on the security-critical list, so it gets the inline branch review only — unless `scripts/check_appsec_trigger.py` fires on the diff, which it will if the watchlist touches a response model or a new gate.
 
 ## Carryover notes
+- **What the M8 build + review actually established, worth keeping:**
+  - **The default-deny sweep caught the milestone's own new routes, and that is the system working.** `test_default_deny.py` failed the first full run on all three account-recovery routes. They are public *by necessity* — a user who cannot log in is their entire audience — so the fix was to register them in `PUBLIC_BY_DESIGN` **with the reason each is safe**, which is what that allowlist is for. Two things made it a real fix rather than a rubber stamp: the routes were first **trimmed** to return a bare status instead of a full `UserRead` (an unauthenticated route should hand back the minimum), and the sweep was **re-verified by adding a deliberately ungated route** and confirming it still fails. An allowlist that grows without either step is how a default-deny check quietly stops meaning anything.
+  - **The milestone's worst bug was an availability bug, not an authorization one — and no permission test could have found it.** `SmtpEmailSender.send` is a blocking socket call with a 5-second timeout, and the send-after-commit design fired it from `after_commit` — which made it reachable from the **`async` WebSocket handler** via `notify_message`. One slow SMTP server would have stalled every live chat socket on the worker. The same root cause gave `forgot-password` a timing oracle. **The class of question the tests were not asking: every F criterion asked *whether* mail is sent; none asked *where the send runs*.** Fixed with a `Dispatcher` port (`ThreadDispatcher` in production, `InlineDispatcher` in tests so assertions don't race), pinned by F7, sabotage-verified — reverting it fails with `commit blocked 10.02s`.
+  - **"Uniform response" is not the same as "no enumeration."** G2 pinned that `forgot-password` returns an identical status and body for known and unknown addresses, and that was still only half the property: the known path paid a token hash plus a DB write-and-commit the unknown path skipped, so **latency answered what the body refused to**. M1 already knew this — its login burns `_DUMMY_HASH` for exactly this reason — and `milestones.md` binds M8 to "the same rule as M1's login", which has always included timing. Now equalized (G14). **The test spies on the equalization rather than timing it**: a wall-clock assertion would be flaky in CI, while the real failure mode is a later refactor deleting the call.
+  - **A docs audit found a contradiction inside a single document.** Spec 008's D9 claimed the fan-out "runs in a `BackgroundTask` now" while D12, twelve lines later, said the opposite — leftover text never updated when D12 was added. It also found three symbols named in the spec that never existed (`InMemoryEmailSender`, "one template table"), an NFR-scalability claim the cited mitigation does not actually bound (the per-user cap limits searches *per user*; the matcher scans every saved search in the system), and S10 described as a "breadth-first walk" when it is deliberately a linear one. **Generalize: the claims most likely to be wrong are the ones written early and never re-read against what shipped** — and a self-contradiction inside one file survives review precisely because a reader checks the diff against other documents, not against itself.
+  - **Duplicated truth resurfaced exactly where Article 4 predicts.** The audit's second pass found `design_implementation.md`'s Part 3 architecture diagram still naming `BackgroundTasks` as the fan-out mechanism — a second home for a fact D12 had changed, ~330 lines from the Part 4 bullet that *was* corrected, and untouched by the branch. **When a mechanism changes, grep for it; do not fix the place you remember.**
+  - **Notifications are a projection, not an audit trail (D1), and that distinction is load-bearing.** The event tables stay the immutable record; `notification` is mutable, per-recipient, and disposable. Related: notification rows carry **no private payload** (D2), which is what makes a stale row safe after a revocation — the click-through hits `require_private_access` / `conversation_role_for` and is refused. Copying message text or private fields into the row would have built a bypass around M5's gate that no permission test would have flagged, because the gate itself would still be correct.
 - **What the M7 build + review actually established, worth keeping:**
   - **The independent appsec pass found a real bypass the fully-green suite never asked about — the corridor-class bug, M3's lesson recurring.** All 8 crown-jewel invariants were confirmed enforced, but `counter` was the one write path that *created a new priced `Offer` row* (D1's design) without re-checking listing liveness, while `create` (A3) and `accept` (B8) both did. A seller could `close`/`pause` a listing with a pending offer, then `counter` it → 200, spawning a priced `submitted` row on a dead listing. Each door was gated; the corridor through an already-open thread was not. **The general rule, re-earned: when every door is checked, ask what the corridor between them skips — a reachability/negative test per *door* misses the sequence that walks through an already-open one.** Fixed (`counter` now 409s `listing_not_live` before any write), **sabotage-verified** (neutralize the guard → B10's three params fail), and re-verified by the same appsec agent in one bounded round (no objection).
   - **D8 — the asymmetry that fell out of it, now a stated decision:** an offer action that *creates a new commitment* (`create`, `accept`, `counter`) requires the listing `live`; one that only *resolves/retracts* an existing row (`decline`, `withdraw`) does not. Not just convenient — *correct*: gating decline/withdraw would strand a buyer's `submitted` offer forever on a seller-paused listing (no expiry — deferred), a worse outcome than letting a purely-resolving action through. Pinned by B10 (gated) + B11 (deliberately open). Recorded in spec 007 D8 as an owner-overridable product call.

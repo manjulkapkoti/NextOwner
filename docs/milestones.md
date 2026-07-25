@@ -124,7 +124,7 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
 - [x] **M5** ⭐ — NDA + access gate *(+ revocation endpoint, `nda_version`, `accessrequestevent` audit; FR-14's verification half deferred to M10 and notification events to M8 — § Scope fold-ins)*
 - [x] **M6** — realtime chat *(+ unread counts, WS error contract — § Scope fold-ins)*
 - [x] **M7** ⭐ — offers / LOI *(+ counter model, sibling policy, `offerevent` audit; appsec-found counter-on-non-live bypass closed, D8 — § Scope fold-ins)*
-- [ ] **M8** — notifications engine + saved searches & alerts *(scope expanded)*
+- [x] **M8** ⭐ — notifications engine + saved searches & alerts *(+ account lifecycle moved from M1; the `notification` projection, the email port + `Dispatcher`, two token tables. Fan-out is synchronous in-transaction, **not** a `BackgroundTask` — spec 008 D12 amends the Part 4 sketch — § Scope fold-ins)*
 - [ ] **M9** — watchlist
 - [ ] **M10** — buyer verification *(+ badge on profile, upload quota — § Scope fold-ins)*
 - [ ] **M11** — valuation calculator *(+ lead capture — § Scope fold-ins)*

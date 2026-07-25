@@ -25,11 +25,42 @@ import { LoginForm } from './components/LoginForm'
 import { MyListings } from './components/MyListings'
 import { MyOffers } from './components/MyOffers'
 import { NavBar } from './components/NavBar'
+import { NotificationInbox } from './components/NotificationInbox'
+import { SavedSearches } from './components/SavedSearches'
+import { ForgotPasswordPage } from './components/ForgotPasswordPage'
+import { ResetPasswordPage } from './components/ResetPasswordPage'
+import { VerifyEmailPage } from './components/VerifyEmailPage'
 import { RegisterForm } from './components/RegisterForm'
 import { RequireAdmin } from './components/RequireAdmin'
 import { RequireAuth } from './components/RequireAuth'
 import { Wordmark } from './components/Wordmark'
 import { authStore } from './stores/authStore'
+
+// M8 — the three account-recovery pages (spec 008 J8-J10). Public by design:
+// the whole audience for "reset my password" is people without a session.
+function ForgotPasswordRoute() {
+  return (
+    <Container maxWidth="sm" sx={{ mt: 6 }}>
+      <ForgotPasswordPage />
+    </Container>
+  )
+}
+
+function ResetPasswordRoute() {
+  return (
+    <Container maxWidth="sm" sx={{ mt: 6 }}>
+      <ResetPasswordPage />
+    </Container>
+  )
+}
+
+function VerifyEmailRoute() {
+  return (
+    <Container maxWidth="sm" sx={{ mt: 6 }}>
+      <VerifyEmailPage />
+    </Container>
+  )
+}
 
 // Public /login route: if a session already exists, skip the form (AS3) —
 // there is nothing useful to show an already-signed-in visitor here.
@@ -289,6 +320,13 @@ export function AppShell() {
         <Route path="/login" element={<LoginRoute />} />
         <Route path="/register" element={<RegisterRoute />} />
         <Route path="/" element={<LandingRoute />} />
+        {/* M8 — account recovery. Deliberately NOT behind RequireAuth: a user
+            who cannot log in is the entire audience for these three pages
+            (spec 008 G, H). The server gates them with a one-time token, not
+            with a session. */}
+        <Route path="/forgot-password" element={<ForgotPasswordRoute />} />
+        <Route path="/reset-password" element={<ResetPasswordRoute />} />
+        <Route path="/verify-email" element={<VerifyEmailRoute />} />
         {/* M4 — public marketplace. Deliberately NOT wrapped in RequireAuth:
             browsing is the anonymous half of the trust gate (spec 004 F9). */}
         <Route path="/browse" element={<BrowseListings />} />
@@ -309,6 +347,33 @@ export function AppShell() {
             <RequireAuth>
               <Container maxWidth="md" sx={{ mt: 4 }}>
                 <ListingWizard />
+              </Container>
+            </RequireAuth>
+          }
+        />
+        {/* M8 — the inbox and saved searches (FR-22, FR-11). */}
+        <Route
+          path="/notifications"
+          element={
+            <RequireAuth>
+              <Container maxWidth="md" sx={{ mt: 4 }}>
+                <Typography variant="h5" gutterBottom>
+                  Notifications
+                </Typography>
+                <NotificationInbox />
+              </Container>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/saved-searches"
+          element={
+            <RequireAuth>
+              <Container maxWidth="md" sx={{ mt: 4 }}>
+                <Typography variant="h5" gutterBottom>
+                  Saved searches
+                </Typography>
+                <SavedSearches />
               </Container>
             </RequireAuth>
           }

@@ -10,7 +10,16 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import EmailStr, Field, field_serializer, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    computed_field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 from sqlmodel import SQLModel
 
 from .config import settings
@@ -68,7 +77,15 @@ class UserRead(SQLModel):
     # or cross-user one.
     nda_signed_at: datetime | None
     nda_version: str | None
+    email_verified_at: datetime | None
     created_at: datetime
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def email_verified(self) -> bool:
+        """Derived, never stored twice (M8). The timestamp is the one source of
+        truth; this is the boolean the API and the UI actually want."""
+        return self.email_verified_at is not None
 
 
 class LoginResponse(SQLModel):
@@ -451,3 +468,108 @@ class OfferWithBuyer(SQLModel):
     @field_serializer("price", when_used="json")
     def _ser_price(self, v: Decimal) -> str:
         return str(v)
+
+
+# ── Notifications, saved searches & account lifecycle (M8) ───────────────────
+
+class NotificationRead(SQLModel):
+    """One inbox row (spec 008 S3).
+
+    **`recipient_id` is deliberately absent.** It is always the caller — the
+    gate guarantees that — so exposing it adds nothing a client can use and
+    gives a future refactor a place to leak someone else's id. Same reasoning
+    as `UserRead`'s missing `password_hash`: the absence *is* the control.
+
+    Nothing private appears here either, because nothing private is ever
+    written (spec D2) — this model does not have to strip anything, which is a
+    stronger position than stripping correctly.
+    """
+
+    id: int
+    type: str
+    title: str
+    listing_id: int | None
+    conversation_id: int | None
+    offer_id: int | None
+    read_at: datetime | None
+    created_at: datetime
+
+
+class UnreadCountRead(SQLModel):
+    """The nav badge's number. Field name matches `ConversationRead`'s existing
+    `unread_count` so the two badges read the same way."""
+
+    unread_count: int
+
+
+class NotificationQuery(SQLModel):
+    """Inbox query parameters, bounded at the boundary.
+
+    The `limit` ceiling is the DoS control M4's `ListingQuery` established, and
+    it is an explicit 422 rather than a silent clamp for the same reason: a
+    clamp hides the caller's mistake and makes the ceiling invisible (E8, X5).
+    """
+
+    unread: bool = False
+    limit: int = Field(default=20, ge=1, le=settings.notifications_page_limit)
+    offset: int = Field(default=0, ge=0)
+
+
+class SavedSearchFilters(BaseModel):
+    """The stored filter set — a strict subset of M4's browse filters.
+
+    `extra="forbid"` is the security control, not a nicety: it is what makes a
+    filter naming a `ListingPrivate` column (`company_name`) a 422 at the
+    boundary rather than something the matcher has to remember to reject
+    (spec A7, S5). The alert engine can only ever match on columns the public
+    browse already exposes.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    q: str | None = Field(default=None, max_length=100)
+    type: str | None = Field(default=None, max_length=40)
+    min_price: Decimal | None = Field(default=None, ge=0, max_digits=14)
+    max_price: Decimal | None = Field(default=None, ge=0, max_digits=14)
+    min_profit: Decimal | None = Field(default=None, max_digits=14)
+
+    @model_validator(mode="after")
+    def _price_range_is_coherent(self) -> "SavedSearchFilters":
+        if (
+            self.min_price is not None
+            and self.max_price is not None
+            and self.min_price > self.max_price
+        ):
+            raise ValueError("min_price cannot exceed max_price")
+        return self
+
+
+class SavedSearchCreate(SQLModel):
+    """Create body. No `user_id` field, so a client cannot assign one (A6)."""
+
+    name: str = Field(min_length=1, max_length=80)
+    filters: SavedSearchFilters
+
+
+class SavedSearchRead(SQLModel):
+    id: int
+    name: str
+    filters: SavedSearchFilters
+    created_at: datetime
+
+
+class ForgotPasswordRequest(SQLModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(SQLModel):
+    """Reset body. The token is a **body field, never a query parameter**
+    (spec 008 D11): a URL parameter lands in access logs, `Referer` headers and
+    browser history, which `security.md` §7 M8 forbids outright."""
+
+    token: str = Field(min_length=1, max_length=512)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class VerifyEmailRequest(SQLModel):
+    token: str = Field(min_length=1, max_length=512)

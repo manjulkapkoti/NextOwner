@@ -28,6 +28,7 @@ import { observer } from 'mobx-react-lite'
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom'
 import { authStore } from '../stores/authStore'
 import { chatStore } from '../stores/chatStore'
+import { notificationStore } from '../stores/notificationStore'
 import { Wordmark } from './Wordmark'
 
 // Three stacked bars — a hamburger without pulling in an icon package for one
@@ -38,6 +39,33 @@ function MenuGlyph() {
       {[0, 1, 2].map((i) => (
         <Box key={i} sx={{ height: 2, borderRadius: 1, bgcolor: 'currentColor' }} />
       ))}
+    </Box>
+  )
+}
+
+// One badge, two callers (Messages and Notifications). Extracted rather than
+// duplicated so the two counts cannot drift into two different-looking pills.
+function CountBadge({ count }: { count: number }) {
+  if (count <= 0) return null
+  return (
+    <Box
+      component="span"
+      sx={{
+        ml: 0.75,
+        minWidth: 20,
+        height: 20,
+        px: 0.5,
+        borderRadius: 999,
+        bgcolor: 'primary.main',
+        color: 'primary.contrastText',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '0.7rem',
+        fontWeight: 700,
+      }}
+    >
+      {count}
     </Box>
   )
 }
@@ -56,7 +84,10 @@ export const NavBar = observer(function NavBar() {
     // Best-effort: a failed badge refresh is not worth surfacing to the
     // user (or, in tests that don't stub fetch, worth an unhandled
     // rejection) — the nav chrome degrades to "no badge", not an error.
-    if (authStore.isAuthenticated) chatStore.loadConversations().catch(() => {})
+    if (authStore.isAuthenticated) {
+      chatStore.loadConversations().catch(() => {})
+      notificationStore.loadUnreadCount().catch(() => {})
+    }
   }, [pathname])
   const unreadTotal = chatStore.conversations.reduce((sum, c) => sum + c.unread_count, 0)
 
@@ -141,27 +172,18 @@ export const NavBar = observer(function NavBar() {
                 </Button>
                 <Button color="inherit" component={RouterLink} to="/messages" sx={{ color: 'text.secondary' }}>
                   Messages
-                  {unreadTotal > 0 && (
-                    <Box
-                      component="span"
-                      sx={{
-                        ml: 0.75,
-                        minWidth: 20,
-                        height: 20,
-                        px: 0.5,
-                        borderRadius: 999,
-                        bgcolor: 'primary.main',
-                        color: 'primary.contrastText',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '0.7rem',
-                        fontWeight: 700,
-                      }}
-                    >
-                      {unreadTotal}
-                    </Box>
-                  )}
+                  <CountBadge count={unreadTotal} />
+                </Button>
+                {/* M8 — the notifications inbox (spec 008 J2, FR-22). Same
+                    shape as Messages beside it: one hub, one badge. */}
+                <Button
+                  color="inherit"
+                  component={RouterLink}
+                  to="/notifications"
+                  sx={{ color: 'text.secondary' }}
+                >
+                  Notifications
+                  <CountBadge count={notificationStore.unreadCount} />
                 </Button>
                 <Button color="inherit" onClick={handleLogout} sx={{ color: 'text.secondary' }}>
                   Logout

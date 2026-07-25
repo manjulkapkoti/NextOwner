@@ -57,6 +57,31 @@ class Settings(BaseSettings):
     offer_structure_max_chars: int = 200
     offer_contingencies_max_chars: int = 2000
 
+    # Email channel (M8, spec 008 D9). MailHog locally: SMTP on 1025, inbox UI
+    # on 8025 — a real inbox with no external service (Article 1, 100% local).
+    smtp_host: str = "localhost"
+    smtp_port: int = 1025
+    email_from: str = "no-reply@nextowner.local"
+    email_enabled: bool = True
+    # Where links in outbound mail point. Server-owned so a client can never
+    # influence the host in a reset link (that would be a phishing primitive).
+    app_base_url: str = "http://localhost:5173"
+
+    # Account-lifecycle tokens (M8, security.md §7 M8). Short expiry is half the
+    # defense; single-use + hashed-at-rest is the other half (spec 008 D5).
+    password_reset_token_ttl_minutes: int = 30
+    email_verification_token_ttl_hours: int = 24
+    # Requesting a reset mails a third party on demand — bound it harder than
+    # login, because the cost of abuse lands on someone who did nothing.
+    forgot_password_rate_limit_max: int = 3
+    forgot_password_rate_limit_window_seconds: int = 900
+
+    # Notifications & saved searches (M8). The per-user search cap bounds the
+    # fan-out cost of a single publication (spec A9, NFR Scalability); the page
+    # limit is the same DoS control M4's browse already applies.
+    saved_search_max_per_user: int = 20
+    notifications_page_limit: int = 50
+
     # Test-only: mount the /_debug/boom route (500-contract tests). Off in prod.
     enable_debug_routes: bool = False
 

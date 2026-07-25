@@ -20,6 +20,7 @@ from ..config import ALLOWED_UPLOAD_TYPES, settings
 from ..db import get_session
 from ..errors import InvalidTransition, NotFound, PayloadTooLarge, UnsupportedMediaType
 from ..models import Listing, ListingDocument, ListingEvent, ListingPrivate, User, _utcnow
+from ..notifications import fan_out_saved_searches, notify_listing_decision
 from ..permissions import (
     get_current_user,
     get_owned_listing,
@@ -513,6 +514,13 @@ def approve_listing(
         action="approved",
         set_fields={"published_at": _utcnow()},   # server clock, never the client's
     )
+    # M8: publication is the milestone's fan-out trigger — the owner learns
+    # their listing is live, and every buyer whose saved search matches learns
+    # it exists (spec C1, B1-B8). Both write into the transaction `_transition`
+    # already committed, so a notification cannot outlive a failed approval.
+    notify_listing_decision(session, listing, "approve")
+    fan_out_saved_searches(session, listing)
+    session.commit()
     return _to_read(listing, session.get(ListingPrivate, listing.id))
 
 
@@ -536,4 +544,9 @@ def reject_listing(
         action="rejected",
         reason=body.reason.strip(),
     )
+    # M8 (spec C2): the reason travels into the notification, because a
+    # rejection the seller cannot act on is worse than none — the same
+    # reasoning that makes `reason` required by schema above.
+    notify_listing_decision(session, listing, "reject", reason=body.reason.strip())
+    session.commit()
     return _to_read(listing, session.get(ListingPrivate, listing.id))
