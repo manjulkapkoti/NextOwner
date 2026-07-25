@@ -28,12 +28,22 @@ import re
 #   - browse + public detail: the anonymous half of the trust gate (M4, FR-6),
 #     served through `ListingPublic`, which cannot carry identity fields
 #   - register/login: the doors by which a caller *becomes* authenticated
+#   - the three M8 account-recovery routes: a user who **cannot log in** is the
+#     entire audience for them, so a session gate would make them useless. They
+#     are gated instead by a single-use, short-lived, hashed one-time token
+#     (spec 008 G/H, `security.md` §7 M8), and each returns a bare status rather
+#     than any record — `forgot-password` deliberately answers an identical 202
+#     to every caller so it cannot become an account-existence oracle.
+#     `resend-verification` is NOT here: it is authenticated, and correctly 401s.
 PUBLIC_BY_DESIGN = {
     ("GET", "/api/health"),
     ("GET", "/api/listings"),
     ("GET", "/api/listings/{listing_id}"),
     ("POST", "/api/auth/register"),
     ("POST", "/api/auth/login"),
+    ("POST", "/api/auth/forgot-password"),
+    ("POST", "/api/auth/reset-password"),
+    ("POST", "/api/auth/verify-email"),
 }
 
 # Mounted only when ENABLE_DEBUG_ROUTES is set (conftest sets it so the 500

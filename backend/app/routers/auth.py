@@ -227,11 +227,11 @@ def forgot_password(
     return {"status": "accepted"}
 
 
-@router.post("/reset-password", response_model=UserRead)
+@router.post("/reset-password")
 def reset_password(
     body: ResetPasswordRequest,
     session: Session = Depends(get_session),
-) -> User:
+) -> dict[str, str]:
     """Redeem a reset token and set a new password (spec G3-G8, G11, S7, X4).
 
     The token arrives in the **body**, never the query string (spec D11): a URL
@@ -251,15 +251,19 @@ def reset_password(
     user.password_hash = hash_password(body.password)
     session.add(user)
     session.commit()
-    session.refresh(user)
-    return user
+    # Deliberately returns a bare status, **not** the user record. This route is
+    # unauthenticated by necessity, and redeeming a token proves control of a
+    # mailbox — not that the caller should be handed a profile. Returning
+    # `UserRead` here would make an anonymous route a data route for no gain
+    # (`security.md` § data minimization); the client's next step is to log in.
+    return {"status": "password_reset"}
 
 
-@router.post("/verify-email", response_model=UserRead)
+@router.post("/verify-email")
 def verify_email(
     body: VerifyEmailRequest,
     session: Session = Depends(get_session),
-) -> User:
+) -> dict[str, str]:
     """Confirm an address (spec H2-H6).
 
     Reads only `EmailVerificationToken`, so a password-reset token cannot land
@@ -274,8 +278,10 @@ def verify_email(
         user.email_verified_at = _utcnow()
         session.add(user)
     session.commit()
-    session.refresh(user)
-    return user
+    # Bare status, for the same reason `reset_password` returns one: an
+    # unauthenticated route should hand back the minimum that answers the
+    # question it was asked.
+    return {"status": "email_verified"}
 
 
 @router.post("/resend-verification", status_code=202)
