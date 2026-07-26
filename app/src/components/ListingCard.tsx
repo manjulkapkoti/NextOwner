@@ -11,6 +11,7 @@
 import { Box, Card, CardActionArea, Chip, Stack, Typography } from '@mui/material'
 import { Link as RouterLink } from 'react-router-dom'
 import { listingTypeLabel } from '../lib/listingTypes'
+import { WatchlistButton } from './WatchlistButton'
 
 export interface PublicListing {
   id: number
@@ -51,77 +52,88 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 export function ListingCard({ listing }: { listing: PublicListing }) {
   return (
-    <Card sx={{ height: '100%', '&:hover': { boxShadow: 3 } }}>
-      <CardActionArea
-        component={RouterLink}
-        to={`/browse/${listing.id}`}
-        sx={{ height: '100%', p: 2.5, display: 'block', textAlign: 'left' }}
-      >
-        <Stack spacing={1.5} sx={{ height: '100%' }}>
-          <Chip
-            label={listingTypeLabel(listing.type)}
-            size="small"
-            sx={{ alignSelf: 'flex-start' }}
-          />
+    // M9 — the watchlist heart sits on top of the card but must not be a DOM
+    // descendant of CardActionArea (a ButtonBase acting as the whole card's
+    // router link): a nested interactive button inside it is invalid nesting
+    // and would fight the card's own click-to-navigate. Positioned as a
+    // sibling instead, absolutely placed over the relatively-positioned Box.
+    <Box sx={{ position: 'relative' }}>
+      <Card sx={{ height: '100%', '&:hover': { boxShadow: 3 } }}>
+        <CardActionArea
+          component={RouterLink}
+          to={`/browse/${listing.id}`}
+          sx={{ height: '100%', p: 2.5, display: 'block', textAlign: 'left' }}
+        >
+          <Stack spacing={1.5} sx={{ height: '100%' }}>
+            <Chip
+              label={listingTypeLabel(listing.type)}
+              size="small"
+              sx={{ alignSelf: 'flex-start' }}
+            />
 
-          <Typography variant="h6" component="h3" sx={{ overflowWrap: 'anywhere' }}>
-            {listing.headline}
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-            }}
-          >
-            {listing.description}
-          </Typography>
-
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-              gap: 1.5,
-              pt: 0.5,
-            }}
-          >
-            <Metric label="MRR" value={money(listing.mrr)} />
-            <Metric label="TTM profit" value={money(listing.ttm_profit)} />
-            <Metric label="Customers" value={listing.customers.toLocaleString('en-US')} />
-          </Box>
-
-          {/* The gate, made visible. M5 turns this into a real request-access
-              action; until then it explains rather than invites. */}
-          <Box
-            sx={{
-              mt: 'auto',
-              px: 1.5,
-              py: 1,
-              borderRadius: 1,
-              bgcolor: 'action.hover',
-              border: '1px dashed',
-              borderColor: 'divider',
-            }}
-          >
-            <Typography variant="caption" color="text.secondary">
-              Company name and financials are locked until the NDA is signed
+            <Typography variant="h6" component="h3" sx={{ overflowWrap: 'anywhere' }}>
+              {listing.headline}
             </Typography>
-          </Box>
 
-          <Stack direction="row" alignItems="baseline" justifyContent="space-between" sx={{ gap: 1 }}>
-            <Typography variant="caption" color="text.secondary">
-              Asking price
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}
+            >
+              {listing.description}
             </Typography>
-            <Typography variant="h6" component="p">
-              {money(listing.asking_price)}
-            </Typography>
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                gap: 1.5,
+                pt: 0.5,
+              }}
+            >
+              <Metric label="MRR" value={money(listing.mrr)} />
+              <Metric label="TTM profit" value={money(listing.ttm_profit)} />
+              <Metric label="Customers" value={listing.customers.toLocaleString('en-US')} />
+            </Box>
+
+            {/* The gate, made visible. M5 turns this into a real request-access
+                action; until then it explains rather than invites. */}
+            <Box
+              sx={{
+                mt: 'auto',
+                px: 1.5,
+                py: 1,
+                borderRadius: 1,
+                bgcolor: 'action.hover',
+                border: '1px dashed',
+                borderColor: 'divider',
+              }}
+            >
+              <Typography variant="caption" color="text.secondary">
+                Company name and financials are locked until the NDA is signed
+              </Typography>
+            </Box>
+
+            <Stack direction="row" alignItems="baseline" justifyContent="space-between" sx={{ gap: 1 }}>
+              <Typography variant="caption" color="text.secondary">
+                Asking price
+              </Typography>
+              <Typography variant="h6" component="p">
+                {money(listing.asking_price)}
+              </Typography>
+            </Stack>
           </Stack>
-        </Stack>
-      </CardActionArea>
-    </Card>
+        </CardActionArea>
+      </Card>
+      {/* Sibling of CardActionArea, not a child — see the comment above. */}
+      <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}>
+        <WatchlistButton listingId={listing.id} />
+      </Box>
+    </Box>
   )
 }

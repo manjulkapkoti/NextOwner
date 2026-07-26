@@ -27,6 +27,7 @@ import { MyOffers } from './components/MyOffers'
 import { NavBar } from './components/NavBar'
 import { NotificationInbox } from './components/NotificationInbox'
 import { SavedSearches } from './components/SavedSearches'
+import { Watchlist } from './components/Watchlist'
 import { ForgotPasswordPage } from './components/ForgotPasswordPage'
 import { ResetPasswordPage } from './components/ResetPasswordPage'
 import { VerifyEmailPage } from './components/VerifyEmailPage'
@@ -35,6 +36,7 @@ import { RequireAdmin } from './components/RequireAdmin'
 import { RequireAuth } from './components/RequireAuth'
 import { Wordmark } from './components/Wordmark'
 import { authStore } from './stores/authStore'
+import { watchlistStore } from './stores/watchlistStore'
 
 // M8 — the three account-recovery pages (spec 008 J8-J10). Public by design:
 // the whole audience for "reset my password" is people without a session.
@@ -307,6 +309,10 @@ export function AppShell() {
   useEffect(() => {
     function onUnauthorized() {
       authStore.logout()
+      // M9 — a second user logging in on the same session must not inherit
+      // the first user's watchlist state (mirrors the client-state-is-
+      // convenience-only rule other stores follow at logout/session-death).
+      watchlistStore.reset()
       navigate('/login')
     }
     window.addEventListener('auth:unauthorized', onUnauthorized)
@@ -374,6 +380,20 @@ export function AppShell() {
                   Saved searches
                 </Typography>
                 <SavedSearches />
+              </Container>
+            </RequireAuth>
+          }
+        />
+        {/* M9 — the watchlist (spec 009, FR-12). */}
+        <Route
+          path="/watchlist"
+          element={
+            <RequireAuth>
+              <Container maxWidth="md" sx={{ mt: 4 }}>
+                <Typography variant="h5" gutterBottom>
+                  Watchlist
+                </Typography>
+                <Watchlist />
               </Container>
             </RequireAuth>
           }

@@ -29,6 +29,7 @@ import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom'
 import { authStore } from '../stores/authStore'
 import { chatStore } from '../stores/chatStore'
 import { notificationStore } from '../stores/notificationStore'
+import { watchlistStore } from '../stores/watchlistStore'
 import { Wordmark } from './Wordmark'
 
 // Three stacked bars — a hamburger without pulling in an icon package for one
@@ -94,6 +95,9 @@ export const NavBar = observer(function NavBar() {
   function handleLogout() {
     setAnchorEl(null)
     authStore.logout()
+    // M9 — a second user logging in on the same session must not inherit the
+    // first user's watchlist state.
+    watchlistStore.reset()
     navigate('/login')
   }
 
@@ -170,6 +174,11 @@ export const NavBar = observer(function NavBar() {
                 <Button color="inherit" onClick={() => go('/my-offers')} sx={{ color: 'text.secondary' }}>
                   My offers
                 </Button>
+                {/* M9 — the watchlist (spec 009, FR-12). No count badge: a
+                    watchlist has no unread concept. */}
+                <Button color="inherit" component={RouterLink} to="/watchlist" sx={{ color: 'text.secondary' }}>
+                  Watchlist
+                </Button>
                 <Button color="inherit" component={RouterLink} to="/messages" sx={{ color: 'text.secondary' }}>
                   Messages
                   <CountBadge count={unreadTotal} />
@@ -211,6 +220,7 @@ export const NavBar = observer(function NavBar() {
                 <MenuItem onClick={() => go('/sell')}>List a business</MenuItem>
                 <MenuItem onClick={() => go('/my-listings')}>My listings</MenuItem>
                 <MenuItem onClick={() => go('/my-offers')}>My offers</MenuItem>
+                <MenuItem onClick={() => go('/watchlist')}>Watchlist</MenuItem>
                 <MenuItem onClick={() => go('/messages')}>
                   Messages{unreadTotal > 0 ? ` (${unreadTotal})` : ''}
                 </MenuItem>
