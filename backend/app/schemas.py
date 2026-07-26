@@ -558,6 +558,45 @@ class SavedSearchRead(SQLModel):
     created_at: datetime
 
 
+class WatchlistEntryRead(SQLModel):
+    """One row of the caller's watchlist (M9, FR-12) — the entry joined to its
+    listing's public card.
+
+    Deliberately a **standalone model**, not a subclass of `ListingPublic` or
+    `ListingRead`, for exactly the reason `ListingPublic`'s docstring gives:
+    inheritance would silently join a private field added to one model onto
+    this one. The duplication is the control, and spec 009 W11 asserts the
+    absent field set directly so it cannot drift unnoticed.
+
+    Absent by construction, the same list `ListingPublic` excludes: `owner_id`,
+    `status`, `company_name`, `website_url`, `detailed_financials`. `status` is
+    excluded for the same reason it is there — every row returned is already
+    known-`live` by construction of the query (D3), so the field would be a
+    constant that tells a caller nothing while opening a channel for a future
+    state to leak by accident.
+
+    `added_at` is the entry's `created_at`, not the listing's — the listing's
+    own age is already carried by `published_at`.
+    """
+
+    listing_id: int
+    added_at: datetime
+    type: str
+    headline: str
+    description: str
+    asking_price: Decimal
+    ttm_revenue: Decimal
+    ttm_profit: Decimal
+    mrr: Decimal
+    churn_pct: Decimal
+    customers: int
+    published_at: datetime | None = None
+
+    @field_serializer(*_MONEY_FIELDS, when_used="json")
+    def _ser_money(self, v: Decimal) -> str:
+        return str(v)
+
+
 class ForgotPasswordRequest(SQLModel):
     email: EmailStr
 

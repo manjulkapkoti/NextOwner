@@ -28,6 +28,7 @@ from .models import (
     Offer,
     SavedSearch,
     User,
+    WatchlistEntry,
 )
 from .security import decode_access_token
 
@@ -361,6 +362,39 @@ def get_owned_saved_search(
     if saved_search is None or saved_search.user_id != user.id:
         raise NotFound("Saved search not found")
     return saved_search
+
+
+def get_owned_watchlist_entry(
+    listing_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> WatchlistEntry:
+    """Trust boundary: is this listing on the caller's own watchlist? (M9, W9/W10)
+
+    Keyed on `listing_id`, not the row's own surrogate id (spec 009 D5): the
+    natural key of a watchlist entry is the pair `(user, listing)`, and the
+    client is never told the row's id. That is also what makes the delete
+    caller-scoped **structurally** — the endpoint body never sees a
+    `listing_id` to query on, so the version of this that reaches another
+    account's row cannot be written by forgetting a predicate (S2).
+
+    Same 404-for-both shape as `get_owned_saved_search` above, for the same
+    reason: a watchlist entry is a private artifact of one account, so "you
+    never added it," "someone else added it," and "no such listing" must all
+    answer identically. W10 asserts the two responses byte-for-byte, so the
+    tempting "helpful" split — `NotFound("Listing not found")` when the listing
+    is missing — is a working oracle for which listing ids are in use, and is
+    exactly what this single message prevents.
+    """
+    entry = session.exec(
+        select(WatchlistEntry).where(
+            WatchlistEntry.user_id == user.id,
+            WatchlistEntry.listing_id == listing_id,
+        )
+    ).first()
+    if entry is None:
+        raise NotFound("Watchlist entry not found")
+    return entry
 
 
 def get_owned_listing(

@@ -24,6 +24,7 @@ import { listingTypeLabel } from '../lib/listingTypes'
 import type { PublicListing } from './ListingCard'
 import { OfferForm } from './OfferForm'
 import { RequestAccessPanel } from './RequestAccessPanel'
+import { WatchlistButton } from './WatchlistButton'
 import { accessStore } from '../stores/accessStore'
 import { authStore } from '../stores/authStore'
 
@@ -96,11 +97,16 @@ export const ListingDetail = observer(function ListingDetail() {
       {!error && listing && (
         <Stack spacing={3}>
           <Stack spacing={1.5}>
-            <Chip
-              label={listingTypeLabel(listing.type)}
-              size="small"
-              sx={{ alignSelf: 'flex-start' }}
-            />
+            <Stack direction="row" alignItems="flex-start" justifyContent="space-between" sx={{ gap: 1 }}>
+              <Chip
+                label={listingTypeLabel(listing.type)}
+                size="small"
+                sx={{ alignSelf: 'flex-start' }}
+              />
+              {/* M9 — not nested inside any clickable region on this page, so
+                  no CardActionArea-style nesting hazard here. */}
+              <WatchlistButton listingId={Number(id)} />
+            </Stack>
             <Typography variant="h4" component="h1" sx={{ overflowWrap: 'anywhere' }}>
               {listing.headline}
             </Typography>

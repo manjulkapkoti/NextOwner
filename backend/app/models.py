@@ -392,6 +392,38 @@ class SavedSearch(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+class WatchlistEntry(SQLModel, table=True):
+    """One user's favorited listing (M9, FR-12, spec 009).
+
+    The simplest caller-owned artifact in the codebase: a boolean membership
+    fact with no state machine, no payload, and no fan-out cost. `user_id` is
+    **server-derived from the JWT** — none of the three M9 routes takes a
+    request body at all, so the ownership field is not merely stripped, it has
+    no field to be assigned from (spec S4).
+
+    The unique constraint on `(user_id, listing_id)` is what makes D1's
+    idempotent add safe under a race: the endpoint's check-then-insert handles
+    the common path, and the constraint is the backstop for two concurrent
+    `POST`s from a double-clicked heart icon — a caught `IntegrityError` is
+    treated as "already present," which *is* the D1 semantics, not a 409.
+    A **plain** unique index, unlike `Offer`/`Notification`'s partial ones:
+    there is no soft-delete or status column here to scope it to (D7 —
+    erasure hard-deletes the row, because a favorite is not evidence).
+
+    No `status` column and no audit table by design: nothing here overwrites a
+    value a later reader needs (Article 2 #5).
+    """
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "listing_id", name="uq_watchlistentry_user_listing"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)         # server-derived
+    listing_id: int = Field(foreign_key="listing.id", index=True)
+    created_at: datetime = Field(default_factory=_utcnow)           # `added_at` on the wire
+
+
 class PasswordResetToken(SQLModel, table=True):
     """A single-use password-reset grant (M8, security.md §7 M8).
 
