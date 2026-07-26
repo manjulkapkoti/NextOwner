@@ -95,9 +95,9 @@ describe('AppShell routing', () => {
   // lives in headlines and prose, never in navigation (fold-in constraint).
   it('F8: the nav offers a Browse link to the public marketplace', async () => {
     renderShellAt('/')
-    // Exact name: the hero also links to /browse ("Browse listings"), and a
-    // /browse/i matcher would fail on the match count rather than on whether
-    // the nav carries the link.
+    // Exact name: the landing page's Buyers spotlight card also links to
+    // /browse ("Browse listings"), and a /browse/i matcher would fail on the
+    // match count rather than on whether the nav carries the link.
     await waitFor(() =>
       expect(screen.getByRole('link', { name: 'Browse' })).toHaveAttribute('href', '/browse'),
     )
@@ -121,10 +121,16 @@ describe('AppShell routing', () => {
   })
 
   // Log in and Get started live in the nav — one of each, never duplicated in
-  // the hero. From M4 the hero does carry exactly one CTA of its own (Browse
-  // listings), which is the one action the nav's auth pair doesn't offer;
-  // asserted here so "one of each" stays precise rather than becoming "no CTA".
-  it('offers exactly one Log in, one Get started, and one hero Browse CTA', async () => {
+  // the hero.
+  //
+  // The hero used to carry its own "Browse listings" / "List your business"
+  // button pair (M4), then briefly carried two occurrences of each after UI
+  // Pass 3 Part A added the Sellers/Buyers spotlight cards lower on the page.
+  // The bare hero buttons were removed as a follow-up (owner feedback: the
+  // spotlight cards' CTAs are strictly more informative and the button pair
+  // was a redundant duplicate) — the spotlight cards are now the only
+  // "Browse listings" / "List your business" occurrences on the page.
+  it('offers exactly one Log in, one Get started, and the spotlight-card Browse CTA', async () => {
     renderShellAt('/')
     await waitFor(() =>
       expect(screen.getByText(/you choose who carries it forward/i)).toBeInTheDocument(),

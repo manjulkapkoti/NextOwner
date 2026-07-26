@@ -38,6 +38,64 @@ const AUTHED_SCREENS = [
   { name: 'wizard', path: '/sell', listings: [] },
 ]
 
+// UI Pass 2 — the marketplace browse grid and a listing's detail page, the two
+// screens the pass restyled most (ListingCard, BrowseListings, ListingDetail).
+// Both are public routes, stubbed the same way the a11y spec's marketplace
+// scan already is, so this stays a UI check independent of a running backend.
+const BROWSE_ITEM_A = {
+  id: 42,
+  type: 'saas',
+  headline: 'Profitable B2B scheduling SaaS',
+  description:
+    'A small, profitable scheduling tool for clinics, with steady growth and low monthly churn.',
+  asking_price: '500000.00',
+  ttm_revenue: '200000.00',
+  ttm_profit: '120000.00',
+  mrr: '18000.00',
+  churn_pct: '2.50',
+  customers: 340,
+  published_at: '2026-07-01T00:00:00Z',
+}
+
+const BROWSE_ITEM_B = {
+  ...BROWSE_ITEM_A,
+  id: 43,
+  type: 'ecommerce',
+  headline: 'DTC specialty coffee subscription',
+}
+
+for (const vp of WIDTHS) {
+  test(`screen: browse @ ${vp.name}`, async ({ page }) => {
+    await page.route('**/api/listings*', (route) =>
+      route.fulfill({
+        json: { items: [BROWSE_ITEM_A, BROWSE_ITEM_B], total: 2, limit: 20, offset: 0 },
+      }),
+    )
+    await page.setViewportSize({ width: vp.width, height: vp.height })
+    await page.goto('/browse')
+    await page.getByText(BROWSE_ITEM_A.headline).waitFor()
+    await settle(page)
+    await page.screenshot({ path: `e2e/__screens__/browse-${vp.name}.png`, fullPage: true })
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    )
+    expect(overflow, `browse scrolls horizontally at ${vp.name}px`).toBe(false)
+  })
+
+  test(`screen: browse-detail @ ${vp.name}`, async ({ page }) => {
+    await page.route('**/api/listings/*', (route) => route.fulfill({ json: BROWSE_ITEM_A }))
+    await page.setViewportSize({ width: vp.width, height: vp.height })
+    await page.goto(`/browse/${BROWSE_ITEM_A.id}`)
+    await page.getByText(BROWSE_ITEM_A.headline).waitFor()
+    await settle(page)
+    await page.screenshot({ path: `e2e/__screens__/browse-detail-${vp.name}.png`, fullPage: true })
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    )
+    expect(overflow, `browse-detail scrolls horizontally at ${vp.name}px`).toBe(false)
+  })
+}
+
 async function stubAuth(page: Page, listings: unknown[]) {
   await page.addInitScript(() => localStorage.setItem('token', 'e2e.fake.token'))
   await page.route('**/api/my/listings', (route) =>

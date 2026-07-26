@@ -1,10 +1,9 @@
 // The app shell — routes the components M1/M2 built into a usable app
 // (spec pre-003). Replaces the M0 health page.
-import { Fragment, useEffect } from 'react'
-import { Box, Button, Container, Stack, Typography } from '@mui/material'
+import { useEffect } from 'react'
+import { Box, Button, Container, Typography } from '@mui/material'
 import {
   BrowserRouter,
-  Link as RouterLink,
   Navigate,
   Route,
   Routes,
@@ -12,12 +11,12 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom'
-import { brandTint } from './theme'
 import { AccessRequestQueue } from './components/AccessRequestQueue'
 import { AdminQueue } from './components/AdminQueue'
 import { BrowseListings } from './components/BrowseListings'
 import { ChatWindow } from './components/ChatWindow'
 import { ConversationList } from './components/ConversationList'
+import { LandingPage } from './components/LandingPage'
 import { ListingDetail } from './components/ListingDetail'
 import { ListingOffersQueue } from './components/ListingOffersQueue'
 import { ListingWizard } from './components/ListingWizard'
@@ -158,94 +157,11 @@ function LandingRoute() {
   // The seller is the lead audience because supply is the scarce side, but a
   // seller-led framing leaves buyers cold, so the counter-story gets equal
   // billing rather than a footnote.
-  const trustPoints = ['Curated listings', 'NDA-gated data rooms', 'Verified buyers']
-  return (
-    <Box
-      sx={{
-        minHeight: { xs: 'auto', md: 'calc(100vh - 65px)' },
-        display: 'flex',
-        alignItems: 'center',
-        // Calm brand-blue wash at the top, fading into the app background.
-        background: `radial-gradient(1100px 520px at 50% -8%, ${brandTint}, transparent 62%)`,
-      }}
-    >
-      <Container maxWidth="md" sx={{ py: { xs: 8, sm: 10, md: 12 }, textAlign: 'center' }}>
-        <Stack spacing={{ xs: 3, md: 3.5 }} alignItems="center">
-          <Box
-            sx={{
-              px: 1.5,
-              py: 0.5,
-              borderRadius: 999,
-              bgcolor: 'background.paper',
-              border: '1px solid',
-              borderColor: 'divider',
-              boxShadow: 1,
-            }}
-          >
-            <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600, letterSpacing: '0.02em' }}>
-              Succession, not transaction
-            </Typography>
-          </Box>
-
-          <Typography
-            variant="h2"
-            component="h1"
-            sx={{ fontSize: { xs: '2.15rem', sm: '2.75rem', md: '3.4rem' }, maxWidth: 780 }}
-          >
-            Every business deserves a next owner
-          </Typography>
-
-          <Typography
-            variant="h6"
-            component="p"
-            sx={{ color: 'text.secondary', fontWeight: 400, maxWidth: 620 }}
-          >
-            You built it. You choose who carries it forward — and you decide who gets to look
-            inside before they do.
-          </Typography>
-
-          {/* The buyer's half of the story. The seller-led framing above is
-              deliberate (supply is the scarce side), but on its own it gives a
-              buyer no reason to be here. */}
-          <Typography
-            variant="body1"
-            sx={{ color: 'text.secondary', maxWidth: 560, pt: { xs: 0.5, md: 1 } }}
-          >
-            Buying? Take over something real — with customers, revenue and a history — instead of
-            starting from zero.
-          </Typography>
-
-          {/* One CTA in the hero: the marketplace is the thing worth seeing
-              first, and it is the only action the nav does not already carry
-              (Log in and Get started live top-right, sticky, on every page). */}
-          <Button component={RouterLink} to="/browse" variant="contained" size="large">
-            Browse listings
-          </Button>
-
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={{ xs: 0.75, sm: 1.75 }}
-            alignItems="center"
-            justifyContent="center"
-            sx={{ pt: { xs: 2, md: 3 }, color: 'text.secondary' }}
-          >
-            {trustPoints.map((point, i) => (
-              <Fragment key={point}>
-                {i > 0 && (
-                  <Box
-                    sx={{ display: { xs: 'none', sm: 'block' }, width: 4, height: 4, borderRadius: '50%', bgcolor: 'text.disabled' }}
-                  />
-                )}
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {point}
-                </Typography>
-              </Fragment>
-            ))}
-          </Stack>
-        </Stack>
-      </Container>
-    </Box>
-  )
+  //
+  // UI Pass 2: the markup lives in `LandingPage.tsx` now (the "first
+  // impression" pass restyled it); this route's only job is the
+  // already-authed redirect above.
+  return <LandingPage />
 }
 
 // M5 — the seller's access-request queue for one listing (FR-14, spec 005 J4).

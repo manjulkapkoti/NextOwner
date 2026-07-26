@@ -7,9 +7,21 @@
 // the full history of offers and counters"). Flagged in the handoff report as
 // a spec point worth a name if a future spec wants to test it more strictly.
 import { render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MyOffers } from './MyOffers'
 import { offerStore } from '../stores/offerStore'
+
+// UI Pass 3 (Part B4) — the empty state now carries a "Browse listings" CTA
+// (`RouterLink`), which throws outside a Router context. Scaffolding only:
+// every assertion below is unchanged.
+function renderMyOffers() {
+  return render(
+    <MemoryRouter>
+      <MyOffers />
+    </MemoryRouter>,
+  )
+}
 
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -59,7 +71,7 @@ describe('MyOffers', () => {
       row({ id: 1, listing_id: 7, created_at: '2026-07-20T00:00:00Z' }),
       row({ id: 2, listing_id: 9, created_at: '2026-07-20T01:00:00Z' }),
     ])
-    render(<MyOffers />)
+    renderMyOffers()
 
     await waitFor(() => expect(screen.getByTestId('offer-row-1')).toBeInTheDocument())
     expect(screen.getByTestId('offer-row-2')).toBeInTheDocument()
@@ -80,7 +92,7 @@ describe('MyOffers', () => {
         created_at: '2026-07-20T01:00:00Z',
       }),
     ])
-    render(<MyOffers />)
+    renderMyOffers()
 
     await waitFor(() => expect(screen.getByTestId('offer-row-1')).toBeInTheDocument())
     expect(screen.getByTestId('offer-row-2')).toBeInTheDocument()
@@ -88,7 +100,7 @@ describe('MyOffers', () => {
 
   it('shows an empty state when the buyer has never made an offer', async () => {
     stubMine([])
-    render(<MyOffers />)
+    renderMyOffers()
 
     await waitFor(() => expect(screen.getByText(/no offers|haven.t made/i)).toBeInTheDocument())
   })
@@ -98,7 +110,7 @@ describe('MyOffers', () => {
       'fetch',
       vi.fn(async () => jsonResponse(500, { detail: 'Something went wrong.', request_id: 'req_1' })),
     )
-    render(<MyOffers />)
+    renderMyOffers()
 
     expect(await screen.findByRole('alert')).toBeInTheDocument()
   })

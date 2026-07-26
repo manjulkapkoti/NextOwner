@@ -16,13 +16,45 @@
 // outcome of not being approved yet — treating it as a session failure would
 // bounce a logged-in buyer to /login. `accessStore` keeps that distinction; the
 // only thing this component must not do is re-introduce it.
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { observer } from 'mobx-react-lite'
-import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from '@mui/material'
+import { Alert, Box, Button, Card, Chip, CircularProgress, Stack, Typography } from '@mui/material'
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import { accessStore } from '../stores/accessStore'
 import { authStore } from '../stores/authStore'
+import { blueTint, surfaceRecessed } from '../theme'
 import { NdaModal } from './NdaModal'
 import { PrivateSection, type DocumentSummary } from './PrivateSection'
+
+// UI Pass 3 (Part C7) — a wrapper/styling change only, matching the same
+// visual shape as the anonymous gate card (ListingDetail's own
+// AnonymousGateCard): a lock circle in blueTint.wash/blueTint.onWash plus a
+// surfaceRecessed fill. Every existing copy string, button, and piece of
+// logic inside stays untouched — only this shell is new.
+function GateCard({ children }: { children: ReactNode }) {
+  return (
+    <Card sx={{ ...surfaceRecessed, p: 3, boxShadow: 'none' }}>
+      <Stack direction="row" spacing={1.5} alignItems="flex-start">
+        <Box
+          sx={{
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            bgcolor: blueTint.wash,
+            color: blueTint.onWash,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <LockOutlinedIcon fontSize="small" />
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>{children}</Box>
+      </Stack>
+    </Card>
+  )
+}
 
 interface Props {
   listingId: number
@@ -139,46 +171,52 @@ export const RequestAccessPanel = observer(function RequestAccessPanel({
 
   if (view === 'pending') {
     return (
-      <Stack spacing={1} sx={{ my: 2 }}>
-        <Chip label="Access pending" color="warning" sx={{ alignSelf: 'flex-start' }} />
-        <Typography variant="body2" color="text.secondary">
-          Your request is with the seller. You will see the private details here once
-          they approve it.
-        </Typography>
-      </Stack>
+      <GateCard>
+        <Stack spacing={1}>
+          <Chip label="Access pending" color="warning" sx={{ alignSelf: 'flex-start' }} />
+          <Typography variant="body2" color="text.secondary">
+            Your request is with the seller. You will see the private details here once
+            they approve it.
+          </Typography>
+        </Stack>
+      </GateCard>
     )
   }
 
   if (view === 'denied') {
     return (
-      <Stack spacing={1} sx={{ my: 2 }}>
-        <Chip label="Access closed" sx={{ alignSelf: 'flex-start' }} />
-        <Typography variant="body2" color="text.secondary">
-          The seller is not sharing this listing&apos;s private details with you.
-        </Typography>
-      </Stack>
+      <GateCard>
+        <Stack spacing={1}>
+          <Chip label="Access closed" sx={{ alignSelf: 'flex-start' }} />
+          <Typography variant="body2" color="text.secondary">
+            The seller is not sharing this listing&apos;s private details with you.
+          </Typography>
+        </Stack>
+      </GateCard>
     )
   }
 
   // locked — the buyer has never asked, or asked and nothing is outstanding.
   return (
-    <Stack spacing={2} sx={{ my: 2 }}>
-      <Typography variant="body2" color="text.secondary">
-        The seller shares real financials, the company name and the data room with
-        buyers they approve.
-      </Typography>
-      <Button variant="contained" sx={{ alignSelf: 'flex-start' }} onClick={onRequestClick}>
-        Request access
-      </Button>
-      <NdaModal
-        open={modalOpen}
-        listingId={listingId}
-        onClose={() => setModalOpen(false)}
-        onSigned={() => {
-          setModalOpen(false)
-          setView('pending')
-        }}
-      />
-    </Stack>
+    <GateCard>
+      <Stack spacing={2}>
+        <Typography variant="body2" color="text.secondary">
+          The seller shares real financials, the company name and the data room with
+          buyers they approve.
+        </Typography>
+        <Button variant="contained" sx={{ alignSelf: 'flex-start' }} onClick={onRequestClick}>
+          Request access
+        </Button>
+        <NdaModal
+          open={modalOpen}
+          listingId={listingId}
+          onClose={() => setModalOpen(false)}
+          onSigned={() => {
+            setModalOpen(false)
+            setView('pending')
+          }}
+        />
+      </Stack>
+    </GateCard>
   )
 })

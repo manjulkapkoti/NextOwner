@@ -48,6 +48,9 @@ Thumbs.db
 
 # Playwright screen captures — artefacts for looking at, not for review
 app/e2e/__screens__/
+# UI Pass 2 (2026-07-26) — a one-off backup of the pre-Pass-2 captures, kept
+# on disk for a before/after comparison; same "artefact, not for review" rule.
+app/e2e/__screens_before_pass2__/
 
 # Captured command output — scratch artifacts from test/debug runs. One of these
 # (backend/count_out.txt) reached `main` via an uninspected `git add -A`; the
