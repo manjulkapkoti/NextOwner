@@ -117,3 +117,37 @@ def add_to_watchlist(
     return _to_read(entry, listing)
 
 
+@router.get("/watchlist", response_model=list[WatchlistEntryRead])
+def list_watchlist(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[WatchlistEntryRead]:
+    """The caller's own watchlist, newest-added first (spec W3, W7, W8, W11, S1; D3).
+
+    **Filtered to currently-`live` listings, not to what was live at add time
+    (D3).** A listing that is paused, closed, rejected or put under offer drops
+    silently out of this view while its row stays untouched, so it reappears on
+    its own if the seller resumes — W7 and W8 are one story split across two
+    criteria. The alternative, returning the entry with its listing's status,
+    would publish a seller-side lifecycle fact to a watching buyer: exactly the
+    channel `ListingPublic` chose not to open, and here the field would not even
+    be the constant it is there.
+
+    The `user_id == caller` predicate is the whole of S1. It is easy to lose,
+    because with a single user "all rows" and "my rows" are the same set and
+    every happy-path test still passes.
+
+    Ordered `created_at DESC, id DESC`: the id tiebreak is not decoration —
+    several entries added inside one test share a timestamp at SQLite's
+    resolution, and without it "newest first" is flaky rather than wrong
+    (`list_saved_searches` orders the same way for the same reason).
+    """
+    rows = session.exec(
+        select(WatchlistEntry, Listing)
+        .join(Listing, Listing.id == WatchlistEntry.listing_id)
+        .where(WatchlistEntry.user_id == user.id, Listing.status == "live")
+        .order_by(WatchlistEntry.created_at.desc(), WatchlistEntry.id.desc())
+    ).all()
+    return [_to_read(entry, listing) for entry, listing in rows]
+
+
