@@ -12,7 +12,6 @@
 // correctly if that redirect logic ever moves.
 import {
   Box,
-  Button,
   Card,
   Chip,
   Container,
@@ -21,7 +20,6 @@ import {
   Typography,
 } from '@mui/material'
 import { observer } from 'mobx-react-lite'
-import { Link as RouterLink } from 'react-router-dom'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import TravelExploreOutlinedIcon from '@mui/icons-material/TravelExploreOutlined'
 import AssignmentTurnedInOutlinedIcon from '@mui/icons-material/AssignmentTurnedInOutlined'
@@ -29,7 +27,7 @@ import HandshakeOutlinedIcon from '@mui/icons-material/HandshakeOutlined'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import SellOutlined from '@mui/icons-material/SellOutlined'
 import SearchOutlined from '@mui/icons-material/SearchOutlined'
-import { blueTint, brandTint, elevation, outlinedBrandTint, surfaceRecessed } from '../theme'
+import { blueTint, brandTint, elevation, surfaceRecessed } from '../theme'
 import { authStore } from '../stores/authStore'
 import { SpotlightCard } from './SpotlightCard'
 
@@ -246,22 +244,36 @@ export const LandingPage = observer(function LandingPage() {
             starting from zero.
           </Typography>
 
-          {/* Two CTAs: only one is `contained` (design_system_spec.md §2 — one
-              primary CTA per screen; outlined is not "a second primary"). */}
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ pt: 0.5 }}>
-            <Button component={RouterLink} to="/browse" variant="contained" size="large">
-              Browse listings
-            </Button>
-            <Button
-              component={RouterLink}
-              to={sellDestination}
-              variant="outlined"
-              size="large"
-              sx={{ ...outlinedBrandTint }}
-            >
-              List your business
-            </Button>
-          </Stack>
+          {/* UI Pass 3 Part A, relocated (owner feedback): the hero's own
+              "Browse listings" / "List your business" button pair is gone —
+              these two spotlight cards now sit exactly where that button row
+              used to be, carrying the same two CTAs but with real substance
+              behind each, instead of duplicating them further down the page. */}
+          <Box
+            sx={{
+              width: '100%',
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0,1fr))' },
+              gap: 3.5,
+              textAlign: 'left',
+              pt: 0.5,
+            }}
+          >
+            <SpotlightCard
+              icon={<SellOutlined sx={{ fontSize: 22, color: 'primary.main' }} />}
+              eyebrow="SELLERS"
+              heading="Choose who carries it forward"
+              points={SELLER_POINTS}
+              cta={{ label: 'List your business', to: sellDestination }}
+            />
+            <SpotlightCard
+              icon={<SearchOutlined sx={{ fontSize: 22, color: 'primary.main' }} />}
+              eyebrow="BUYERS"
+              heading="Take over something real"
+              points={BUYER_POINTS}
+              cta={{ label: 'Browse listings', to: '/browse' }}
+            />
+          </Box>
 
           <Stack
             direction="row"
@@ -349,37 +361,6 @@ export const LandingPage = observer(function LandingPage() {
           </Typography>
         </Box>
       </Container>
-
-      {/* UI Pass 3 Part A — the two-sided "value cards" section. No section
-          header above them: the eyebrows (SELLERS / BUYERS) are the labels.
-          Deliberately no background color here — the page's own
-          `blueTint.page` background shows through. */}
-      <Box sx={{ py: { xs: 6, md: 8 } }}>
-        <Container maxWidth="md">
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0,1fr))' },
-              gap: 3.5,
-            }}
-          >
-            <SpotlightCard
-              icon={<SellOutlined sx={{ fontSize: 22, color: 'primary.main' }} />}
-              eyebrow="SELLERS"
-              heading="Choose who carries it forward"
-              points={SELLER_POINTS}
-              cta={{ label: 'List your business', to: sellDestination }}
-            />
-            <SpotlightCard
-              icon={<SearchOutlined sx={{ fontSize: 22, color: 'primary.main' }} />}
-              eyebrow="BUYERS"
-              heading="Take over something real"
-              points={BUYER_POINTS}
-              cta={{ label: 'Browse listings', to: '/browse' }}
-            />
-          </Box>
-        </Container>
-      </Box>
 
       {/* The "how the gate works" band (audit item 6), on the blue-tinted
           `brandTint`/`blueTint.band` background so it reads as a distinct

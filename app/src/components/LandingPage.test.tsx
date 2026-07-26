@@ -28,25 +28,26 @@ describe('LandingPage — Part A spotlight cards', () => {
     expect(screen.getByText('BUYERS')).toBeInTheDocument()
   })
 
-  // The hero already has its own "List your business" / "Browse listings"
-  // CTAs (Pass 2), so the new spotlight cards' CTAs share the same visible
-  // name — the spotlight card's copy is the *second* occurrence in DOM order.
+  // The hero's own "List your business" / "Browse listings" button pair was
+  // removed as a follow-up to Pass 3 (owner feedback: it duplicated the
+  // spotlight cards' CTAs with less substance) — the spotlight cards are now
+  // the only occurrence of each, so no index disambiguation is needed.
   it('the Sellers CTA resolves to /register when logged out, and to /sell when logged in', () => {
     const { unmount } = renderLanding()
-    const loggedOutCta = screen.getAllByRole('link', { name: /list your business/i })[1]
+    const loggedOutCta = screen.getByRole('link', { name: /list your business/i })
     expect(loggedOutCta).toHaveAttribute('href', '/register')
     unmount()
 
     authStore.setToken('a.b.c')
     renderLanding()
-    const loggedInCta = screen.getAllByRole('link', { name: /list your business/i })[1]
+    const loggedInCta = screen.getByRole('link', { name: /list your business/i })
     expect(loggedInCta).toHaveAttribute('href', '/sell')
   })
 
   it('the Buyers CTA resolves to /browse', () => {
     renderLanding()
-    const ctas = screen.getAllByRole('link', { name: /browse listings/i })
-    expect(ctas[1]).toHaveAttribute('href', '/browse')
+    const cta = screen.getByRole('link', { name: /browse listings/i })
+    expect(cta).toHaveAttribute('href', '/browse')
   })
 
   it('the new section appears before the 3-step gate band in DOM order', () => {
