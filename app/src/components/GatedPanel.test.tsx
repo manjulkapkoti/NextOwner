@@ -37,6 +37,15 @@ describe('GatedPanel', () => {
     // so the (also aria-hidden) lock icon `<svg>` doesn't inflate the count.
     const hiddenPlaceholders = container.querySelectorAll('div[aria-hidden="true"]')
     expect(hiddenPlaceholders.length).toBe(fields.length)
+
+    // The redaction invariant itself, not just the label/bar count (found by
+    // an independent appsec pass via sabotage: inserting text as a child of
+    // the aria-hidden bar left every other assertion here green). A future
+    // caller deriving `redactedFields` from real listing data, or a future
+    // edit rendering a value inside the bar, must fail here.
+    hiddenPlaceholders.forEach((bar) => {
+      expect(bar.textContent).toBe('')
+    })
   })
 
   it('renders no redacted rows when redactedFields is omitted', () => {

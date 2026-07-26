@@ -48,10 +48,24 @@ describe('ListingDetail', () => {
       'fetch',
       vi.fn(
         async () =>
-          new Response(JSON.stringify(listing), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          }),
+          new Response(
+            // Deliberately hostile response (found vacuous by an independent
+            // appsec pass: the plain `listing` fixture never carries these
+            // fields, so the assertion below could never fail). Mirrors
+            // ListingCard.test.tsx's "renders no identity field, even when
+            // one is present on the object" — the server already makes this
+            // leak impossible by schema; this is the client's own promise.
+            JSON.stringify({
+              ...listing,
+              company_name: 'SecretCo',
+              website_url: 'https://secret.example.com',
+              owner_id: 42,
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            },
+          ),
       ),
     )
     renderDetail()
@@ -60,6 +74,7 @@ describe('ListingDetail', () => {
     )
     expect(screen.getByText(/locked until the nda is signed/i)).toBeInTheDocument()
     expect(screen.queryByText(/secretco/i)).toBeNull()
+    expect(screen.queryByText(/secret\.example\.com/i)).toBeNull()
   })
 
   it('F11: a 404 says "not available" and reveals nothing about existence', async () => {
