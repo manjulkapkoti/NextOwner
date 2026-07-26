@@ -22,7 +22,11 @@ describe('NavBar', () => {
     chatStore.reset()
   })
 
-  it('AS5: shows Logout when authed; clicking it clears the session and returns to /login', async () => {
+  // UI Pass 2 moved Logout from an always-visible inline button into the
+  // account (avatar) menu, so the accessible path is now "open the account
+  // menu, then click Logout" rather than a bare button — the assertion below
+  // (session cleared, redirected to /login) is unchanged.
+  it('AS5: clicking Logout in the account menu clears the session and returns to /login', async () => {
     authStore.setToken('a.b.c')
     render(
       <MemoryRouter initialEntries={['/my-listings']}>
@@ -33,10 +37,11 @@ describe('NavBar', () => {
       </MemoryRouter>,
     )
 
-    const logoutButton = screen.getByRole('button', { name: /logout/i })
-    expect(logoutButton).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /account menu/i }))
+    const logoutItem = screen.getByRole('menuitem', { name: /logout/i })
+    expect(logoutItem).toBeInTheDocument()
 
-    await userEvent.click(logoutButton)
+    await userEvent.click(logoutItem)
 
     expect(screen.getByText('Login page')).toBeInTheDocument()
     expect(localStorage.getItem('token')).toBeNull()
@@ -58,9 +63,11 @@ describe('NavBar', () => {
     expect(screen.queryByRole('button', { name: /logout/i })).not.toBeInTheDocument()
   })
 
-  // Below `sm` the three authed actions collapse behind one control; the menu
-  // renders nothing while closed, so "Logout" is never ambiguous in the DOM.
-  it('collapses the authed actions into a menu control on narrow widths', async () => {
+  // UI Pass 2 — Logout now lives behind two closed menus (the desktop account
+  // menu, the mobile hamburger), neither of which renders its items while
+  // closed, so "Logout" is never ambiguous in the DOM: it does not exist at
+  // all until one of the two triggers is opened.
+  it('renders no bare Logout control until a menu is opened', () => {
     authStore.setToken('a.b.c')
     render(
       <MemoryRouter initialEntries={['/my-listings']}>
@@ -68,10 +75,61 @@ describe('NavBar', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getAllByRole('button', { name: /logout/i })).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: /^logout$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /logout/i })).not.toBeInTheDocument()
+  })
+
+  // Below `sm` every authed action (not just the 4 kept inline on desktop)
+  // collapses behind the one hamburger control — the mobile menu is the full
+  // set, not a subset (the audit's finding: Notifications/Saved searches were
+  // previously missing here).
+  it('collapses every authed action into the mobile hamburger menu', async () => {
+    authStore.setToken('a.b.c')
+    render(
+      <MemoryRouter initialEntries={['/my-listings']}>
+        <NavBar />
+      </MemoryRouter>,
+    )
 
     await userEvent.click(screen.getByRole('button', { name: /open menu/i }))
     expect(screen.getByRole('menuitem', { name: /list a business/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /my listings/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /my offers/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /watchlist/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /saved searches/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /notifications/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /messages/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /logout/i })).toBeInTheDocument()
+  })
+
+  // The desktop account menu (the avatar button) carries the same
+  // destinations that used to be bare inline buttons — Watchlist and Saved
+  // searches are new nav surface area entirely (previously URL-only).
+  it('opens Watchlist, Saved searches and Logout from the account menu', async () => {
+    authStore.setToken('a.b.c')
+    render(
+      <MemoryRouter initialEntries={['/my-listings']}>
+        <NavBar />
+      </MemoryRouter>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /account menu/i }))
+    expect(screen.getByRole('menuitem', { name: /watchlist/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /saved searches/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /logout/i })).toBeInTheDocument()
+  })
+
+  it('gives every icon-only nav control an accessible name', () => {
+    authStore.setToken('a.b.c')
+    render(
+      <MemoryRouter initialEntries={['/my-listings']}>
+        <NavBar />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('link', { name: /^notifications$/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /^messages$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^account menu$/i })).toBeInTheDocument()
   })
 
   it('J1: a signed-in user with unread messages sees a Messages link with the total unread count', async () => {

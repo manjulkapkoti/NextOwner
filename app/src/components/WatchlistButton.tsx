@@ -5,10 +5,11 @@
 // dependency of this app (see NavBar.tsx's MenuGlyph for the same pattern).
 // A Unicode heart pair styled with `sx` renders reliably without adding one.
 import { useEffect, type MouseEvent } from 'react'
-import { Box, IconButton } from '@mui/material'
+import { alpha, Box, IconButton } from '@mui/material'
 import { observer } from 'mobx-react-lite'
 import { authStore } from '../stores/authStore'
 import { watchlistStore } from '../stores/watchlistStore'
+import { motion } from '../theme'
 
 export const WatchlistButton = observer(function WatchlistButton({
   listingId,
@@ -54,9 +55,14 @@ export const WatchlistButton = observer(function WatchlistButton({
       onClick={(e) => void handleClick(e)}
       size="small"
       sx={{
-        bgcolor: 'background.paper',
+        bgcolor: alpha('#fff', 0.9),
+        backdropFilter: 'blur(4px)',
         boxShadow: 1,
-        '&:hover': { bgcolor: 'background.paper' },
+        transition: `transform ${motion.fast}ms ${motion.easing}, background-color ${motion.fast}ms ${motion.easing}`,
+        '&:hover': { bgcolor: alpha('#fff', 0.9), transform: 'scale(1.08)' },
+        '@media (prefers-reduced-motion: reduce)': {
+          '&:hover': { transform: 'none' },
+        },
       }}
     >
       <Box

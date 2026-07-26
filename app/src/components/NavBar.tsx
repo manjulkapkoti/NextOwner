@@ -6,15 +6,22 @@
 // Layout (design_system_spec.md): actions sit top-right at every width.
 //  - Logged out: "Log in" + "Get started" — the log-in affordance lives here,
 //    not in the landing hero, so it is in the same place on every page.
-//  - Logged in:  the three actions inline on >=sm; below sm they collapse into
-//    a menu, because three labelled buttons plus the brand wrap on a phone.
+//  - Logged in: UI Pass 2 consolidated 7 inline controls down to 4 + a right
+//    cluster (bell / envelope / avatar), because a phone-width nav with seven
+//    labelled controls is what collapses to a menu in the first place; the
+//    consolidation is what let a *desktop* nav stay legible too. Below `sm`
+//    everything (the 4 + the right cluster's destinations) still collapses
+//    into the one hamburger menu.
 //
 // The breakpoint is CSS (`display`), not a JS media query: both branches stay
 // in the DOM so tests (and any non-matchMedia environment) see the inline row,
-// while the closed Menu renders nothing — so "Logout" is never ambiguous.
+// while the closed Menu/Popover renders nothing — so a label is never
+// ambiguous between the desktop and mobile copies.
 import { useEffect, useState, type MouseEvent } from 'react'
 import {
   AppBar,
+  Avatar,
+  Badge,
   Box,
   Button,
   Container,
@@ -24,9 +31,13 @@ import {
   Stack,
   Toolbar,
 } from '@mui/material'
+import type { SxProps, Theme } from '@mui/material/styles'
 import { observer } from 'mobx-react-lite'
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom'
-import { authStore } from '../stores/authStore'
+import MailOutlineIcon from '@mui/icons-material/MailOutline'
+import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined'
+import { brandTint } from '../theme'
+import { authStore, type CurrentUser } from '../stores/authStore'
 import { chatStore } from '../stores/chatStore'
 import { notificationStore } from '../stores/notificationStore'
 import { watchlistStore } from '../stores/watchlistStore'
@@ -44,38 +55,22 @@ function MenuGlyph() {
   )
 }
 
-// One badge, two callers (Messages and Notifications). Extracted rather than
-// duplicated so the two counts cannot drift into two different-looking pills.
-function CountBadge({ count }: { count: number }) {
-  if (count <= 0) return null
-  return (
-    <Box
-      component="span"
-      sx={{
-        ml: 0.75,
-        minWidth: 20,
-        height: 20,
-        px: 0.5,
-        borderRadius: 999,
-        bgcolor: 'primary.main',
-        color: 'primary.contrastText',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '0.7rem',
-        fontWeight: 700,
-      }}
-    >
-      {count}
-    </Box>
-  )
+// The account avatar's initial. `authStore.user` is only populated after
+// `loadUser()` resolves (login, or the effect below on a fresh page load with
+// an existing token) — "?" is the honest placeholder for the gap between "has
+// a token" and "know who they are".
+function initialFor(user: CurrentUser | null): string {
+  const source = user?.display_name?.trim() || user?.email
+  return source ? source.charAt(0).toUpperCase() : '?'
 }
 
 export const NavBar = observer(function NavBar() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
+  const [accountAnchorEl, setAccountAnchorEl] = useState<HTMLElement | null>(null)
   const menuOpen = Boolean(anchorEl)
+  const accountMenuOpen = Boolean(accountAnchorEl)
 
   // M6 — the unread badge (spec 006 J1). Refetched on route change: the same
   // "poll/refetch on route change, fine for MVP" pattern the rest of the app
@@ -90,10 +85,34 @@ export const NavBar = observer(function NavBar() {
       notificationStore.loadUnreadCount().catch(() => {})
     }
   }, [pathname])
+
+  // UI Pass 2 — the avatar needs the current user's name/email for its
+  // initial; nothing before this pass loaded it outside of login and the
+  // admin route guard, so a reload elsewhere left it permanently unknown.
+  useEffect(() => {
+    if (authStore.isAuthenticated && !authStore.user) {
+      authStore.loadUser().catch(() => {})
+    }
+  }, [])
+
   const unreadTotal = chatStore.conversations.reduce((sum, c) => sum + c.unread_count, 0)
+
+  function isActive(path: string): boolean {
+    return pathname === path || pathname.startsWith(`${path}/`)
+  }
+
+  // Active-route indication (design_system_spec.md §5 "Navigation — active
+  // item in blue"): the matching nav button gets a brand-tint pill rather than
+  // just a colour change, so it reads at a glance rather than on close look.
+  function navSx(path: string): SxProps<Theme> {
+    return isActive(path)
+      ? { color: 'text.primary', fontWeight: 600, bgcolor: brandTint, borderRadius: 999 }
+      : { color: 'text.secondary' }
+  }
 
   function handleLogout() {
     setAnchorEl(null)
+    setAccountAnchorEl(null)
     authStore.logout()
     // M9 — a second user logging in on the same session must not inherit the
     // first user's watchlist state.
@@ -103,13 +122,14 @@ export const NavBar = observer(function NavBar() {
 
   function go(path: string) {
     setAnchorEl(null)
+    setAccountAnchorEl(null)
     navigate(path)
   }
 
   return (
     <AppBar position="sticky">
       <Container maxWidth="lg">
-        <Toolbar disableGutters sx={{ minHeight: 64, gap: 1 }}>
+        <Toolbar disableGutters sx={{ minHeight: 68, gap: 1 }}>
           {/* Brand — also the way home from anywhere in the app. */}
           <Stack
             component={RouterLink}
@@ -146,17 +166,17 @@ export const NavBar = observer(function NavBar() {
             color="inherit"
             component={RouterLink}
             to="/browse"
-            sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}
+            sx={{ whiteSpace: 'nowrap', ...navSx('/browse') }}
           >
             Browse
           </Button>
 
           {authStore.isAuthenticated ? (
             <>
-              {/* >=sm: the actions inline. */}
+              {/* >=sm: 4 inline controls + the bell/envelope/avatar cluster. */}
               <Stack
                 direction="row"
-                spacing={1}
+                spacing={0.5}
                 alignItems="center"
                 sx={{
                   display: { xs: 'none', sm: 'flex' },
@@ -166,40 +186,69 @@ export const NavBar = observer(function NavBar() {
                 <Button variant="contained" onClick={() => go('/sell')}>
                   List a business
                 </Button>
-                <Button color="inherit" onClick={() => go('/my-listings')} sx={{ color: 'text.secondary' }}>
+                <Button color="inherit" onClick={() => go('/my-listings')} sx={navSx('/my-listings')}>
                   My listings
                 </Button>
                 {/* M7 — offers/LOI (FR-17): the buyer's cross-listing thread
                     history, the same "one hub" shape /messages already is. */}
-                <Button color="inherit" onClick={() => go('/my-offers')} sx={{ color: 'text.secondary' }}>
+                <Button color="inherit" onClick={() => go('/my-offers')} sx={navSx('/my-offers')}>
                   My offers
                 </Button>
-                {/* M9 — the watchlist (spec 009, FR-12). No count badge: a
-                    watchlist has no unread concept. */}
-                <Button color="inherit" component={RouterLink} to="/watchlist" sx={{ color: 'text.secondary' }}>
-                  Watchlist
-                </Button>
-                <Button color="inherit" component={RouterLink} to="/messages" sx={{ color: 'text.secondary' }}>
-                  Messages
-                  <CountBadge count={unreadTotal} />
-                </Button>
-                {/* M8 — the notifications inbox (spec 008 J2, FR-22). Same
-                    shape as Messages beside it: one hub, one badge. */}
-                <Button
-                  color="inherit"
+              </Stack>
+
+              <Stack
+                direction="row"
+                spacing={0.5}
+                alignItems="center"
+                sx={{ display: { xs: 'none', sm: 'flex' } }}
+              >
+                <IconButton
+                  aria-label="Notifications"
                   component={RouterLink}
                   to="/notifications"
                   sx={{ color: 'text.secondary' }}
                 >
-                  Notifications
-                  <CountBadge count={notificationStore.unreadCount} />
-                </Button>
-                <Button color="inherit" onClick={handleLogout} sx={{ color: 'text.secondary' }}>
-                  Logout
-                </Button>
+                  <Badge badgeContent={notificationStore.unreadCount} color="primary">
+                    <NotificationsOutlinedIcon />
+                  </Badge>
+                </IconButton>
+                <IconButton
+                  aria-label="Messages"
+                  component={RouterLink}
+                  to="/messages"
+                  sx={{ color: 'text.secondary' }}
+                >
+                  <Badge badgeContent={unreadTotal} color="primary">
+                    <MailOutlineIcon />
+                  </Badge>
+                </IconButton>
+                <IconButton
+                  aria-label="Account menu"
+                  aria-haspopup="true"
+                  aria-expanded={accountMenuOpen || undefined}
+                  onClick={(e: MouseEvent<HTMLElement>) => setAccountAnchorEl(e.currentTarget)}
+                  size="small"
+                  sx={{ ml: 0.5 }}
+                >
+                  <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: '0.9rem' }}>
+                    {initialFor(authStore.user)}
+                  </Avatar>
+                </IconButton>
+                <Menu
+                  anchorEl={accountAnchorEl}
+                  open={accountMenuOpen}
+                  onClose={() => setAccountAnchorEl(null)}
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                  transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                  slotProps={{ paper: { sx: { minWidth: 180, mt: 1 } } }}
+                >
+                  <MenuItem onClick={() => go('/watchlist')}>Watchlist</MenuItem>
+                  <MenuItem onClick={() => go('/saved-searches')}>Saved searches</MenuItem>
+                  <MenuItem onClick={handleLogout}>Logout</MenuItem>
+                </Menu>
               </Stack>
 
-              {/* <sm: one control instead of three. */}
+              {/* <sm: one control instead of everything above. */}
               <IconButton
                 aria-label="Open menu"
                 aria-haspopup="true"
@@ -215,12 +264,16 @@ export const NavBar = observer(function NavBar() {
                 onClose={() => setAnchorEl(null)}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                slotProps={{ paper: { sx: { minWidth: 180, mt: 1 } } }}
+                slotProps={{ paper: { sx: { minWidth: 200, mt: 1 } } }}
               >
                 <MenuItem onClick={() => go('/sell')}>List a business</MenuItem>
                 <MenuItem onClick={() => go('/my-listings')}>My listings</MenuItem>
                 <MenuItem onClick={() => go('/my-offers')}>My offers</MenuItem>
                 <MenuItem onClick={() => go('/watchlist')}>Watchlist</MenuItem>
+                <MenuItem onClick={() => go('/saved-searches')}>Saved searches</MenuItem>
+                <MenuItem onClick={() => go('/notifications')}>
+                  Notifications{notificationStore.unreadCount > 0 ? ` (${notificationStore.unreadCount})` : ''}
+                </MenuItem>
                 <MenuItem onClick={() => go('/messages')}>
                   Messages{unreadTotal > 0 ? ` (${unreadTotal})` : ''}
                 </MenuItem>

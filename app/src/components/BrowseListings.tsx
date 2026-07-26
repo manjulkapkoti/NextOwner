@@ -7,14 +7,18 @@
 // State is local `useState` rather than a MobX store: this screen owns its data
 // and nothing else reads it, which is the same call `MyListings` made. A store
 // earns its place when a second consumer appears (the watchlist, at M9).
+//
+// UI Pass 2: `PageHeader`, active-filter chips, a 3-up `lg` grid, skeleton
+// loading, the shared `EmptyState`, and a rounded/primary pagination control.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
   Button,
   Card,
-  CircularProgress,
-  Container,
+  Chip,
+  Divider,
+  InputAdornment,
   MenuItem,
   Pagination,
   Stack,
@@ -24,9 +28,12 @@ import {
 import { useSearchParams } from 'react-router-dom'
 import { publicApi } from '../lib/api'
 import { LISTING_TYPES } from '../lib/listingTypes'
-import { ListingCard, type PublicListing } from './ListingCard'
+import { EmptyState } from './EmptyState'
+import { ListingCard, ListingCardSkeleton, type PublicListing } from './ListingCard'
+import { PageContainer, PageHeader } from './PageShell'
 
 const PAGE_SIZE = 20
+const SKELETON_COUNT = 6
 
 // "No type filter" is a real, selectable option, so it needs a real value.
 // MUI treats `value=""` as *empty* and renders a zero-width space instead of
@@ -36,6 +43,15 @@ const PAGE_SIZE = 20
 const ALL_TYPES = 'all'
 
 const TYPES = [{ value: ALL_TYPES, label: 'All types' }, ...LISTING_TYPES]
+
+// The grid template shared by the loaded grid and its skeleton twin — so the
+// loading state never visibly reflows once real data arrives. `lg` adds a
+// third column: below it, 2 columns keep cards from stretching over-wide.
+const GRID_COLUMNS = {
+  xs: '1fr',
+  sm: 'repeat(2, minmax(0, 1fr))',
+  lg: 'repeat(3, minmax(0, 1fr))',
+}
 
 interface Page {
   items: PublicListing[]
@@ -116,19 +132,62 @@ export function BrowseListings() {
     })
   }
 
+  // One handler, two callers (the rail's "Clear all" and the empty state's
+  // "Clear all filters") — so they cannot drift into clearing different things.
+  function clearAllFilters() {
+    setTerm('')
+    setParams(new URLSearchParams())
+  }
+
   const hasFilters = Boolean(params.get('q') || type || minProfit || maxPrice)
   const pageCount = page ? Math.ceil(page.total / PAGE_SIZE) : 0
 
+  // Active-filter chips above the grid — a user isn't forced back to the rail
+  // to remove a single filter.
+  const activeFilters: { key: string; label: string; onRemove: () => void }[] = []
+  if (params.get('q')) {
+    activeFilters.push({
+      key: 'q',
+      label: `Search: "${params.get('q')}"`,
+      onRemove: () => {
+        setTerm('')
+        setFilter('q', '')
+      },
+    })
+  }
+  if (type) {
+    activeFilters.push({
+      key: 'type',
+      label: `Type: ${TYPES.find((t) => t.value === type)?.label ?? type}`,
+      onRemove: () => setFilter('type', ''),
+    })
+  }
+  if (maxPrice) {
+    activeFilters.push({
+      key: 'max_price',
+      label: `Under $${Number(maxPrice).toLocaleString('en-US')}`,
+      onRemove: () => setFilter('max_price', ''),
+    })
+  }
+  if (minProfit) {
+    activeFilters.push({
+      key: 'min_profit',
+      label: `Min profit $${Number(minProfit).toLocaleString('en-US')}`,
+      onRemove: () => setFilter('min_profit', ''),
+    })
+  }
+
   return (
-    <Container maxWidth="lg" sx={{ py: { xs: 3, sm: 5 } }}>
-      <Stack spacing={0.5} sx={{ mb: 3 }}>
-        <Typography variant="h4" component="h1">
-          Browse businesses
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {page ? `${page.total} ${page.total === 1 ? 'listing' : 'listings'}` : 'Loading listings'}
-        </Typography>
-      </Stack>
+    <PageContainer maxWidth="lg">
+      <PageHeader
+        title="Browse businesses"
+        subtitle="Every listing's shape — metrics, growth, asking price — is visible before you sign anything. The identity behind it stays locked until the seller says yes."
+        action={
+          page && (
+            <Chip label={`${page.total} ${page.total === 1 ? 'listing' : 'listings'}`} size="small" />
+          )
+        }
+      />
 
       <Box
         sx={{
@@ -138,8 +197,11 @@ export function BrowseListings() {
           alignItems: 'start',
         }}
       >
-        <Card component="aside" sx={{ p: 2.5, position: { md: 'sticky' }, top: 88 }}>
+        <Card component="aside" sx={{ p: 3, position: { md: 'sticky' }, top: 88 }}>
           <Stack spacing={2.5}>
+            <Typography variant="overline" color="text.secondary">
+              Filter
+            </Typography>
             <TextField
               label="Search"
               placeholder="e.g. clinics"
@@ -164,29 +226,33 @@ export function BrowseListings() {
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              label="Max asking price"
-              type="number"
-              value={maxPrice}
-              onChange={(e) => setFilter('max_price', e.target.value)}
-              size="small"
-              fullWidth
-            />
-            <TextField
-              label="Min TTM profit"
-              type="number"
-              value={minProfit}
-              onChange={(e) => setFilter('min_profit', e.target.value)}
-              size="small"
-              fullWidth
-            />
+
+            <Stack spacing={1.5}>
+              <Typography variant="overline" color="text.secondary">
+                Financials
+              </Typography>
+              <TextField
+                label="Max asking price"
+                type="number"
+                value={maxPrice}
+                onChange={(e) => setFilter('max_price', e.target.value)}
+                size="small"
+                fullWidth
+                slotProps={{ input: { startAdornment: <InputAdornment position="start">$</InputAdornment> } }}
+              />
+              <TextField
+                label="Min TTM profit"
+                type="number"
+                value={minProfit}
+                onChange={(e) => setFilter('min_profit', e.target.value)}
+                size="small"
+                fullWidth
+                slotProps={{ input: { startAdornment: <InputAdornment position="start">$</InputAdornment> } }}
+              />
+            </Stack>
+
             {hasFilters && (
-              <Button
-                onClick={() => {
-                  setTerm('')
-                  setParams(new URLSearchParams())
-                }}
-              >
+              <Button variant="outlined" fullWidth size="small" onClick={clearAllFilters}>
                 Clear all
               </Button>
             )}
@@ -194,6 +260,14 @@ export function BrowseListings() {
         </Card>
 
         <Box>
+          {activeFilters.length > 0 && (
+            <Stack direction="row" flexWrap="wrap" spacing={1} sx={{ mb: 2.5, rowGap: 1 }}>
+              {activeFilters.map((filter) => (
+                <Chip key={filter.key} label={filter.label} size="small" onDelete={filter.onRemove} />
+              ))}
+            </Stack>
+          )}
+
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
               Couldn't load listings: {error}
@@ -201,20 +275,22 @@ export function BrowseListings() {
           )}
 
           {!error && page === null && (
-            <Stack alignItems="center" sx={{ py: 10 }}>
-              <CircularProgress aria-label="loading listings" />
-            </Stack>
+            <Box
+              role="status"
+              aria-label="Loading listings"
+              sx={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, gap: 2.5 }}
+            >
+              {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+                <ListingCardSkeleton key={i} />
+              ))}
+            </Box>
           )}
 
           {!error && page?.items.length === 0 && (
-            <Card sx={{ p: { xs: 4, sm: 6 }, textAlign: 'center' }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                No listings match these filters.
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Try widening the price range or clearing the search.
-              </Typography>
-            </Card>
+            <EmptyState
+              message="No listings match these filters. Try widening the price range or clearing the search."
+              action={{ label: 'Clear all filters', onClick: clearAllFilters }}
+            />
           )}
 
           {!error && page && page.items.length > 0 && (
@@ -222,7 +298,7 @@ export function BrowseListings() {
               <Box
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                  gridTemplateColumns: GRID_COLUMNS,
                   gap: 2.5,
                 }}
               >
@@ -232,18 +308,23 @@ export function BrowseListings() {
               </Box>
 
               {pageCount > 1 && (
-                <Stack alignItems="center" sx={{ mt: 4 }}>
-                  <Pagination
-                    count={pageCount}
-                    page={Math.max(pageNumber, 1)}
-                    onChange={(_, value) => setFilter('page', String(value))}
-                  />
-                </Stack>
+                <>
+                  <Divider sx={{ mt: 5, mb: 3 }} />
+                  <Stack alignItems="center">
+                    <Pagination
+                      count={pageCount}
+                      page={Math.max(pageNumber, 1)}
+                      onChange={(_, value) => setFilter('page', String(value))}
+                      shape="rounded"
+                      color="primary"
+                    />
+                  </Stack>
+                </>
               )}
             </>
           )}
         </Box>
       </Box>
-    </Container>
+    </PageContainer>
   )
 }
