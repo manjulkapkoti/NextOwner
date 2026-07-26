@@ -121,15 +121,21 @@ describe('AppShell routing', () => {
   })
 
   // Log in and Get started live in the nav — one of each, never duplicated in
-  // the hero. From M4 the hero does carry exactly one CTA of its own (Browse
-  // listings), which is the one action the nav's auth pair doesn't offer;
-  // asserted here so "one of each" stays precise rather than becoming "no CTA".
-  it('offers exactly one Log in, one Get started, and one hero Browse CTA', async () => {
+  // the hero. From M4 the hero carries a CTA of its own (Browse listings),
+  // which is the one action the nav's auth pair doesn't offer; asserted here
+  // so "one of each" stays precise rather than becoming "no CTA".
+  //
+  // UI Pass 3 (Part A) added a second "Browse listings" / "List your
+  // business" CTA — the Buyers/Sellers spotlight cards further down the
+  // landing page — by explicit, approved spec (a deliberate second occurrence
+  // of the same copy, not a duplication bug), so the count below moved from 1
+  // to 2 for both.
+  it('offers exactly one Log in, one Get started, and the hero + spotlight-card Browse CTAs', async () => {
     renderShellAt('/')
     await waitFor(() =>
       expect(screen.getByText(/you choose who carries it forward/i)).toBeInTheDocument(),
     )
-    expect(screen.getAllByRole('link', { name: /browse listings/i })).toHaveLength(1)
+    expect(screen.getAllByRole('link', { name: /browse listings/i })).toHaveLength(2)
     expect(screen.getByRole('link', { name: /get started/i })).toHaveAttribute('href', '/register')
     expect(screen.getAllByRole('link', { name: /log in/i })).toHaveLength(1)
   })

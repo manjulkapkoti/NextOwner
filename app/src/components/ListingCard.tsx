@@ -20,7 +20,7 @@ import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import { listingTypeLabel } from '../lib/listingTypes'
 import { Metric } from './Metric'
 import { WatchlistButton } from './WatchlistButton'
-import { badge, brand, brandTint, cardInteractive, elevation, metricLabel, metricValue, neutral, surfaceRecessed } from '../theme'
+import { badge, blueTint, brand, cardInteractive, elevation, metricLabel, metricValue, neutral, surfaceRecessed } from '../theme'
 
 export interface PublicListing {
   id: number
@@ -104,8 +104,8 @@ function LockedStrip() {
             width: 24,
             height: 24,
             borderRadius: '50%',
-            bgcolor: brandTint,
-            color: 'primary.main',
+            bgcolor: blueTint.wash,
+            color: blueTint.onWash,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -119,8 +119,8 @@ function LockedStrip() {
             Company name and financials are locked until the NDA is signed
           </Typography>
           {/* Redacted-field placeholders — decorative only. */}
-          <Box aria-hidden sx={{ height: 8, borderRadius: 1, bgcolor: neutral[100], filter: 'blur(5px)', opacity: 0.7, width: '75%' }} />
-          <Box aria-hidden sx={{ height: 8, borderRadius: 1, bgcolor: neutral[100], filter: 'blur(5px)', opacity: 0.7, width: '45%' }} />
+          <Box aria-hidden sx={{ height: 8, borderRadius: 1, bgcolor: blueTint.placeholder, filter: 'blur(5px)', opacity: 0.7, width: '75%' }} />
+          <Box aria-hidden sx={{ height: 8, borderRadius: 1, bgcolor: blueTint.placeholder, filter: 'blur(5px)', opacity: 0.7, width: '45%' }} />
         </Stack>
       </Stack>
     </Box>

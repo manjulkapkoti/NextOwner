@@ -8,8 +8,19 @@
 // one-primary-CTA-per-screen rule.
 import { useEffect, useState } from 'react'
 import { Alert, Box, Card, CircularProgress, Stack, Typography } from '@mui/material'
+import StorefrontOutlined from '@mui/icons-material/StorefrontOutlined'
 import { api } from '../lib/api'
+import { SpotlightCard } from './SpotlightCard'
 import { StatusChip } from './StatusChip'
+
+// UI Pass 3 (Part B1) — the empty-state spotlight card's points. The exact
+// current heading string ("No listings yet — create your first one.") is
+// preserved verbatim below (MyListings.test.tsx matches `/no listings yet/i`).
+const EMPTY_STATE_POINTS = [
+  'A new listing starts as a private draft. Nothing is visible to anyone until you submit it.',
+  "Submitted listings go through review before they go live — we don't publish everything that arrives.",
+  "Your company name, website and detailed financials stay behind the gate even once it's live.",
+]
 
 interface ListingRow {
   id: number
@@ -56,16 +67,19 @@ export function MyListings() {
 
       {!error && rows?.length === 0 && (
         // Empty state as a designed state, not a bare sentence — it is the
-        // first thing every new seller sees.
-        <Card sx={{ p: { xs: 4, sm: 6 }, textAlign: 'center' }}>
-          <Typography variant="h6" sx={{ mb: 1 }}>
-            No listings yet — create your first one.
+        // first thing every new seller sees. No CTA on this card: the "List a
+        // business" action already lives in the nav above, sticky and on
+        // screen, and a second one here would break the one-primary-CTA rule.
+        <SpotlightCard
+          icon={<StorefrontOutlined sx={{ fontSize: 22, color: 'primary.main' }} />}
+          eyebrow="GET STARTED"
+          heading="No listings yet — create your first one."
+          points={EMPTY_STATE_POINTS}
+        >
+          <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
+            Use <strong>List a business</strong> above to start a draft.
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420, mx: 'auto' }}>
-            Use <strong>List a business</strong> above to start a draft. Nothing is public until
-            you submit it and it passes review.
-          </Typography>
-        </Card>
+        </SpotlightCard>
       )}
 
       {!error && rows && rows.length > 0 && (

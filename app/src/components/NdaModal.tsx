@@ -10,6 +10,7 @@
 // with 403 `nda_not_signed` (B2), so requesting first would simply fail.
 import { useState } from 'react'
 import {
+  Box,
   Button,
   Checkbox,
   Dialog,
@@ -17,10 +18,13 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  Stack,
   Alert,
   Typography,
 } from '@mui/material'
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import { accessStore } from '../stores/accessStore'
+import { blueTint, surfaceRecessed } from '../theme'
 
 interface Props {
   open: boolean
@@ -51,14 +55,38 @@ export function NdaModal({ open, listingId, onClose, onSigned }: Props) {
 
   return (
     <Dialog open={open} onClose={onClose} aria-labelledby="nda-modal-title" maxWidth="sm" fullWidth>
-      <DialogTitle id="nda-modal-title">Non-disclosure agreement</DialogTitle>
+      <DialogTitle id="nda-modal-title">
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Box
+            aria-hidden
+            sx={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              bgcolor: blueTint.wash,
+              color: blueTint.onWash,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <LockOutlinedIcon fontSize="small" />
+          </Box>
+          <Box component="span">Non-disclosure agreement</Box>
+        </Stack>
+      </DialogTitle>
       <DialogContent>
-        <Typography variant="body2" sx={{ mb: 2 }}>
-          Sellers share confidential details — real financials, customer numbers, the
-          company name — with buyers they choose. Signing once lets you ask any seller on
-          NextOwner for that access. You agree to keep everything you see confidential and
-          to use it only to evaluate the business.
-        </Typography>
+        {/* NDA legal text itself is unchanged — only the surrounding
+            presentation (UI Pass 3). */}
+        <Box sx={{ ...surfaceRecessed, p: 2, mb: 2 }}>
+          <Typography variant="body2">
+            Sellers share confidential details — real financials, customer numbers, the
+            company name — with buyers they choose. Signing once lets you ask any seller on
+            NextOwner for that access. You agree to keep everything you see confidential and
+            to use it only to evaluate the business.
+          </Typography>
+        </Box>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}

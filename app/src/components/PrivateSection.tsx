@@ -11,8 +11,11 @@
 //     sends no header, so it would 401 for everyone. Fetching the blob and
 //     handing it to the browser is what makes a *gated* file downloadable.
 import { useState } from 'react'
-import { Alert, Box, Button, Link, Stack, Typography } from '@mui/material'
+import { Alert, Button, Divider, Link, Stack, Typography } from '@mui/material'
+import LockOpenOutlined from '@mui/icons-material/LockOpenOutlined'
 import type { ListingPrivate } from '../stores/accessStore'
+import { badge } from '../theme'
+import { SpotlightCard } from './SpotlightCard'
 
 export interface DocumentSummary {
   id: number
@@ -62,11 +65,19 @@ export function PrivateSection({ listingId, data, documents }: Props) {
   }
 
   return (
-    <Box>
-      <Typography variant="h6" gutterBottom>
-        {data.company_name}
-      </Typography>
-
+    // UI Pass 3 (Part B3) — the payoff/unlocked state. Deliberately GREEN
+    // (badge.verified), never the blue lock treatment used on the anonymous/
+    // locked gate cards elsewhere: this must read as visually distinct from
+    // those, not similar to them.
+    <SpotlightCard
+      icon={<LockOpenOutlined sx={{ fontSize: 22 }} />}
+      tagBg={badge.verified.bg}
+      tagIconColor={badge.verified.fg}
+      eyebrow="DATA ROOM · ACCESS GRANTED"
+      heading={data.company_name}
+      points={[]}
+      checkBullets={false}
+    >
       {href ? (
         <Link href={href} target="_blank" rel="noopener noreferrer">
           {data.website_url}
@@ -84,6 +95,17 @@ export function PrivateSection({ listingId, data, documents }: Props) {
         </Typography>
       )}
 
+      {/* Notes, not bullets — a check mark here would read as "verified,"
+          which is not the claim being made. */}
+      <Stack spacing={0.75} sx={{ mt: 2 }}>
+        <Typography variant="body2" color="text.secondary">
+          Everything on this page is covered by the NDA you signed.
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          The seller can withdraw this access at any time.
+        </Typography>
+      </Stack>
+
       {error && (
         <Alert severity="error" sx={{ mt: 2 }}>
           {error}
@@ -91,21 +113,24 @@ export function PrivateSection({ listingId, data, documents }: Props) {
       )}
 
       {documents.length > 0 && (
-        <Stack spacing={1} sx={{ mt: 3 }}>
-          <Typography variant="subtitle2">Documents</Typography>
-          {documents.map((doc) => (
-            <Button
-              key={doc.id}
-              variant="outlined"
-              size="small"
-              sx={{ alignSelf: 'flex-start' }}
-              onClick={() => download(doc)}
-            >
-              {doc.filename}
-            </Button>
-          ))}
-        </Stack>
+        <>
+          <Divider sx={{ mt: 3, mb: 2 }} />
+          <Stack spacing={1}>
+            <Typography variant="subtitle2">Documents</Typography>
+            {documents.map((doc) => (
+              <Button
+                key={doc.id}
+                variant="outlined"
+                size="small"
+                sx={{ alignSelf: 'flex-start' }}
+                onClick={() => download(doc)}
+              >
+                {doc.filename}
+              </Button>
+            ))}
+          </Stack>
+        </>
       )}
-    </Box>
+    </SpotlightCard>
   )
 }

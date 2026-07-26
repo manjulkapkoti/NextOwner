@@ -19,8 +19,18 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import RateReviewOutlined from '@mui/icons-material/RateReviewOutlined'
 import { api } from '../lib/api'
+import { SpotlightCard } from './SpotlightCard'
 import { tabularNums } from '../theme'
+
+// UI Pass 3 (Part B2) — "what happens next," shown above the review step's
+// field readback.
+const REVIEW_SPOTLIGHT_POINTS = [
+  'This saves a private draft. You can keep editing it, and nobody else can see it.',
+  'When you submit it, it goes to review — going live is a decision, not a delay.',
+  'Once live, buyers see the metrics. The company name and detailed financials only reach buyers you approve.',
+]
 
 const STEPS = ['Basics', 'Metrics', 'Private', 'Review']
 
@@ -181,6 +191,15 @@ export function ListingWizard() {
 
         {step === 3 && (
           <Box>
+            <Box sx={{ mb: 3 }}>
+              <SpotlightCard
+                variant="inset"
+                icon={<RateReviewOutlined sx={{ fontSize: 22, color: 'primary.main' }} />}
+                eyebrow="WHAT HAPPENS NEXT"
+                heading="Creating a draft is not publishing"
+                points={REVIEW_SPOTLIGHT_POINTS}
+              />
+            </Box>
             {REVIEW_FIELDS.map(([label, key]) => (
               <Box key={key}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, py: 1.25 }}>

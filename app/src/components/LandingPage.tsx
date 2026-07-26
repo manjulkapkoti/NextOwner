@@ -27,8 +27,27 @@ import TravelExploreOutlinedIcon from '@mui/icons-material/TravelExploreOutlined
 import AssignmentTurnedInOutlinedIcon from '@mui/icons-material/AssignmentTurnedInOutlined'
 import HandshakeOutlinedIcon from '@mui/icons-material/HandshakeOutlined'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
-import { brandTint, elevation, neutral, surfaceRecessed } from '../theme'
+import SellOutlined from '@mui/icons-material/SellOutlined'
+import SearchOutlined from '@mui/icons-material/SearchOutlined'
+import { blueTint, brandTint, elevation, outlinedBrandTint, surfaceRecessed } from '../theme'
 import { authStore } from '../stores/authStore'
+import { SpotlightCard } from './SpotlightCard'
+
+// UI Pass 3 Part A — the two-sided "value cards" section, inserted between the
+// hero and the 3-step gate band. No section header above them: the eyebrows
+// (SELLERS / BUYERS) are the labels. Copy is locked in the spec — do not add a
+// 4th bullet or a stat to either card.
+const SELLER_POINTS = [
+  'Every request for your financials needs your approval — nobody sees behind the gate without your yes',
+  'One private data room per listing, not a public page anyone can screenshot and forward',
+  "Buyers sign the platform NDA before they see a single number, not after you've already talked",
+]
+
+const BUYER_POINTS = [
+  'No account needed to browse — sign up only when you want to ask a seller for access.',
+  'One NDA covers every listing on the platform, signed once',
+  'You see the shape of a deal before you ask — metrics, growth, price. The identity comes after.',
+]
 
 const trustPoints = ['Curated listings', 'NDA-gated data rooms', 'Verified buyers']
 
@@ -136,8 +155,8 @@ function MockLockedCard() {
               width: 24,
               height: 24,
               borderRadius: '50%',
-              bgcolor: brandTint,
-              color: 'primary.main',
+              bgcolor: blueTint.wash,
+              color: blueTint.onWash,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -147,8 +166,8 @@ function MockLockedCard() {
             <LockOutlinedIcon sx={{ fontSize: 14 }} />
           </Box>
           <Stack spacing={0.75} sx={{ flex: 1, minWidth: 0 }}>
-            <Box sx={{ height: 8, borderRadius: 1, bgcolor: neutral[100], filter: 'blur(5px)', opacity: 0.8, width: '80%' }} />
-            <Box sx={{ height: 8, borderRadius: 1, bgcolor: neutral[100], filter: 'blur(5px)', opacity: 0.8, width: '55%' }} />
+            <Box sx={{ height: 8, borderRadius: 1, bgcolor: blueTint.placeholder, filter: 'blur(5px)', opacity: 0.8, width: '80%' }} />
+            <Box sx={{ height: 8, borderRadius: 1, bgcolor: blueTint.placeholder, filter: 'blur(5px)', opacity: 0.8, width: '55%' }} />
           </Stack>
         </Box>
         <Divider sx={{ mt: 'auto', mb: 1 }} />
@@ -175,7 +194,7 @@ export const LandingPage = observer(function LandingPage() {
         // - 65px)` + `alignItems: center`) -- it produced a large empty scroll
         // area below the fold on anything taller than the hero. Real content
         // (the preview + the gate band) now fills that space instead.
-        background: `radial-gradient(1100px 520px at 50% -8%, ${brandTint}, transparent 62%)`,
+        background: `radial-gradient(1100px 520px at 50% -8%, ${blueTint.wash}, ${brandTint} 45%, transparent 70%)`,
       }}
     >
       <Container maxWidth="md" sx={{ pt: { xs: 8, md: 14 }, pb: { xs: 6, md: 8 }, textAlign: 'center' }}>
@@ -185,13 +204,10 @@ export const LandingPage = observer(function LandingPage() {
               px: 1.5,
               py: 0.5,
               borderRadius: 999,
-              bgcolor: 'background.paper',
-              border: '1px solid',
-              borderColor: 'divider',
-              boxShadow: 1,
+              bgcolor: blueTint.wash,
             }}
           >
-            <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600, letterSpacing: '0.02em' }}>
+            <Typography variant="caption" sx={{ color: blueTint.onWash, fontWeight: 600, letterSpacing: '0.02em' }}>
               Succession, not transaction
             </Typography>
           </Box>
@@ -236,7 +252,13 @@ export const LandingPage = observer(function LandingPage() {
             <Button component={RouterLink} to="/browse" variant="contained" size="large">
               Browse listings
             </Button>
-            <Button component={RouterLink} to={sellDestination} variant="outlined" size="large">
+            <Button
+              component={RouterLink}
+              to={sellDestination}
+              variant="outlined"
+              size="large"
+              sx={{ ...outlinedBrandTint }}
+            >
               List your business
             </Button>
           </Stack>
@@ -311,7 +333,10 @@ export const LandingPage = observer(function LandingPage() {
               bottom: 0,
               height: 64,
               pointerEvents: 'none',
-              background: `linear-gradient(to bottom, transparent, ${neutral[25]})`,
+              // Must match the page background exactly (`blueTint.page`, not
+              // the old `neutral[25]`) or a visible hard edge appears where
+              // the hero ends and the page ground begins.
+              background: `linear-gradient(to bottom, transparent, ${blueTint.page})`,
             }}
           />
 
@@ -325,10 +350,41 @@ export const LandingPage = observer(function LandingPage() {
         </Box>
       </Container>
 
-      {/* The "how the gate works" band (audit item 6), on a neutral section
-          background so it reads as a distinct band rather than a continuation
-          of the hero. */}
-      <Box sx={{ bgcolor: neutral[25], borderTop: '1px solid', borderColor: 'divider' }}>
+      {/* UI Pass 3 Part A — the two-sided "value cards" section. No section
+          header above them: the eyebrows (SELLERS / BUYERS) are the labels.
+          Deliberately no background color here — the page's own
+          `blueTint.page` background shows through. */}
+      <Box sx={{ py: { xs: 6, md: 8 } }}>
+        <Container maxWidth="md">
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0,1fr))' },
+              gap: 3.5,
+            }}
+          >
+            <SpotlightCard
+              icon={<SellOutlined sx={{ fontSize: 22, color: 'primary.main' }} />}
+              eyebrow="SELLERS"
+              heading="Choose who carries it forward"
+              points={SELLER_POINTS}
+              cta={{ label: 'List your business', to: sellDestination }}
+            />
+            <SpotlightCard
+              icon={<SearchOutlined sx={{ fontSize: 22, color: 'primary.main' }} />}
+              eyebrow="BUYERS"
+              heading="Take over something real"
+              points={BUYER_POINTS}
+              cta={{ label: 'Browse listings', to: '/browse' }}
+            />
+          </Box>
+        </Container>
+      </Box>
+
+      {/* The "how the gate works" band (audit item 6), on the blue-tinted
+          `brandTint`/`blueTint.band` background so it reads as a distinct
+          band rather than a continuation of the hero. */}
+      <Box sx={{ bgcolor: blueTint.band, borderTop: '1px solid', borderColor: blueTint.washBorder }}>
         <Container maxWidth="md" sx={{ py: { xs: 6, md: 8 } }}>
           <Box
             sx={{
@@ -349,8 +405,8 @@ export const LandingPage = observer(function LandingPage() {
                       width: 32,
                       height: 32,
                       borderRadius: '50%',
-                      bgcolor: brandTint,
-                      color: 'primary.main',
+                      bgcolor: blueTint.wash,
+                      color: blueTint.onWash,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',

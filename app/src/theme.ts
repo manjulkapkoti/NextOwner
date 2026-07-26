@@ -90,6 +90,27 @@ export const badge = {
 } as const
 
 /**
+ * UI Pass 3 (Option 2 — "Blue as Environment", 2026-07-26): the audit found
+ * page-vs-card contrast at 1.05:1 (visually the same white) and blue confined
+ * to button fills. This tints the page/well/wash surfaces themselves so blue
+ * reads as the *environment* the product sits in, not just an accent.
+ *
+ * Hard rule: any text/icon rendered on `wash` (#DBEAFE) MUST use `onWash`
+ * (#1D4ED8), never `primary.main`/#2563EB directly — the brighter blue fails
+ * AA contrast on that specific background.
+ */
+export const blueTint = {
+  page: '#F5F8FD',
+  well: '#EFF4FC',
+  wellBorder: '#DCE7F7',
+  band: brandTint, // alias — brandTint already exists above, not redeclared
+  wash: badge.underOffer.bg, // alias — #DBEAFE already exists as badge.underOffer.bg
+  washBorder: '#BFDBFE',
+  onWash: brand.dark, // #1D4ED8 — mandatory for text/icon on `wash`, see hard rule above
+  placeholder: '#C7DBF7',
+} as const
+
+/**
  * Opt-in tabular figures so money/metrics columns align. Spread into `sx` on
  * any element that renders currency or KPIs, e.g. `sx={{ ...tabularNums }}`.
  */
@@ -131,6 +152,9 @@ export const elevation = {
   // brand-tinted respectively to match the existing `elevation` convention.
   inset: `inset 0 1px 3px rgba(${SHADOW_RGB}, 0.06)`,
   ring: `0 0 0 1px rgba(37, 99, 235, 0.35)`, // brand.main as RGB
+  // UI Pass 3 — used only by the spotlight-card pattern's `Card` and icon-tag
+  // `boxShadow` (LandingPage's new spotlight cards + SpotlightCard.tsx).
+  brandMd: `0 4px 20px rgba(37, 99, 235, 0.10)`,
 } as const
 
 const softShadows = [...createTheme().shadows] as Shadows
@@ -181,7 +205,10 @@ function getPalette(mode: PaletteMode): ThemeOptions['palette'] {
   return {
     mode,
     ...semantic,
-    background: { default: neutral[25], paper: neutral[0] },
+    // UI Pass 3 (Option 2): the page background is now blue-tinted so cards
+    // (still `neutral[0]`/white) read as distinct surfaces sitting on it.
+    // `divider` stays `neutral[100]` — untouched.
+    background: { default: blueTint.page, paper: neutral[0] },
     text: { primary: neutral[900], secondary: neutral[600], disabled: neutral[400] },
     divider: neutral[100],
   }
@@ -338,7 +365,9 @@ export function createAppTheme(mode: PaletteMode = 'light') {
             boxShadow: elevation.sm,
             // Cards had a shadow but no border, which barely separated them
             // from the near-white page background (Pass 1, 2026-07-26).
-            border: `1px solid ${neutral[100]}`,
+            // UI Pass 3 (Option 2): the page ground is now blue-tinted, so the
+            // card edge is tinted to match rather than the neutral hairline.
+            border: `1px solid ${blueTint.wellBorder}`,
             // Token spec § cards: hover raises the shadow. border-color and
             // transform are wired in too, for `cardInteractive` below (not
             // consumed until Pass 2 touches an actual card component).
@@ -357,7 +386,7 @@ export function createAppTheme(mode: PaletteMode = 'light') {
             props: { variant: 'outlined' },
             style: {
               boxShadow: elevation.sm,
-              borderColor: neutral[100],
+              borderColor: blueTint.wellBorder,
               border: undefined,
             },
           },
@@ -375,7 +404,9 @@ export function createAppTheme(mode: PaletteMode = 'light') {
             backgroundColor: isDark ? alpha(neutral[900], 0.85) : alpha(neutral[0], 0.85),
             backdropFilter: 'saturate(180%) blur(8px)',
             color: isDark ? neutral[25] : neutral[900],
-            borderBottom: `1px solid ${isDark ? alpha('#FFFFFF', 0.12) : neutral[100]}`,
+            // UI Pass 3 (Option 2): light-mode edge tinted to match the new
+            // blue-tinted page ground. Dark mode untouched.
+            borderBottom: `1px solid ${isDark ? alpha('#FFFFFF', 0.12) : blueTint.wellBorder}`,
           },
         },
       },
@@ -464,7 +495,9 @@ export const cardInteractive = {
   '&:hover': {
     boxShadow: elevation.md,
     transform: 'translateY(-2px)',
-    borderColor: neutral[300],
+    // UI Pass 3 (Option 2): the browse grid's card-hover border now turns
+    // brand blue instead of grey, on top of the color rollout.
+    borderColor: brand.light,
   },
   // The lift is motion; the shadow change is not, so only the transform is
   // dropped for users who asked for reduced motion.
@@ -475,10 +508,20 @@ export const cardInteractive = {
 
 /** A recessed/inset surface (e.g. a quoted figure, a code/id chip well). */
 export const surfaceRecessed = {
-  backgroundColor: neutral[50],
-  border: `1px solid ${neutral[100]}`,
+  // UI Pass 3 (Option 2): blue-tinted well instead of plain slate, to match
+  // the rest of the color rollout. Propagates to every existing consumer
+  // (EmptyState.tsx, ListingCard.tsx, ListingDetail.tsx) with no call-site edit.
+  backgroundColor: blueTint.well,
+  border: `1px solid ${blueTint.wellBorder}`,
   boxShadow: elevation.inset,
   borderRadius: 2, // MUI's sx borderRadius multiplies by theme.shape.borderRadius (8) -> 16px, matching the card radius.
+} as const
+
+/** Outlined button on a blue-tinted surface — landing/spotlight-card CTAs only. */
+export const outlinedBrandTint = {
+  borderColor: blueTint.washBorder,
+  color: blueTint.onWash,
+  '&:hover': { borderColor: brand.main, backgroundColor: brandTint },
 } as const
 
 /** A small KPI/metric pair -- label above value. Pairs with `Metric.tsx`. */

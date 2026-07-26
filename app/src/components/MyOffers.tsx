@@ -6,8 +6,17 @@
 import { useEffect, useState } from 'react'
 import { observer } from 'mobx-react-lite'
 import { Alert, Box, CircularProgress, Stack, Typography } from '@mui/material'
+import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined'
 import { offerStore } from '../stores/offerStore'
 import { OfferThread } from './OfferThread'
+import { SpotlightCard } from './SpotlightCard'
+
+// UI Pass 3 (Part B4) — the empty-state spotlight card's points.
+const EMPTY_STATE_POINTS = [
+  "An offer is structured — price and terms — not a message. It lands in the seller's queue with a status you can both see.",
+  'Either side can counter. Nothing is binding until someone accepts.',
+  'When a seller accepts one offer on a listing, the others are declined automatically.',
+]
 
 export const MyOffers = observer(function MyOffers() {
   const [status, setStatus] = useState<'loading' | 'ready' | 'errored'>('loading')
@@ -47,10 +56,16 @@ export const MyOffers = observer(function MyOffers() {
   const listingIds = Array.from(new Set(offerStore.myOffers.map((row) => row.listing_id)))
 
   if (listingIds.length === 0) {
+    // Exact current heading string kept verbatim below — MyOffers.test.tsx
+    // matches it case-insensitively (`/no offers|haven.t made/i`).
     return (
-      <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-        You haven&apos;t made any offers yet.
-      </Typography>
+      <SpotlightCard
+        icon={<LocalOfferOutlined sx={{ fontSize: 22, color: 'primary.main' }} />}
+        eyebrow="OFFERS"
+        heading="You haven't made any offers yet."
+        points={EMPTY_STATE_POINTS}
+        cta={{ label: 'Browse listings', to: '/browse' }}
+      />
     )
   }
 

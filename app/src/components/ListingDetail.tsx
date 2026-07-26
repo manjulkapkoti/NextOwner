@@ -35,7 +35,7 @@ import { RequestAccessPanel } from './RequestAccessPanel'
 import { WatchlistButton } from './WatchlistButton'
 import { accessStore } from '../stores/accessStore'
 import { authStore } from '../stores/authStore'
-import { brandTint, metricLabel, metricValue, neutral, surfaceRecessed } from '../theme'
+import { blueTint, metricLabel, metricValue, surfaceRecessed } from '../theme'
 
 function money(value: string): string {
   const n = Number(value)
@@ -97,8 +97,8 @@ function AnonymousGateCard() {
             width: 32,
             height: 32,
             borderRadius: '50%',
-            bgcolor: brandTint,
-            color: 'primary.main',
+            bgcolor: blueTint.wash,
+            color: blueTint.onWash,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -116,8 +116,8 @@ function AnonymousGateCard() {
             sign the platform NDA and the seller approves your request.
           </Typography>
           {/* Redacted-field placeholders — decorative only. */}
-          <Box aria-hidden sx={{ height: 8, borderRadius: 1, bgcolor: neutral[100], filter: 'blur(5px)', opacity: 0.7, width: '55%' }} />
-          <Box aria-hidden sx={{ height: 8, borderRadius: 1, bgcolor: neutral[100], filter: 'blur(5px)', opacity: 0.7, width: '35%' }} />
+          <Box aria-hidden sx={{ height: 8, borderRadius: 1, bgcolor: blueTint.placeholder, filter: 'blur(5px)', opacity: 0.7, width: '55%' }} />
+          <Box aria-hidden sx={{ height: 8, borderRadius: 1, bgcolor: blueTint.placeholder, filter: 'blur(5px)', opacity: 0.7, width: '35%' }} />
           <Button component={RouterLink} to="/login" variant="contained" sx={{ mt: 1, alignSelf: 'flex-start' }}>
             Sign in to request access
           </Button>
