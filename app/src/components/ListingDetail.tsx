@@ -25,8 +25,8 @@ import {
   Typography,
 } from '@mui/material'
 import { Link as RouterLink, useParams } from 'react-router-dom'
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import { ApiError, publicApi } from '../lib/api'
+import { GatedPanel } from './GatedPanel'
 import { listingTypeLabel } from '../lib/listingTypes'
 import { IdentityTile, type PublicListing } from './ListingCard'
 import { Metric } from './Metric'
@@ -35,7 +35,7 @@ import { RequestAccessPanel } from './RequestAccessPanel'
 import { WatchlistButton } from './WatchlistButton'
 import { accessStore } from '../stores/accessStore'
 import { authStore } from '../stores/authStore'
-import { blueTint, metricLabel, metricValue, surfaceRecessed } from '../theme'
+import { metricLabel, metricValue, surfaceRecessed } from '../theme'
 
 function money(value: string): string {
   const n = Number(value)
@@ -85,45 +85,23 @@ function DetailSkeleton() {
   )
 }
 
-// The gate, made visible for an anonymous visitor — same locked-strip
-// treatment as `ListingCard` (surfaceRecessed + a lock icon + blurred
-// placeholder bars). Every existing sentence is unchanged.
+// The gate, made visible for an anonymous visitor — UI Pass 3 consolidated
+// this onto the shared `GatedPanel` (see that file). Every existing sentence
+// is unchanged.
 function AnonymousGateCard() {
   return (
-    <Card sx={{ ...surfaceRecessed, p: 3, boxShadow: 'none' }}>
-      <Stack direction="row" spacing={1.5} alignItems="flex-start">
-        <Box
-          sx={{
-            width: 32,
-            height: 32,
-            borderRadius: '50%',
-            bgcolor: blueTint.wash,
-            color: blueTint.onWash,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <LockOutlinedIcon fontSize="small" />
-        </Box>
-        <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="h6" component="h2">
-            Locked until the NDA is signed
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            The company name, website, and detailed financials become available once you
-            sign the platform NDA and the seller approves your request.
-          </Typography>
-          {/* Redacted-field placeholders — decorative only. */}
-          <Box aria-hidden sx={{ height: 8, borderRadius: 1, bgcolor: blueTint.placeholder, filter: 'blur(5px)', opacity: 0.7, width: '55%' }} />
-          <Box aria-hidden sx={{ height: 8, borderRadius: 1, bgcolor: blueTint.placeholder, filter: 'blur(5px)', opacity: 0.7, width: '35%' }} />
-          <Button component={RouterLink} to="/login" variant="contained" sx={{ mt: 1, alignSelf: 'flex-start' }}>
-            Sign in to request access
-          </Button>
-        </Stack>
-      </Stack>
-    </Card>
+    <GatedPanel variant="locked" size="full" redactedFields={['Company name', 'Website', 'Detailed financials']}>
+      <Typography variant="h6" component="h2">
+        Locked until the NDA is signed
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        The company name, website, and detailed financials become available once you
+        sign the platform NDA and the seller approves your request.
+      </Typography>
+      <Button component={RouterLink} to="/login" variant="contained" sx={{ mt: 1, alignSelf: 'flex-start' }}>
+        Sign in to request access
+      </Button>
+    </GatedPanel>
   )
 }
 
