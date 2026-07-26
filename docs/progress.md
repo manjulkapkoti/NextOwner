@@ -7,13 +7,18 @@
 > - Full design: `docs/session_recovery.md`.
 
 **Milestone status:**
-- M0–M8 ✅ merged.
+- M0–M9 ✅ merged.
 - **App-shell** (`pre-003`) ✅ merged (#25), plus the public landing page (#26) and the register page (#27).
 - **Design system** ✅ merged (#28).
 - **Agentic workflow** ✅ merged (#32).
 - **PR conventions guard** ✅ merged (#37).
 
 **In flight:** nothing.
+**M9 (watchlist)** shipped the smallest milestone since M0 — a caller-owned favorites list, one rung simpler than M8's `SavedSearch`:
+- `POST`/`GET`/`DELETE /watchlist/{listing_id}` (FR-12) — add is idempotent (200 on repeat, D1), requires the target `live` (D2, applies even to the listing's own owner), and the list silently omits an entry whose listing has since left `live` rather than deleting the row (D3).
+- `get_owned_watchlist_entry`, a new `permissions.py` trust boundary keyed on `(caller, listing_id)` — the delete path never receives a `listing_id` predicate it could get wrong, so cross-user access is closed by construction, not a forgettable check.
+- `WatchlistEntryRead` is a standalone response model (not a `ListingRead`/`ListingPublic` subclass) — no route in the router takes a request body at all, so `user_id` mass-assignment has no field to be assigned from.
+- Not on the security-critical list, but the diff trigger escalated it anyway (new route + permission boundary + response model) — the independent `appsec-engineer` pass found no blocking issues.
 **M8 ⭐ (notifications engine + saved searches + account lifecycle)** turned every event the earlier milestones emit into delivery, and closed the last auth gap:
 - A `notification` **projection** table fed from the rows M3/M5/M6/M7 already wrote — a delivery record, explicitly *not* a second audit trail (D1).
 - **Recipient derivation is the trust boundary** (`notifications.py`, D3): no caller passes a recipient, no body influences one.
@@ -36,14 +41,16 @@
 **Open PRs:** none.
 
 ## ▶ NEXT ACTION
-**M9 — watchlist**: **`/start-milestone watchlist`**
+**M10 — manual buyer verification**: **`/start-milestone buyer-verification`**
 
-The smallest milestone left (`design_implementation.md` Part 4 calls it "an hour") and deliberately so after M8's three-in-one:
-- `POST /watchlist/{listing_id}` / `DELETE /watchlist/{listing_id}` toggle, `GET /watchlist` joined to listings (FR-12).
-- **Every operation caller-scoped** — you only ever see or edit your own items; that is the whole security surface, so the forbidden-path tests are IDOR on each of the three routes.
-- Not on the security-critical list, so it gets the inline branch review only — unless `scripts/check_appsec_trigger.py` fires on the diff, which it will if the watchlist touches a response model or a new gate.
+- Buyer uploads a proof-of-funds doc → `buyer_verified: "pending"`; admin reviews in `/admin` → sets `verified` → the badge shows in access requests and chat (F11).
+- **Security-critical** (on the crown-jewel list: M1/M2/M3/M5/M7/M8/M10) — a buyer must not be able to self-verify (`verified` ignored/403 if client-sent), only an admin flip reaches it, and the proof-of-funds upload obeys M2's upload rules (type/size/path-confinement) plus M10's own fold-in: a per-listing upload count/total-size quota.
+- Fold-in scope (`docs/milestones.md` § Scope fold-ins → M10): the badge also surfaces on the M1 profile and in M5's access-request list — this is the milestone FR-14 has been waiting on since M5 deferred the verification-status half.
 
 ## Carryover notes
+- **What the M9 build + review actually established, worth keeping:**
+  - **A `plan.md` Build order written predictively, not verified, drifted from what the commits actually did — and the drift was checkable.** The docs-auditor pass built git worktrees at each of the three backend commits and re-ran the real suite, finding the Build order over-credited slice 1 (claimed 9 criteria green, only 3 were — the rest round-trip through `GET`, which doesn't land until slice 2), mis-assigned X2 to slice 3 when it actually passes after slice 2, and described two single-route-spanning tests (S3, X1) as splittable into a "POST-half"/"DELETE-half" when neither can go green in half. **Generalize: a Build order's slice→test claims are exactly the kind of specific, falsifiable prose that looks authoritative and is easy to get wrong by writing it before running it** — the fix that stuck was re-deriving the mapping from the implementing agent's own reported red-count deltas (24→16→6→0) rather than re-guessing.
+  - **An untested exception-handling branch, found by adversarial reading rather than a failing test.** `POST /watchlist/{listing_id}`'s `IntegrityError` catch (the D1 idempotent-add race backstop) is defensively correct on inspection — it re-verifies a matching row exists before returning success, and a genuinely different `IntegrityError` still falls through to the generic 500 handler rather than being mislabeled — but no test in the suite forces the race, so that correctness is unverified, not proven. Recorded rather than blocked on, since the milestone's own constitution (Article 3 §2) already names the general rule: *a reachability/sabotage test nobody has seen fail proves nothing* — this is the same shape one level earlier, a branch nobody has seen **run** at all. Worth a follow-up test (force a pre-existing row via direct session insert, then `POST`) whenever this router is touched again.
 - **What the M8 build + review actually established, worth keeping:**
   - **The default-deny sweep caught the milestone's own new routes, and that is the system working.** `test_default_deny.py` failed the first full run on all three account-recovery routes. They are public *by necessity* — a user who cannot log in is their entire audience — so the fix was to register them in `PUBLIC_BY_DESIGN` **with the reason each is safe**, which is what that allowlist is for. Two things made it a real fix rather than a rubber stamp: the routes were first **trimmed** to return a bare status instead of a full `UserRead` (an unauthenticated route should hand back the minimum), and the sweep was **re-verified by adding a deliberately ungated route** and confirming it still fails. An allowlist that grows without either step is how a default-deny check quietly stops meaning anything.
   - **The milestone's worst bug was an availability bug, not an authorization one — and no permission test could have found it.** `SmtpEmailSender.send` is a blocking socket call with a 5-second timeout, and the send-after-commit design fired it from `after_commit` — which made it reachable from the **`async` WebSocket handler** via `notify_message`. One slow SMTP server would have stalled every live chat socket on the worker. The same root cause gave `forgot-password` a timing oracle. **The class of question the tests were not asking: every F criterion asked *whether* mail is sent; none asked *where the send runs*.** Fixed with a `Dispatcher` port (`ThreadDispatcher` in production, `InlineDispatcher` in tests so assertions don't race), pinned by F7, sabotage-verified — reverting it fails with `commit blocked 10.02s`.
