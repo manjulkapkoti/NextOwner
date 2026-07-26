@@ -126,6 +126,11 @@ export const elevation = {
   sm: `0 1px 2px rgba(${SHADOW_RGB}, 0.05)`,
   md: `0 4px 12px rgba(${SHADOW_RGB}, 0.08)`,
   lg: `0 12px 24px rgba(${SHADOW_RGB}, 0.12)`,
+  // Pass 1 additions (UI design pass, 2026-07-26): a recessed/inset surface
+  // (e.g. `surfaceRecessed` below) and a focus/selection ring, both slate- and
+  // brand-tinted respectively to match the existing `elevation` convention.
+  inset: `inset 0 1px 3px rgba(${SHADOW_RGB}, 0.06)`,
+  ring: `0 0 0 1px rgba(37, 99, 235, 0.35)`, // brand.main as RGB
 } as const
 
 const softShadows = [...createTheme().shadows] as Shadows
@@ -135,6 +140,13 @@ softShadows[3] = elevation.md
 softShadows[4] = elevation.md
 softShadows[6] = elevation.lg
 softShadows[8] = elevation.lg
+// MUI's Dialog (elevation 24) and Menu/Popover (elevation 8, already mapped
+// above -- but Dialog also probes 16 via its Paper) request these indices by
+// default. Without a mapping they fall through to MUI's own stock
+// high-elevation shadow, which is why dialogs looked like a generic MUI
+// dialog rather than this theme's own top tier.
+softShadows[16] = elevation.lg
+softShadows[24] = elevation.lg
 
 // ---------------------------------------------------------------------------
 // Palette — keyed by mode so dark mode is a fill-in, not a rewrite
@@ -324,10 +336,32 @@ export function createAppTheme(mode: PaletteMode = 'light') {
             borderRadius: 16,
             backgroundImage: 'none',
             boxShadow: elevation.sm,
-            // Token spec § cards: hover raises the shadow only.
-            transition: `box-shadow ${motion.normal}ms ${motion.easing}`,
+            // Cards had a shadow but no border, which barely separated them
+            // from the near-white page background (Pass 1, 2026-07-26).
+            border: `1px solid ${neutral[100]}`,
+            // Token spec § cards: hover raises the shadow. border-color and
+            // transform are wired in too, for `cardInteractive` below (not
+            // consumed until Pass 2 touches an actual card component).
+            transition: `box-shadow ${motion.normal}ms ${motion.easing}, border-color ${motion.normal}ms ${motion.easing}, transform ${motion.normal}ms ${motion.easing}`,
           },
         },
+        // `variant="outlined"` today strips the shadow (Paper's own outlined
+        // variant never sets one) and draws a border in `divider` grey
+        // instead of our card border colour. This `variants` entry -- which
+        // MUI applies with higher precedence than `styleOverrides` for
+        // exactly this reason -- converges the ten existing
+        // `variant="outlined"` call sites onto the same look as every other
+        // card, with zero changes at those call sites.
+        variants: [
+          {
+            props: { variant: 'outlined' },
+            style: {
+              boxShadow: elevation.sm,
+              borderColor: neutral[100],
+              border: undefined,
+            },
+          },
+        ],
       },
 
       MuiCardContent: { styleOverrides: { root: { padding: 24, '&:last-child': { paddingBottom: 24 } } } },
@@ -354,9 +388,115 @@ export function createAppTheme(mode: PaletteMode = 'light') {
       MuiChip: { styleOverrides: { root: { fontWeight: 600, borderRadius: 8 } } },
 
       MuiTableCell: { styleOverrides: { root: { height: 48, paddingBlock: 0 } } },
+
+      // Pass 1 additions (2026-07-26) below -- dialog/menu/alert/skeleton/
+      // stepper defaults that previously fell through to MUI's stock look.
+
+      // MUI's stock dialog radius is 4px; this was flagged as the single
+      // cheapest fix in the design audit.
+      MuiDialog: { styleOverrides: { paper: { borderRadius: 24 } } },
+
+      MuiAlert: {
+        styleOverrides: {
+          root: ({ theme, ownerState }) => {
+            const key = (ownerState.color ?? ownerState.severity ?? 'info') as
+              | 'success'
+              | 'info'
+              | 'warning'
+              | 'error'
+            return {
+              borderRadius: 12,
+              boxShadow: 'none',
+              border: `1px solid ${theme.palette[key].light}`,
+            }
+          },
+        },
+      },
+
+      MuiMenu: {
+        styleOverrides: {
+          paper: { borderRadius: 12, boxShadow: elevation.lg, border: `1px solid ${neutral[100]}` },
+        },
+      },
+
+      MuiPopover: {
+        styleOverrides: {
+          paper: { borderRadius: 12, boxShadow: elevation.lg, border: `1px solid ${neutral[100]}` },
+        },
+      },
+
+      MuiSkeleton: { defaultProps: { variant: 'rounded', animation: 'wave' } },
+
+      MuiStepIcon: {
+        styleOverrides: {
+          root: {
+            color: neutral[300],
+            '&.Mui-active': { color: brand.main },
+            '&.Mui-completed': { color: brand.main },
+          },
+        },
+      },
+
+      MuiStepConnector: {
+        styleOverrides: {
+          line: { borderColor: neutral[100], borderWidth: 2 },
+        },
+      },
     },
   })
 }
+
+// ---------------------------------------------------------------------------
+// Shared sx primitives (Pass 1, 2026-07-26) -- plain `sx` objects, not styled
+// components, so later passes can spread them onto whatever element needs
+// them without importing a new component.
+// ---------------------------------------------------------------------------
+
+/**
+ * For interactive (clickable/navigable) cards: a small hover lift plus a
+ * border-colour shift, on top of the shadow raise every card already gets.
+ * Not consumed yet -- exported for Pass 2, which wires it onto `ListingCard`
+ * and similar. See design_system_spec.md §5 "Cards" for the amendment this
+ * token exists to satisfy.
+ */
+export const cardInteractive = {
+  transition: `box-shadow ${motion.fast}ms ${motion.easing}, transform ${motion.fast}ms ${motion.easing}, border-color ${motion.fast}ms ${motion.easing}`,
+  '&:hover': {
+    boxShadow: elevation.md,
+    transform: 'translateY(-2px)',
+    borderColor: neutral[300],
+  },
+  // The lift is motion; the shadow change is not, so only the transform is
+  // dropped for users who asked for reduced motion.
+  '@media (prefers-reduced-motion: reduce)': {
+    '&:hover': { transform: 'none' },
+  },
+} as const
+
+/** A recessed/inset surface (e.g. a quoted figure, a code/id chip well). */
+export const surfaceRecessed = {
+  backgroundColor: neutral[50],
+  border: `1px solid ${neutral[100]}`,
+  boxShadow: elevation.inset,
+  borderRadius: 2, // MUI's sx borderRadius multiplies by theme.shape.borderRadius (8) -> 16px, matching the card radius.
+} as const
+
+/** A small KPI/metric pair -- label above value. Pairs with `Metric.tsx`. */
+export const metricLabel = {
+  fontSize: '0.6875rem',
+  fontWeight: 600,
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+  color: 'text.secondary',
+} as const
+
+export const metricValue = {
+  fontSize: '1.0625rem',
+  fontWeight: 700,
+  letterSpacing: '-0.02em',
+  color: 'text.primary',
+  ...tabularNums,
+} as const
 
 /** The app theme (light). Swap/branch via `createAppTheme('dark')` when ready. */
 export const theme = createAppTheme('light')

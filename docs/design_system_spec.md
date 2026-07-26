@@ -87,6 +87,24 @@ The spec's brighter hues are **not discarded** — they survive as the *light fi
 - **Buttons.** Primary: blue fill, white text. Secondary: white with a grey border. Ghost: transparent. Destructive: red. No ALL-CAPS. Primary gets a small shadow that lifts on hover; nothing else does.
 - **Inputs.** One height across the app (48px), 12px radius, focus ring in brand blue at 2px. Validation is the server's: the form submits and renders the 422 inline rather than blocking with native popups.
 - **Cards.** White surface, 16px radius, 24px padding, soft shadow. **Hover raises the shadow only** — no transform, no border change.
+
+  > **Amendment, 2026-07-26 (UI Pass 1 — theme foundation):** interactive cards
+  > (those with a click/navigate affordance) may also apply a small hover lift
+  > (`translateY(-2px)`) and a border-colour shift, via the new
+  > `cardInteractive` sx object in `theme.ts`. The original "shadow only" rule
+  > was written before any card grid existed to evaluate it against; a small
+  > lift below the distraction threshold is standard practice at this
+  > product's aesthetic reference points (Stripe/Linear/Mercury/Ramp — §1).
+  > `cardInteractive` respects `prefers-reduced-motion` (drops the transform,
+  > keeps the shadow change). Non-interactive cards (static content, no
+  > click/navigate target) keep the original shadow-only rule — this
+  > amendment does not apply to them. Not yet consumed by any screen; Pass 2
+  > wires it onto `ListingCard` and similar.
+  >
+  > Also new in `theme.ts` as of this pass: the `elevation.inset` and
+  > `elevation.ring` shadow tokens, and the `surfaceRecessed`, `metricLabel`,
+  > `metricValue`, and `cardInteractive` sx exports — see that file's
+  > docstrings for each.
 - **Navigation.** White top bar, sticky. Auth actions top-right at every width. Below `sm` the authed actions collapse behind one menu control. Active item in blue.
 - **Badges.** Verified = green · Featured = orange · Premium = purple · Sold = grey. Always a light fill with dark text, **never colour alone** — every badge carries a label.
 - **Tables.** Sticky header, 48px rows, hover-only row highlight (no zebra striping). Prefer cards over tables on mobile.
