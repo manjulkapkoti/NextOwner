@@ -8,7 +8,7 @@
 // Client state is convenience only; the server (`get_owned_watchlist_entry`,
 // the D2 live-listing check) is the real boundary.
 import { makeAutoObservable, runInAction } from 'mobx'
-import { api } from '../lib/api'
+import { ApiError, api } from '../lib/api'
 
 // Mirrors `WatchlistEntryRead` in backend/app/schemas.py exactly — note
 // `listing_id`, not `id`, and no `owner_id` / `status` / `company_name` /
@@ -73,7 +73,14 @@ class WatchlistStore {
   /** No re-fetch needed: the caller's own delete is the only thing that could
    * have changed the list, so removing the row locally keeps this fast. */
   async remove(listingId: number): Promise<void> {
-    await api(`/watchlist/${listingId}`, { method: 'DELETE' })
+    try {
+      await api(`/watchlist/${listingId}`, { method: 'DELETE' })
+    } catch (err) {
+      // A 404 means the entry is already gone (a double-click, another tab,
+      // or the listing having left `live`) — that is the state this call was
+      // trying to reach, not a failure. Any other error is real and propagates.
+      if (!(err instanceof ApiError && err.status === 404)) throw err
+    }
     runInAction(() => {
       this.entries = this.entries.filter((entry) => entry.listing_id !== listingId)
     })
