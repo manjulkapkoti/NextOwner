@@ -2,7 +2,7 @@
 
 > **Milestone:** M9 — `docs/design_implementation.md` Part 4 § *Milestone 9 — Watchlist (F10)* ("an hour" of work: `POST /watchlist/{listing_id}` / `DELETE /watchlist/{listing_id}` toggle; `GET /watchlist` joins to listings for the "Watchlist" page).
 > **Not security-critical** (`docs/security.md` §7 M9; the crown-jewel list is M1/M2/M3/M5/M7/M8/M10 — no independent `appsec-engineer` pass required). It still gets the standard **Security & abuse** treatment below: `security.md` §7's M9 line is "every operation caller-scoped; a user only ever sees/edits their own items."
-> **Scope fold-ins read at spec time:** `docs/milestones.md` § Scope fold-ins has **no M9 bullet** — unlike M1/M2/M3/M5/M8/M10/M11, this milestone carries no additional scope beyond `design_implementation.md`'s one-line description. Nothing is imported from another milestone's fold-ins.
+> **Scope fold-ins read at spec time:** `docs/milestones.md` § Scope fold-ins has **no M9 bullet** — every other milestone in that section (M1, M2, M3, M4, M5, M6, M7, M8, M10, M11) carries one, so M9 is the exception, not the rule. This milestone carries no additional scope beyond `design_implementation.md`'s one-line description; nothing is imported from another milestone's fold-ins.
 
 ---
 
