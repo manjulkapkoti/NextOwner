@@ -27,7 +27,7 @@ from sqlmodel import Session, select
 from ..db import get_session
 from ..errors import NotFound
 from ..models import Listing, User, WatchlistEntry
-from ..permissions import get_current_user
+from ..permissions import get_current_user, get_owned_watchlist_entry
 from ..schemas import WatchlistEntryRead
 
 router = APIRouter(tags=["watchlist"])
@@ -149,5 +149,28 @@ def list_watchlist(
         .order_by(WatchlistEntry.created_at.desc(), WatchlistEntry.id.desc())
     ).all()
     return [_to_read(entry, listing) for entry, listing in rows]
+
+
+@router.delete("/watchlist/{listing_id}", status_code=204)
+def remove_from_watchlist(
+    entry: WatchlistEntry = Depends(get_owned_watchlist_entry),
+    session: Session = Depends(get_session),
+) -> Response:
+    """Un-favorite (spec W2, W9, W10, S2).
+
+    A hard delete, like `SavedSearch` and unlike the audit-bearing tables: a
+    favorite carries no evidentiary value, so there is nothing here a later
+    reader needs (plan 009 § Data protection).
+
+    The gate does all the authorization, and this body deliberately never takes
+    a `listing_id` of its own — that absence is what makes "B's delete cannot
+    reach A's row" structural rather than a predicate someone must remember
+    (S2). Note that the *listing's* status is irrelevant here: a buyer must be
+    able to clear an entry whose listing has since left `live` and vanished
+    from their view (D3), which a liveness check would make impossible.
+    """
+    session.delete(entry)
+    session.commit()
+    return Response(status_code=204)
 
 
