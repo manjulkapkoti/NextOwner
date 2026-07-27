@@ -49,7 +49,9 @@ The one thing that's painful to retrofit. A user is referenced by listings, mess
 
 ## 4. KYC / identity documents — held by the vendor, not us
 
-Follow the Acquire pattern (`research/acquire_design.md`): the verification vendor (Persona) **holds the identity documents**; our DB stores **only the verification result** (`verified: bool`, timestamp, a vendor reference) — never the raw docs. This minimizes our most sensitive PII surface. The M10 mock must model this: our DB never receives the document, only the outcome.
+Follow the Acquire pattern (`research/acquire_design.md`): the verification vendor (Persona) **holds the identity documents**; our DB stores **only the verification result** (`verified: bool`, timestamp, a vendor reference) — never the raw docs. This minimizes our most sensitive PII surface.
+
+> **⚠ M10 ships a recorded deviation from the sentence that used to close this paragraph** (*"The M10 mock must model this: our DB never receives the document, only the outcome"*). It does not, and could not: F11 and `design_implementation.md` Part 4 both specify **manual** review by our own admin, which is impossible unless a system of ours holds the file — there is no vendor to hand it to yet. So `BuyerVerificationDocument` stores the document, readable by the uploader and by an admin and nobody else. **The goal of this section is honoured as far as MVP allows** — the file is served only through a permission-checked route (never statically), its contents are never parsed, and the *profile-facing* surfaces carry only `verification_status` + a timestamp, never the file. The paragraph above remains the target state: when a real KYC vendor is integrated, the upload route is replaced by their widget plus a webhook, and this deviation retires with the code that caused it. Full reasoning: **spec 010 D9**; erasure consequences: **D10** (hard-delete row + file, and never by directory — the key space is shared with listing documents).
 
 ## 5. Retention (pointers; durations → `legal-compliance`)
 
@@ -69,5 +71,5 @@ Follow the Acquire pattern (`research/acquire_design.md`): the verification vend
 - [ ] New PII fields are justified (data-min), excluded from public `response_model`s, and never logged.
 - [ ] New person-referencing tables have a defined **erasure/anonymization** behavior (cascade vs anonymize).
 - [ ] The `user` table is **erasure-ready** (soft-delete / anonymize path) from M1.
-- [ ] KYC / identity docs are held by the vendor, not our DB (only the result is stored).
+- [ ] KYC / identity docs are held by the vendor, not our DB (only the result is stored). **Not met at MVP, deliberately — see the M10 deviation note in §4.** Re-check this box when a real KYC vendor replaces the manual mock; until then the compensating controls are the permission-gated download route, admin-or-uploader-only access, and no parsing of contents.
 - [ ] Audit rows store ids + minimal data (no PII snapshots), so anonymization can't break them.
