@@ -612,3 +612,50 @@ class ResetPasswordRequest(SQLModel):
 
 class VerifyEmailRequest(SQLModel):
     token: str = Field(min_length=1, max_length=512)
+
+
+# ── M10 — buyer verification (the manual Persona mock) ───────────────────────
+#
+# Naming note: these are **buyer** verification (a proof-of-funds document an
+# admin reviews), not `VerifyEmailRequest` above (a token redemption, M8). Two
+# unrelated state machines that share a word in prose; the models keep them apart.
+
+
+class VerificationDocumentRead(SQLModel):
+    """One submitted proof-of-funds file, as its uploader and an admin see it.
+
+    **No `storage_key`** (spec 010 S9), and its absence is the control — the same
+    construction as `UserRead` and `password_hash`. The key is `{owner}/{uuid}`:
+    returning it would hand a caller both a live user-id enumeration and the exact
+    shape of the paths behind the download route, which is the first thing anyone
+    probing for a static-serving mistake or a traversal wants.
+
+    **No `user_id` either**, unlike M2's `DocumentRead.listing_id`. Every surface
+    this appears on already establishes whose documents these are — the caller's
+    own (`VerificationRead`) or the queue row's buyer — so the field would be
+    redundant on one and a cross-user identifier on the other.
+    """
+
+    id: int
+    original_filename: str
+    content_type: str
+    size_bytes: int
+    uploaded_at: datetime
+
+
+class VerificationRead(SQLModel):
+    """The caller's own verification state (`GET /api/verification`).
+
+    Carries the *outcome* and nothing else about the submission — the one part of
+    `data_protection.md` §4's letter this milestone can keep while holding the
+    document itself (spec 010 D9). `verification_reason` is echoed back
+    deliberately: a rejection the buyer cannot act on is worse than none (the same
+    reasoning that makes M3's listing-rejection reason required), and it is
+    length-capped at the boundary it is written through for exactly that reason
+    (`verification_reason_max_chars`).
+    """
+
+    verification_status: str
+    verification_reviewed_at: datetime | None
+    verification_reason: str | None
+    documents: list[VerificationDocumentRead]

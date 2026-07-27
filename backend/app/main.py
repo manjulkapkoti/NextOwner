@@ -33,6 +33,7 @@ from .routers import (
     offers,
     profile,
     saved_searches,
+    verification,
     watchlist,
 )
 
@@ -121,6 +122,7 @@ app.include_router(chat.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
 app.include_router(saved_searches.router, prefix="/api")
 app.include_router(watchlist.router, prefix="/api")
+app.include_router(verification.router, prefix="/api")
 app.include_router(chat.ws_router, prefix="/ws")
 
 if settings.enable_debug_routes:            # test-only; off in production
