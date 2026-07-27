@@ -126,7 +126,7 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
 - [x] **M7** ⭐ — offers / LOI *(+ counter model, sibling policy, `offerevent` audit; appsec-found counter-on-non-live bypass closed, D8 — § Scope fold-ins)*
 - [x] **M8** ⭐ — notifications engine + saved searches & alerts *(+ account lifecycle moved from M1; the `notification` projection, the email port + `Dispatcher`, two token tables. Fan-out is synchronous in-transaction, **not** a `BackgroundTask` — spec 008 D12 amends the Part 4 sketch — § Scope fold-ins)*
 - [x] **M9** — watchlist
-- [ ] **M10** — buyer verification *(+ badge on profile, upload quota — § Scope fold-ins)*
+- [x] **M10** ⭐ — buyer verification *(+ badge on profile **and** M7's offer queue, upload quota retrofitted onto M2's route too; `?status=` queue filter added mid-build as D13 — § Scope fold-ins)*
 - [ ] **M11** — valuation calculator *(+ lead capture — § Scope fold-ins)*
 - [ ] **M12** — deal completion *(sold / fell-through + final price)*
 - [ ] **E2E** — Playwright golden path *(extends to "sold" once M12 lands)*
