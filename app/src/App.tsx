@@ -13,6 +13,7 @@ import {
 } from 'react-router-dom'
 import { AccessRequestQueue } from './components/AccessRequestQueue'
 import { AdminQueue } from './components/AdminQueue'
+import { AdminVerificationQueue } from './components/AdminVerificationQueue'
 import { BrowseListings } from './components/BrowseListings'
 import { ChatWindow } from './components/ChatWindow'
 import { ConversationList } from './components/ConversationList'
@@ -33,8 +34,10 @@ import { VerifyEmailPage } from './components/VerifyEmailPage'
 import { RegisterForm } from './components/RegisterForm'
 import { RequireAdmin } from './components/RequireAdmin'
 import { RequireAuth } from './components/RequireAuth'
+import { VerificationStatus } from './components/VerificationStatus'
 import { Wordmark } from './components/Wordmark'
 import { authStore } from './stores/authStore'
+import { verificationStore } from './stores/verificationStore'
 import { watchlistStore } from './stores/watchlistStore'
 
 // M8 — the three account-recovery pages (spec 008 J8-J10). Public by design:
@@ -229,6 +232,8 @@ export function AppShell() {
       // the first user's watchlist state (mirrors the client-state-is-
       // convenience-only rule other stores follow at logout/session-death).
       watchlistStore.reset()
+      // M10 — same reasoning for verification state.
+      verificationStore.reset()
       navigate('/login')
     }
     window.addEventListener('auth:unauthorized', onUnauthorized)
@@ -314,12 +319,36 @@ export function AppShell() {
             </RequireAuth>
           }
         />
+        {/* M10 — buyer verification (spec 010, F11/FR-3/FR-14). No role gate
+            on the buyer's own page (D4) — any authenticated user may submit. */}
+        <Route
+          path="/verification"
+          element={
+            <RequireAuth>
+              <Container maxWidth="md" sx={{ mt: 4 }}>
+                <VerificationStatus />
+              </Container>
+            </RequireAuth>
+          }
+        />
         <Route
           path="/admin"
           element={
             <RequireAdmin>
               <Container maxWidth="md" sx={{ mt: 4 }}>
                 <AdminQueue />
+              </Container>
+            </RequireAdmin>
+          }
+        />
+        {/* M10 — the admin review queue for buyer verification, the
+            demand-side sibling of /admin (M3's listing curation). */}
+        <Route
+          path="/admin/verifications"
+          element={
+            <RequireAdmin>
+              <Container maxWidth="md" sx={{ mt: 4 }}>
+                <AdminVerificationQueue />
               </Container>
             </RequireAdmin>
           }

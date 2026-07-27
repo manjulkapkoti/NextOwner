@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { observer } from 'mobx-react-lite'
 import { Alert, Box, Card, CardContent, Skeleton, Stack, Typography } from '@mui/material'
 import { offerStore, type OfferWithBuyer } from '../stores/offerStore'
+import { VerifiedBadge } from './VerifiedBadge'
 import { EmptyState } from './EmptyState'
 import { OfferThread } from './OfferThread'
 
@@ -142,9 +143,17 @@ export const ListingOffersQueue = observer(function ListingOffersQueue({ listing
         const industries = formatIndustries(buyer.target_industries)
         return (
           <Box key={thread.key}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-              {buyer.display_name ?? 'Unnamed buyer'}
-            </Typography>
+            {/* The badge belongs here for the same reason it belongs on the
+                access-request queue (spec 010 D7/S11) — and arguably more so:
+                this seller is weighing money, not just whether to open the
+                data room. `verified` is read live off the response, never
+                cached, so a revoked badge disappears on the next fetch. */}
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                {buyer.display_name ?? 'Unnamed buyer'}
+              </Typography>
+              <VerifiedBadge verified={buyer.verified ?? false} />
+            </Stack>
             {budget && (
               <Typography variant="body2" color="text.secondary">
                 Budget: {budget}

@@ -4,9 +4,13 @@
 // seller reads who is asking and *chooses* who carries the business forward.
 // So it shows enough to decide — budget, sector, experience — and nothing more.
 //
-// **No verification badge** (spec 005 § Decisions D5). M10 owns buyer
-// verification; a placeholder here would be an unenforced flag, which
-// `security.md` §7 calls decoration. M10's fold-in already covers adding it.
+// **Verification badge, added by M10** (spec 010 D7, V8, S11). Spec 005 D5
+// deferred this field ("a placeholder here would be an unenforced flag");
+// M10 completes it, so FR-14's promise — profile *and verification status*
+// before approving — is finally whole. Rendered next to the buyer's name via
+// `VerifiedBadge`, which renders nothing at all for a non-verified buyer, so a
+// revoke (verified -> rejected) makes the badge disappear rather than change
+// label — the anti-staleness property S11 exists to pin.
 //
 // **No buyer email**, because the API does not send one (G3): the seller gets a
 // profile, and chat (M6) is the channel once they have decided.
@@ -30,6 +34,7 @@ import { api } from '../lib/api'
 import { EmptyState } from './EmptyState'
 import { PersonRow } from './PersonRow'
 import { StatusChip } from './StatusChip'
+import { VerifiedBadge } from './VerifiedBadge'
 import { blueTint } from '../theme'
 
 interface BuyerProfile {
@@ -39,6 +44,10 @@ interface BuyerProfile {
   // into structured sectors without this component becoming the blocker.
   target_industries: string | string[] | null
   experience: string | null
+  // M10 (spec 010 D7) — mirrors `BuyerProfile`'s two additions in
+  // backend/app/schemas.py exactly.
+  verification_status: string
+  verified: boolean
 }
 
 interface QueueRow {
@@ -158,7 +167,12 @@ export function AccessRequestQueue({ listingId }: Props) {
                 {name.charAt(0).toUpperCase()}
               </Avatar>
             }
-            title={<Typography variant="subtitle1">{name}</Typography>}
+            title={
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography variant="subtitle1">{name}</Typography>
+                <VerifiedBadge verified={row.buyer.verified} />
+              </Stack>
+            }
             meta={
               <>
                 {budget && (

@@ -48,10 +48,15 @@ export async function publicApi(path: string) {
 
 export async function api(path: string, opts: RequestInit = {}) {
   const token = localStorage.getItem('token')
+  // M10 — multipart uploads (verification documents) must let the browser set
+  // its own `Content-Type: multipart/form-data; boundary=...`. Forcing the
+  // usual JSON header here would strip the boundary the server needs to parse
+  // the body at all, so a FormData body opts out of it.
+  const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData
   const res = await fetch(`/api${path}`, {
     ...opts,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...opts.headers,
     },

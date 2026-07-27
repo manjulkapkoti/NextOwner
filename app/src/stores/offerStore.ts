@@ -48,6 +48,13 @@ export interface BuyerProfile {
   // (mirrors AccessRequestQueue's own BuyerProfile — spec 005).
   target_industries: string | string[] | null
   experience: string | null
+  // M10 (spec 010 D7). `BuyerProfile` is one model server-side, so the badge
+  // reaches this queue as well as M5's access-request list — deliberately: the
+  // same seller, about the same buyer, on a *more* consequential decision.
+  // Optional here only because older fixtures predate the field; the API always
+  // sends both.
+  verification_status?: string
+  verified?: boolean
 }
 
 export interface OfferWithBuyer extends OfferRead {
