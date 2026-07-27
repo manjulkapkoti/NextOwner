@@ -622,3 +622,103 @@ def verify_email(client, outbox):
         client.post("/api/auth/verify-email", json={"token": token})
         return headers
     return _verify
+
+
+# ── M10 buyer-verification helpers ───────────────────────────────────────────
+#
+# Note the naming: `verify_email` above is M8's *email* verification (a token
+# redemption); everything below is M10's *buyer* verification (a proof-of-funds
+# document reviewed by an admin). Two unrelated state machines that both got
+# called "verification" in prose — the fixtures keep them apart by name so a
+# test cannot reach for the wrong one.
+#
+# Same discipline as the M5/M7 fixtures: compose the product's own routes, never
+# forge a `verification_status` column directly. Every state this milestone
+# reaches (unverified → pending → verified | rejected, and back to pending on
+# resubmission) is produced by a real endpoint, so a fixture cannot hand a test
+# a state the app itself cannot reach.
+
+# A minimal well-formed PDF — the magic-byte check M2 already enforces
+# (`test_listing_upload.py::test_d7`) applies verbatim to this route (spec 010 D5),
+# so an upload's bytes must actually match its declared content type.
+VALID_PDF = b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF"
+
+
+@pytest.fixture
+def submit_verification(client):
+    """Upload a proof-of-funds document as the given caller (spec 010 V1).
+
+    Mirrors `test_listing_upload.py`'s `_upload` helper — same multipart shape,
+    a different route — because M10 deliberately reuses M2's upload pipeline
+    rather than building a second one (spec 010 D5).
+    """
+    def _submit(
+        headers,
+        filename="proof-of-funds.pdf",
+        content=VALID_PDF,
+        content_type="application/pdf",
+    ):
+        return client.post(
+            "/api/verification/documents",
+            files={"file": (filename, content, content_type)},
+            headers=headers,
+        )
+    return _submit
+
+
+@pytest.fixture
+def pending_verification(client, submit_verification, user_id):
+    """A buyer with a `pending` submission; returns `(user_id, document_id)`.
+
+    The document id is returned because three criteria (S4, S5, S9) address the
+    gated download route and would otherwise have to re-derive it from
+    `GET /api/verification`.
+    """
+    def _pending(buyer_headers):
+        res = submit_verification(buyer_headers)
+        assert res.status_code == 201, res.text
+        return user_id(buyer_headers), res.json()["id"]
+    return _pending
+
+
+@pytest.fixture
+def verified_buyer(client, pending_verification, admin_headers):
+    """Drive a buyer all the way to `verified` through the real admin route.
+
+    Returns `(user_id, document_id)` like `pending_verification`, so a test can
+    carry on to the `verified → rejected` revoke path (V14) or to D3's
+    already-verified 409 (V7).
+    """
+    def _verified(buyer_headers, admin=None):
+        buyer_id, document_id = pending_verification(buyer_headers)
+        approved = client.post(
+            f"/api/admin/verifications/{buyer_id}/approve",
+            headers=admin or admin_headers(),
+        )
+        assert approved.status_code == 200, approved.text
+        return buyer_id, document_id
+    return _verified
+
+
+@pytest.fixture
+def verification_events(session):
+    """Read the append-only audit rows for a buyer, oldest first.
+
+    Mirrors `listing_events`/`access_events`/`offer_events`. Spec 010 D6 is the
+    reason this table exists: `User.verification_reason` holds only the *current*
+    decision, so a rejection reason is overwritten the moment a resubmission is
+    approved — the history has to be read from here, not from the row.
+    """
+    from sqlalchemy import text
+
+    def _events(user_id_value):
+        rows = session.execute(
+            text(
+                "SELECT actor_id, action, from_status, to_status, reason, created_at "
+                "FROM buyerverificationevent WHERE user_id = :i ORDER BY id"
+            ),
+            {"i": user_id_value},
+        ).mappings().all()
+        return [dict(r) for r in rows]
+
+    return _events
