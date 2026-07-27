@@ -370,6 +370,34 @@ def test_v14_admin_reject_can_revoke_an_already_verified_buyer(
     assert revoke_event["reason"] == "Fraud reported after approval"
 
 
+def test_v15_the_queue_filter_reaches_verified_buyers_for_the_revoke_path(
+    client, auth_headers, admin_headers, pending_verification, verified_buyer
+):
+    """V15 — D13: `?status=verified` is how story 4 finds its subject.
+
+    D1 makes `reject` do double duty as revoke, acting on an already-`verified`
+    buyer. Without this filter that endpoint is reachable only by an admin who
+    already knows the user id — a route with no discovery path, which is a
+    feature that exists in the API and not in the product.
+
+    Asserts the filter *discriminates* rather than merely returning something: a
+    `pending` buyer exists at the same time and must be absent, so an
+    implementation that ignores the parameter and returns everything fails here.
+    """
+    admin = admin_headers()
+    pending_buyer = auth_headers(email="pending@example.com", role="buyer")
+    approved_buyer = auth_headers(email="approved@example.com", role="buyer")
+    pending_id, _ = pending_verification(pending_buyer)
+    verified_id, _ = verified_buyer(approved_buyer, admin=admin)
+
+    res = client.get("/api/admin/verifications?status=verified", headers=admin)
+
+    assert res.status_code == 200, res.text
+    returned = {row["user_id"] for row in res.json()}
+    assert verified_id in returned, res.text
+    assert pending_id not in returned, res.text
+
+
 # ── X — errors & failure modes ───────────────────────────────────────────────
 
 

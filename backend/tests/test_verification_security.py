@@ -294,6 +294,36 @@ def test_s8_the_admin_queue_leaks_no_credential_or_undeclared_user_field(
     assert "password" not in res.text.lower()
 
 
+def test_s12_the_queue_filter_cannot_be_used_to_list_every_account(
+    client, auth_headers, admin_headers
+):
+    """S12 — D13: the one `?status=` value that would change what this route *is*.
+
+    The queue is "buyers under review". `?status=unverified` would make it "every
+    registered account, with email addresses" — the same authorization, a
+    different feature, and the single most useful response in this router to
+    anyone who gets hold of an admin token or finds a way to reach the route
+    without one. It is refused by the `Literal` on the parameter, so the refusal
+    happens in validation before any query runs, not in a runtime branch someone
+    can later reorder.
+
+    Two never-submitted accounts exist while this is asserted, so the test would
+    genuinely catch a leak: if the filter accepted the value, their addresses
+    would be in the response body. Asserting their absence as well as the 422
+    means a future implementation that "helpfully" coerces an unknown status to a
+    default cannot pass by returning an empty list either — it has to refuse.
+    """
+    admin = admin_headers()
+    auth_headers(email="never-submitted-a@example.com", role="buyer")
+    auth_headers(email="never-submitted-b@example.com", role="seller")
+
+    res = client.get("/api/admin/verifications?status=unverified", headers=admin)
+
+    assert res.status_code == 422, res.text
+    assert "never-submitted-a@example.com" not in res.text
+    assert "never-submitted-b@example.com" not in res.text
+
+
 # ── S4, S5 — the document download boundary (owner or admin, nobody else) ────
 
 

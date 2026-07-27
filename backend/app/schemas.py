@@ -659,3 +659,71 @@ class VerificationRead(SQLModel):
     verification_reviewed_at: datetime | None
     verification_reason: str | None
     documents: list[VerificationDocumentRead]
+
+
+class AdminVerificationQueueRead(SQLModel):
+    """One row of the admin review queue (`GET /api/admin/verifications`, V3, S8).
+
+    **Standalone, and deliberately not `UserRead` or `User`.** Reusing either
+    would satisfy every core criterion — display name, budget, industries and
+    documents would all be there — while serializing `password_hash`, `is_admin`
+    and `nda_signed_at` to whoever holds an admin token. That is a schema bug no
+    permission test can catch, which is why S8 asserts this exact field set as an
+    allow-list. **Do not add fields here without changing S8 first**: the model
+    and the test are one control in two halves.
+
+    `email` is in scope *because* this surface is admin-only — the same reasoning
+    `AdminListingRead` already applies to seller identity at M3, and the same
+    warning applies: never mount this model on a route guarded by anything
+    weaker than `require_admin`.
+
+    Absent by construction: `verification_reason` and `verification_reviewed_at`.
+    An admin about to decide does not need to be told what a *previous* decision
+    said — and where the history genuinely matters, `BuyerVerificationEvent` is
+    the record, not a field on a queue row (D6).
+    """
+
+    user_id: int
+    email: str
+    display_name: str | None
+    budget: Decimal | None
+    target_industries: str | None
+    experience: str | None
+    verification_status: str
+    documents: list[VerificationDocumentRead]
+
+    @field_serializer("budget", when_used="json")
+    def _ser_budget(self, value: Decimal | None) -> str | None:
+        """Money as an exact string, never a float — the same serializer
+        `BuyerProfile._ser_budget` and `ListingRead._ser_money` already apply."""
+        return None if value is None else str(value)
+
+
+class VerificationRejectRequest(SQLModel):
+    """`POST /api/admin/verifications/{user_id}/reject` body (X2, X6).
+
+    **One field, deliberately.** `{"reason": "x", "to_status": "verified"}` has
+    nothing to assign from — the same structural control S1 pins on the profile
+    route, applied to the one endpoint in this milestone that *can* reach
+    `verified`/`rejected`.
+
+    Bound to `settings.verification_reason_max_chars` rather than M3's
+    `RejectRequest` literal, even though the two happen to agree today: this
+    reason is stored *and echoed back to the buyer* through `GET /verification`,
+    so it is an unbounded-input surface of its own (`security.md` §1.1), and
+    sharing M3's hardcoded ceiling is exactly the drift the setting exists to
+    prevent. Over-long is a 422 at the boundary, so the state machine never sees
+    it.
+
+    The strip-then-check validator is M3's, for M3's reason: `min_length` alone
+    accepts `"   "`, and a rejection the buyer cannot act on is worse than none.
+    """
+
+    reason: str = Field(min_length=1, max_length=settings.verification_reason_max_chars)
+
+    @field_validator("reason")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("A rejection reason is required")
+        return v
