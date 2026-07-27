@@ -17,6 +17,7 @@ import {
 } from '@mui/material'
 import { api, ApiError } from '../lib/api'
 import { LISTING_TYPES } from '../lib/listingTypes'
+import { EmptyState } from './EmptyState'
 
 interface SavedSearch {
   id: number
@@ -114,9 +115,7 @@ export function SavedSearches() {
       )}
 
       {rows.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">
-          No saved searches yet.
-        </Typography>
+        <EmptyState message="No saved searches yet." />
       ) : (
         <Stack spacing={1.5}>
           {rows.map((row) => (

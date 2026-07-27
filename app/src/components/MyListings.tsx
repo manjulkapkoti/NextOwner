@@ -7,11 +7,28 @@
 // here — a second contained button would also break the design system's
 // one-primary-CTA-per-screen rule.
 import { useEffect, useState } from 'react'
-import { Alert, Box, Card, CircularProgress, Stack, Typography } from '@mui/material'
+import { Alert, Box, Card, Skeleton, Stack, Typography } from '@mui/material'
 import StorefrontOutlined from '@mui/icons-material/StorefrontOutlined'
 import { api } from '../lib/api'
 import { SpotlightCard } from './SpotlightCard'
 import { StatusChip } from './StatusChip'
+
+// UI Pass 4 — the loading twin: 3 row-shaped skeleton cards matching this
+// screen's actual row (headline + status chip).
+function MyListingsSkeleton() {
+  return (
+    <Stack spacing={1.5} role="status" aria-label="Loading your listings">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <Card key={i} sx={{ p: 2.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+            <Skeleton height={22} width="55%" />
+            <Skeleton width={70} height={24} />
+          </Box>
+        </Card>
+      ))}
+    </Stack>
+  )
+}
 
 // UI Pass 3 (Part B1) — the empty-state spotlight card's points. The exact
 // current heading string ("No listings yet — create your first one.") is
@@ -59,11 +76,7 @@ export function MyListings() {
 
       {error && <Alert severity="error">Couldn't load your listings: {error}</Alert>}
 
-      {!error && rows === null && (
-        <Stack alignItems="center" sx={{ py: 8 }}>
-          <CircularProgress aria-label="loading your listings" />
-        </Stack>
-      )}
+      {!error && rows === null && <MyListingsSkeleton />}
 
       {!error && rows?.length === 0 && (
         // Empty state as a designed state, not a bare sentence — it is the

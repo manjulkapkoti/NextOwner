@@ -16,8 +16,9 @@
 // section rather than two.
 import { useCallback, useEffect, useState } from 'react'
 import { observer } from 'mobx-react-lite'
-import { Alert, Box, CircularProgress, Stack, Typography } from '@mui/material'
+import { Alert, Box, Card, CardContent, Skeleton, Stack, Typography } from '@mui/material'
 import { offerStore, type OfferWithBuyer } from '../stores/offerStore'
+import { EmptyState } from './EmptyState'
 import { OfferThread } from './OfferThread'
 
 interface Props {
@@ -65,6 +66,39 @@ function groupThreads(rows: OfferWithBuyer[]): Array<{ key: string; rows: OfferW
   }))
 }
 
+// UI Pass 4 — the loading twin: 2 thread-shaped skeleton blocks (a buyer
+// heading + one offer-card shape), matching this screen's actual layout
+// closely enough that the grid doesn't visibly reflow once data arrives
+// (the same rationale as `ListingCardSkeleton` in `ListingCard.tsx`).
+function ListingOffersQueueSkeleton() {
+  return (
+    <Stack spacing={4} role="status" aria-label="Loading offers">
+      {Array.from({ length: 2 }).map((_, i) => (
+        <Box key={i}>
+          <Skeleton height={22} width="30%" sx={{ mb: 1 }} />
+          <Skeleton height={16} width="45%" sx={{ mb: 1.5 }} />
+          <Card variant="outlined">
+            <CardContent>
+              <Stack direction="row" justifyContent="space-between">
+                <Box>
+                  <Skeleton height={22} width={110} sx={{ mb: 0.5 }} />
+                  <Skeleton height={16} width={80} />
+                </Box>
+                <Skeleton width={70} height={24} />
+              </Stack>
+              <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                <Skeleton width={80} height={32} />
+                <Skeleton width={80} height={32} />
+                <Skeleton width={80} height={32} />
+              </Stack>
+            </CardContent>
+          </Card>
+        </Box>
+      ))}
+    </Stack>
+  )
+}
+
 export const ListingOffersQueue = observer(function ListingOffersQueue({ listingId }: Props) {
   const [status, setStatus] = useState<'loading' | 'ready' | 'errored'>('loading')
 
@@ -82,11 +116,7 @@ export const ListingOffersQueue = observer(function ListingOffersQueue({ listing
   }, [load])
 
   if (status === 'loading') {
-    return (
-      <Box sx={{ py: 3, display: 'flex', justifyContent: 'center' }}>
-        <CircularProgress aria-label="Loading offers" size={28} />
-      </Box>
-    )
+    return <ListingOffersQueueSkeleton />
   }
 
   if (status === 'errored') {
@@ -101,11 +131,7 @@ export const ListingOffersQueue = observer(function ListingOffersQueue({ listing
   const threads = groupThreads(rows)
 
   if (threads.length === 0) {
-    return (
-      <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-        No offers yet for this listing.
-      </Typography>
-    )
+    return <EmptyState message="No offers yet for this listing." />
   }
 
   return (

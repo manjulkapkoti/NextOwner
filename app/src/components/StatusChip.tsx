@@ -21,7 +21,7 @@ const STATUS: Record<string, { label: string; tone: keyof typeof badge }> = {
   rejected: { label: 'Rejected', tone: 'rejected' },
 }
 
-export function StatusChip({ status }: { status: string }) {
+export function StatusChip({ status, showDot = false }: { status: string; showDot?: boolean }) {
   const meta = STATUS[status] ?? { label: status, tone: 'neutral' as const }
   const { bg, fg } = badge[meta.tone]
 
@@ -29,7 +29,8 @@ export function StatusChip({ status }: { status: string }) {
     <Box
       component="span"
       sx={{
-        display: 'inline-block',
+        display: 'inline-flex',
+        alignItems: 'center',
         px: 1.25,
         py: 0.375,
         borderRadius: 8 / 8,
@@ -41,6 +42,16 @@ export function StatusChip({ status }: { status: string }) {
         whiteSpace: 'nowrap',
       }}
     >
+      {/* Opt-in (UI Pass 4): a dense queue row (PersonRow) can wire this in to
+          help scan-by-colour; every existing call site is unaffected since
+          this defaults to false. */}
+      {showDot && (
+        <Box
+          component="span"
+          aria-hidden
+          sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: fg, mr: 0.75, flexShrink: 0 }}
+        />
+      )}
       {meta.label}
     </Box>
   )
