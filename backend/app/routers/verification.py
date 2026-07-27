@@ -50,6 +50,7 @@ from ..schemas import (
 from ..uploads import (
     attachment_headers,
     display_filename,
+    enforce_upload_quota,
     read_validated_upload,
     storage,
 )
@@ -132,6 +133,17 @@ async def submit_verification_document(
         raise Conflict("Already verified", code="already_verified")
 
     data, suffix = await read_validated_upload(file)
+    # D8's per-owner quota — the same helper the M2 listing-document route runs,
+    # keyed on the user instead of a listing. Before `storage.save`, so a refused
+    # upload leaves nothing on disk. Per D11 there is no resubmission exemption:
+    # at the cap the way out is an admin, not a retry.
+    enforce_upload_quota(
+        session,
+        model=BuyerVerificationDocument,
+        owner_column=BuyerVerificationDocument.user_id,
+        owner_id=user.id,
+        new_size_bytes=len(data),
+    )
     # `user.id` from the JWT into the slot M2 passes `listing_id` into — the key
     # is server-generated (uuid) and confined to the uploads base inside
     # `storage.py`, so the client filename never reaches a path (S7).

@@ -38,6 +38,7 @@ from ..schemas import (
 from ..uploads import (
     attachment_headers,
     display_filename,
+    enforce_upload_quota,
     read_validated_upload,
     storage,
 )
@@ -412,6 +413,19 @@ async def upload_document(
     # `POST /verification/documents` so the two upload routes cannot drift
     # (spec 010 D5). The rules are unchanged; only their address moved.
     data, suffix = await read_validated_upload(file)
+    # M10 retrofit (spec 010 D8): M2 capped each file but never the set, so a
+    # seller could store twenty 10 MB documents on one listing. The quota is the
+    # same shared check the verification route runs, keyed on the listing rather
+    # than the user — "per-listing" is the fold-in's own wording, and it is the
+    # owning entity that varies, not the rule. Before `storage.save`, so a
+    # refused upload leaves nothing on disk.
+    enforce_upload_quota(
+        session,
+        model=ListingDocument,
+        owner_column=ListingDocument.listing_id,
+        owner_id=listing.id,
+        new_size_bytes=len(data),
+    )
     key = storage.save(listing.id, data, suffix)         # server-generated name; path confined
     doc = ListingDocument(
         listing_id=listing.id,

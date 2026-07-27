@@ -23,8 +23,11 @@ router, and both callers share the confinement `storage.py` enforces.
 from __future__ import annotations
 
 import os
+from typing import Any
 
 from fastapi import UploadFile
+from sqlalchemy import func
+from sqlmodel import Session, SQLModel, select
 
 from .config import ALLOWED_UPLOAD_TYPES, settings
 from .errors import PayloadTooLarge, UnsupportedMediaType
@@ -90,6 +93,61 @@ def display_filename(client_filename: str | None) -> str:
     downstream has to remember that the value is hostile.
     """
     return os.path.basename(client_filename or "upload")
+
+
+def enforce_upload_quota(
+    session: Session,
+    *,
+    model: type[SQLModel],
+    owner_column: Any,
+    owner_id: int,
+    new_size_bytes: int,
+) -> None:
+    """Refuse an upload that would take an owner past their document quota (D8).
+
+    The `milestones.md` M10 fold-in asks for *"a per-listing upload count /
+    total-size quota (extends the M2 upload rules)"* — read literally, that is
+    M2's listing-document route, which caps each file (`max_upload_bytes`) but
+    never the *set*: twenty files of 10 MB were always allowed. Spec 010 D8
+    honours both surfaces the bullet plausibly means rather than quietly
+    narrowing it to the new route, and "per-listing" generalizes to **per owning
+    entity** — a listing for `ListingDocument`, a user for
+    `BuyerVerificationDocument`. That generalization is the whole reason this is
+    one function taking an owner column instead of two checks that agree today.
+
+    Two limits, one error, because a client's remedy is the same for both
+    ("upload less"): `PayloadTooLarge(code="upload_quota_exceeded")` — 413, but a
+    **different code** from M2's `file_too_large`, since "this file is too big"
+    and "you have too much stored" need different UI copy and the machine code is
+    what a client branches on.
+
+    `settings` is read here, at call time, not captured at import: the caps are
+    operational knobs, and a value frozen into a default argument is one a
+    deployment cannot actually change.
+
+    Called **after** the bytes are read and validated but **before**
+    `storage.save`, so a refused upload leaves nothing on disk. The count check
+    could technically run earlier and spare the server the read, but the size
+    check cannot — and splitting the quota across two places in the request is
+    exactly the drift this shared helper exists to prevent. `max_request_bytes`
+    is what actually bounds the read.
+
+    Deliberately *not* here (spec 010 D11): any exemption for a resubmission. A
+    buyer sitting at the cap when they are rejected is refused, and the way out
+    is an admin, not a retry — accepted and recorded, with the defaults chosen
+    (20 documents / 50 MB against a review cycle that needs one) so it is a DoS
+    control rather than a workflow limit.
+    """
+    existing_count, existing_bytes = session.exec(
+        select(func.count(), func.coalesce(func.sum(model.size_bytes), 0))
+        .select_from(model)
+        .where(owner_column == owner_id)
+    ).one()
+
+    if existing_count + 1 > settings.max_documents_per_owner:
+        raise PayloadTooLarge("Document quota exceeded", code="upload_quota_exceeded")
+    if existing_bytes + new_size_bytes > settings.max_total_upload_bytes_per_owner:
+        raise PayloadTooLarge("Document quota exceeded", code="upload_quota_exceeded")
 
 
 def attachment_headers(original_filename: str) -> dict[str, str]:
