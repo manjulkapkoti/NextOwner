@@ -41,16 +41,24 @@
 
 **`Listing` upload quota — no schema change**, a config + query-time check only (D8): `max_documents_per_owner` and `max_total_upload_bytes_per_owner` in `config.py`, checked by counting/summing existing rows before insert on both `ListingDocument` (retrofit) and `BuyerVerificationDocument` (new).
 
+**New `config.py` settings** (three, all with the `Settings` class's existing style — a literal default plus a comment naming what it bounds):
+
+| Setting | Default | Bounds |
+|---|---|---|
+| `max_documents_per_owner` | `20` | Document *count* per owning entity — per listing for `ListingDocument`, per user for `BuyerVerificationDocument`. Deliberately generous (D11): a DoS control, not a workflow limit. |
+| `max_total_upload_bytes_per_owner` | `50 * 1024 * 1024` (50 MB) | Cumulative stored bytes per owning entity. Complements the existing per-file `max_upload_bytes` (10 MB), which a 20-file owner could otherwise multiply by 20. |
+| `verification_reason_max_chars` | `1000` | The admin-authored rejection reason (X6) — free text that is stored *and echoed to the buyer*, so it is capped at the boundary like `offer_contingencies_max_chars`. |
+
 ## Endpoints
 
 | Method + path | Permission gate | Effect |
 |---|---|---|
 | `POST /api/verification/documents` | `get_current_user` (D4 — no role gate) | Validates file (M2 rules, D5) + quota (D8); creates `BuyerVerificationDocument`; sets `verification_status` to `pending` from `unverified`/`rejected`; 409 if currently `verified` (D3); writes no event row for the upload itself (D6's `actor_id` note) |
 | `GET /api/verification` | `get_current_user` | Caller's own `verification_status`, `verification_reviewed_at`, `verification_reason`, document metadata list (S9 — no `storage_key`) |
-| `GET /api/verification/documents/{document_id}` | **`get_owned_or_admin_verification_document`** | Streams the file bytes + `content_type`; 404 for not-owner-and-not-admin (S4, matching spec 002's 404-for-not-yours choice) |
+| `GET /api/verification/documents/{document_id}` | **`get_owned_or_admin_verification_document`** | Streams the file bytes + `content_type`; 404 for not-owner-and-not-admin (S4, matching spec 002's 404-for-not-yours choice). **Reuses M2 `download_document`'s response hardening verbatim** (S10): `Content-Disposition: attachment` with the name run through `os.path.basename` + quote/CR/LF strip + 200-char cap. D5's "narrower reuse of the same seam" covers *serving* as well as *storing* — a `.pdf`-suffixed filename can carry `"`/CRLF past the extension whitelist, so the header is an injection surface, and `attachment` is what keeps a buyer-supplied file from rendering same-origin. Worth factoring the four sanitizing lines out of `listings.py` into one helper rather than copying them, so the two routes cannot drift. |
 | `GET /api/admin/verifications` | `require_admin` | Queue of submissions (default: `pending`; V3) with buyer profile fields + document metadata |
 | `POST /api/admin/verifications/{user_id}/approve` | `require_admin` | `pending → verified`; 409 from any other `from_status` (X3); writes `BuyerVerificationEvent` |
-| `POST /api/admin/verifications/{user_id}/reject` | `require_admin` | `{pending, verified} → rejected` (D1 — doubles as deny and revoke); `reason` required (422 if absent, X2); 409 from `unverified`/`rejected` (X4); writes `BuyerVerificationEvent` |
+| `POST /api/admin/verifications/{user_id}/reject` | `require_admin` | `{pending, verified} → rejected` (D1 — doubles as deny and revoke); `reason` required and length-capped via a `VerificationRejectRequest` body model — `reason: str = Field(min_length=1, max_length=settings.verification_reason_max_chars)`, so absent → 422 (X2) and over-long → 422 (X6); 409 from `unverified`/`rejected` (X4); writes `BuyerVerificationEvent`. The model carries **only** `reason`, so `{"reason": "x", "to_status": "verified"}` has no field to assign from — the same structural control S1 pins on the profile route |
 | `POST /api/listings/{id}/documents` *(existing M2 route, modified)* | `get_owned_listing` *(unchanged)* | **Adds** the D8 quota check ahead of the existing content-type/size checks; no other behavior change |
 
 No route accepts `verification_status`, `verification_reviewed_at`, or `verification_reason` as request-body fields anywhere — the only bodies in this milestone are the upload's `UploadFile` and the reject endpoint's `{reason: str}`. Mass-assignment of the status fields is impossible by schema, the same class of control `ListingCreate`/`ListingUpdate` already use for `status`/`owner_id`.
@@ -125,6 +133,14 @@ class AdminVerificationQueueRead(SQLModel):
     experience: str | None
     verification_status: str
     documents: list[VerificationDocumentRead]
+
+    # Money serializes as an exact string, never a float — the same
+    # `field_serializer` BuyerProfile._ser_budget and ListingRead._ser_money
+    # already apply. Called out because the first draft of this model omitted it,
+    # which left V3 unable to know whether to expect "250000.00" or 250000.0.
+    @field_serializer("budget", when_used="json")
+    def _ser_budget(self, value: Decimal | None) -> str | None:
+        return None if value is None else str(value)
 ```
 
 **`UserRead`** (existing, M1) — two additions, mirroring the `email_verified_at` → `email_verified` pattern exactly:
@@ -156,7 +172,7 @@ class AdminVerificationQueueRead(SQLModel):
 | `NotFound("Document not found")` | 404 — via `get_owned_or_admin_verification_document` (S4) |
 | `Forbidden(...)` | 403 — `require_admin` on all three admin routes for a non-admin caller (S2, S3) |
 
-The 422 paths (X1: missing file part, X2: missing `reason`) and the 500-safety path (X5) fall through to the handlers M1 already built — no new exception-handling code, only new tests, same as M9's routers.
+The 422 paths (X1: missing file part, X2: missing `reason`, X6: over-long `reason`) and the 500-safety path (X5) fall through to the handlers M1 already built — no new exception-handling code, only new tests, same as M9's routers. X6 needs no new error class either: the cap is a `Field(max_length=…)` on the request model, so Pydantic produces the 422.
 
 ## Analytics events
 
@@ -176,9 +192,10 @@ The 422 paths (X1: missing file part, X2: missing `reason`) and the 500-safety p
 Five backend slices plus one frontend slice, each ending in one Conventional Commit. **No checkboxes and no status here by design** — the red test list is the status (`cd backend && pytest -q --lf`), and the red count is the progress bar.
 
 1. **Schema (`User` columns, `BuyerVerificationDocument`, `BuyerVerificationEvent`) + `POST /api/verification/documents` + `GET /api/verification`.** → **V1, V2, V6, V7, V10, V11, S1, S7, X1, X5**. *First because nothing else in this milestone is reachable without the ability to create a submission and read it back — the same "add must exist before anything else can be exercised" reasoning as spec 009's slice 1. S1 lands here too: it only needs the new `verification_status` column and the existing `PUT /profile` route, no new endpoint. S7's path-confinement reuse and V10/V11's whitelist/size-cap reuse cost nothing new (D5) — they're regression pins on the M2 code path applied to a new caller.*
-2. **Admin queue + approve/reject (`require_admin`, D1's transitions, `BuyerVerificationEvent` writes).** → **V3, V4, V5, V14, X2, X3, X4, S2, S3**. *Second because the state machine's only non-buyer-initiated transitions live here, and D1's "reject doubles as deny and revoke" can't be tested (V14) until both `pending→rejected` (V5) and `verified→rejected` (V14) are reachable from the same endpoint. S2/S3 fall out for free once the routes exist — the negative test is "the same route as V4/V5, called by the wrong identity."*
-3. **`get_owned_or_admin_verification_document` + `GET /api/verification/documents/{id}`.** → **S4, S5, S9**. *Depends on slice 1 for a document to fetch and slice 2 for an admin identity to test the "admin can view any" half (S5) meaningfully against a submission that has actually been queued. Kept separate from slice 1 because it is a distinct trust boundary (owner-or-admin, not just owner) — Article 2 #1's "one function per trust boundary" — not because of dependency order alone.*
-4. **Badge surfacing: `UserRead` + `BuyerProfile` additions.** → **V8, V9, S8**. *Deliberately after the state machine (slices 1–2) is real — surfacing a field before the status it reflects can actually reach `verified`/`rejected` would make V8/V9 pass vacuously against a column that never changes value in the test. This slice also retires `BuyerProfile`'s "M10 owns this" docstring note left by spec 005 D5.*
+2. **Admin queue + approve/reject (`require_admin`, D1's transitions, `BuyerVerificationEvent` writes).** → **V3, V4, V5, V14, X2, X3, X4, X6, S2, S3, S8**. *Second because the state machine's only non-buyer-initiated transitions live here, and D1's "reject doubles as deny and revoke" can't be tested (V14) until both `pending→rejected` (V5) and `verified→rejected` (V14) are reachable from the same endpoint. S2/S3 fall out for free once the routes exist — the negative test is "the same route as V4/V5, called by the wrong identity."*
+3. **`get_owned_or_admin_verification_document` + `GET /api/verification/documents/{id}`.** → **S4, S5, S9, S10**. *Depends on slice 1 for a document to fetch and slice 2 for an admin identity to test the "admin can view any" half (S5) meaningfully against a submission that has actually been queued. Kept separate from slice 1 because it is a distinct trust boundary (owner-or-admin, not just owner) — Article 2 #1's "one function per trust boundary" — not because of dependency order alone.*
+4. **Badge surfacing: `UserRead` + `BuyerProfile` additions.** → **V8, V9, S11**. *Deliberately after the state machine (slices 1–2) is real — surfacing a field before the status it reflects can actually reach `verified`/`rejected` would make V8/V9 pass vacuously against a column that never changes value in the test. S11 (the badge is not stale after a revoke) belongs here and **only** works here: it needs both the field on `BuyerProfile` and slice 2's `verified → rejected` transition, which is why it is the one criterion in this milestone that no single slice could have carried alone. This slice also retires `BuyerProfile`'s "M10 owns this" docstring note left by spec 005 D5.*
+   *Correction against the first draft of this Build order: **S8 moved to slice 2**, where it belongs — it asserts the field set of `GET /api/admin/verifications`, which that slice builds, and could never have gone green here. Recorded rather than silently edited, because M9's docs audit found exactly this class of drift (a slice→test mapping written predictively, before anything ran) and the fix that stuck was re-deriving the mapping from what the code actually does.*
 5. **Upload quota (D8): shared config + check, applied to `POST /verification/documents` (new, from slice 1) and retrofitted onto `POST /listings/{id}/documents` (existing, M2).** → **V12, V13**. *Last among backend slices, deliberately: unlike slices 1–4, this one modifies already-shipped M2 code rather than only adding new surface. Sequencing it last means the new milestone's own routes are fully green first, so a regression the retrofit might cause in the M2 suite is isolated and easy to attribute to this specific commit rather than tangled with new-feature debugging.*
 6. **Frontend** — `verificationStore.ts`, `VerificationStatus.tsx`, `VerifiedBadge.tsx`, `AdminVerificationQueue.tsx`, the two new routes, two nav links. *Last, per the project's standing order (spec 009's slice 4 precedent): the server gate is the boundary, the client is the view. No acceptance criteria above are frontend-specific, so this slice is scoped to "the six backend routes are reachable and usable," verified by the existing component-test conventions (empty/loading/error triad) rather than new numbered criteria.*
 
