@@ -16,44 +16,22 @@
 // outcome of not being approved yet — treating it as a session failure would
 // bounce a logged-in buyer to /login. `accessStore` keeps that distinction; the
 // only thing this component must not do is re-introduce it.
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { observer } from 'mobx-react-lite'
-import { Alert, Box, Button, Card, Chip, CircularProgress, Stack, Typography } from '@mui/material'
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
+import { Alert, Box, Button, Chip, CircularProgress, Fade, Stack, Typography } from '@mui/material'
 import { accessStore } from '../stores/accessStore'
 import { authStore } from '../stores/authStore'
-import { blueTint, surfaceRecessed } from '../theme'
+import { GatedPanel } from './GatedPanel'
 import { NdaModal } from './NdaModal'
 import { PrivateSection, type DocumentSummary } from './PrivateSection'
 
-// UI Pass 3 (Part C7) — a wrapper/styling change only, matching the same
-// visual shape as the anonymous gate card (ListingDetail's own
-// AnonymousGateCard): a lock circle in blueTint.wash/blueTint.onWash plus a
-// surfaceRecessed fill. Every existing copy string, button, and piece of
-// logic inside stays untouched — only this shell is new.
-function GateCard({ children }: { children: ReactNode }) {
-  return (
-    <Card sx={{ ...surfaceRecessed, p: 3, boxShadow: 'none' }}>
-      <Stack direction="row" spacing={1.5} alignItems="flex-start">
-        <Box
-          sx={{
-            width: 32,
-            height: 32,
-            borderRadius: '50%',
-            bgcolor: blueTint.wash,
-            color: blueTint.onWash,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <LockOutlinedIcon fontSize="small" />
-        </Box>
-        <Box sx={{ flex: 1, minWidth: 0 }}>{children}</Box>
-      </Stack>
-    </Card>
-  )
+// Plays the fade-in only for users who haven't asked for reduced motion —
+// same pattern `theme.ts`'s `cardInteractive` token uses for its hover lift.
+// A plain `matchMedia` check (no new dependency) is enough here; there is no
+// need to re-check on the fly since a gate only transitions to unlocked once
+// per mount.
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 }
 
 interface Props {
@@ -148,30 +126,40 @@ export const RequestAccessPanel = observer(function RequestAccessPanel({
   }
 
   if (view === 'unlocked' && accessStore.privateData) {
+    // The moment access flips from locked to unlocked, play a one-time
+    // reveal instead of an instant swap: `in appear` fades in immediately on
+    // this branch's first render, which is exactly that moment (the
+    // component was rendering a different branch beforehand). `Fade` needs a
+    // single child that can hold a ref, hence the wrapping `Box` —
+    // `PrivateSection` isn't guaranteed to forward one.
     return (
-      <PrivateSection
-        listingId={listingId}
-        data={accessStore.privateData}
-        // Mapped here rather than teaching `PrivateSection` the API's shape:
-        // the store speaks the server's language (`original_filename`), the
-        // display component speaks a display language (`filename`), and the
-        // translation lives at the one seam between them. The `documents` prop
-        // still wins when supplied, so a caller can inject its own list.
-        documents={
-          documents.length > 0
-            ? documents
-            : accessStore.documents.map((doc) => ({
-                id: doc.id,
-                filename: doc.original_filename,
-              }))
-        }
-      />
+      <Fade in appear timeout={prefersReducedMotion() ? 0 : 250}>
+        <Box>
+          <PrivateSection
+            listingId={listingId}
+            data={accessStore.privateData}
+            // Mapped here rather than teaching `PrivateSection` the API's shape:
+            // the store speaks the server's language (`original_filename`), the
+            // display component speaks a display language (`filename`), and the
+            // translation lives at the one seam between them. The `documents` prop
+            // still wins when supplied, so a caller can inject its own list.
+            documents={
+              documents.length > 0
+                ? documents
+                : accessStore.documents.map((doc) => ({
+                    id: doc.id,
+                    filename: doc.original_filename,
+                  }))
+            }
+          />
+        </Box>
+      </Fade>
     )
   }
 
   if (view === 'pending') {
     return (
-      <GateCard>
+      <GatedPanel variant="pending" size="full">
         <Stack spacing={1}>
           <Chip label="Access pending" color="warning" sx={{ alignSelf: 'flex-start' }} />
           <Typography variant="body2" color="text.secondary">
@@ -179,26 +167,26 @@ export const RequestAccessPanel = observer(function RequestAccessPanel({
             they approve it.
           </Typography>
         </Stack>
-      </GateCard>
+      </GatedPanel>
     )
   }
 
   if (view === 'denied') {
     return (
-      <GateCard>
+      <GatedPanel variant="denied" size="full">
         <Stack spacing={1}>
           <Chip label="Access closed" sx={{ alignSelf: 'flex-start' }} />
           <Typography variant="body2" color="text.secondary">
             The seller is not sharing this listing&apos;s private details with you.
           </Typography>
         </Stack>
-      </GateCard>
+      </GatedPanel>
     )
   }
 
   // locked — the buyer has never asked, or asked and nothing is outstanding.
   return (
-    <GateCard>
+    <GatedPanel variant="locked" size="full" redactedFields={['Company name', 'Website', 'Detailed financials']}>
       <Stack spacing={2}>
         <Typography variant="body2" color="text.secondary">
           The seller shares real financials, the company name and the data room with
@@ -217,6 +205,6 @@ export const RequestAccessPanel = observer(function RequestAccessPanel({
           }}
         />
       </Stack>
-    </GateCard>
+    </GatedPanel>
   )
 })

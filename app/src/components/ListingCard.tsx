@@ -16,11 +16,11 @@
 // `BrowseListings`'s loading state.
 import { Box, Card, CardActionArea, Chip, Divider, Skeleton, Stack, Typography } from '@mui/material'
 import { Link as RouterLink } from 'react-router-dom'
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import { listingTypeLabel } from '../lib/listingTypes'
+import { GatedPanel } from './GatedPanel'
 import { Metric } from './Metric'
 import { WatchlistButton } from './WatchlistButton'
-import { badge, blueTint, brand, cardInteractive, elevation, metricLabel, metricValue, neutral, surfaceRecessed } from '../theme'
+import { badge, brand, cardInteractive, elevation, metricLabel, metricValue, neutral, surfaceRecessed } from '../theme'
 
 export interface PublicListing {
   id: number
@@ -93,36 +93,19 @@ export function IdentityTile({ id, type }: { id: number; type: string }) {
   )
 }
 
-// The gate, made visible — rebuilt in Pass 2 (surfaceRecessed + a lock icon +
-// blurred placeholder bars) but the caption copy is unchanged verbatim.
+// The gate, made visible — UI Pass 3 consolidated this onto the shared
+// `GatedPanel` (see that file); the caption copy stays unchanged verbatim.
+// `mt: 'auto'` is kept here (not inside `GatedPanel`, which takes no layout
+// props) so the strip still pins to the bottom of the card's flex column
+// exactly as it did before.
 function LockedStrip() {
   return (
-    <Box sx={{ ...surfaceRecessed, p: 1.5, mt: 'auto' }}>
-      <Stack direction="row" spacing={1.5} alignItems="flex-start">
-        <Box
-          sx={{
-            width: 24,
-            height: 24,
-            borderRadius: '50%',
-            bgcolor: blueTint.wash,
-            color: blueTint.onWash,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <LockOutlinedIcon sx={{ fontSize: 14 }} />
-        </Box>
-        <Stack spacing={0.75} sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="caption" color="text.secondary">
-            Company name and financials are locked until the NDA is signed
-          </Typography>
-          {/* Redacted-field placeholders — decorative only. */}
-          <Box aria-hidden sx={{ height: 8, borderRadius: 1, bgcolor: blueTint.placeholder, filter: 'blur(5px)', opacity: 0.7, width: '75%' }} />
-          <Box aria-hidden sx={{ height: 8, borderRadius: 1, bgcolor: blueTint.placeholder, filter: 'blur(5px)', opacity: 0.7, width: '45%' }} />
-        </Stack>
-      </Stack>
+    <Box sx={{ mt: 'auto' }}>
+      <GatedPanel variant="locked" size="compact" redactedFields={['Company name', 'Financials']}>
+        <Typography variant="caption" color="text.secondary">
+          Company name and financials are locked until the NDA is signed
+        </Typography>
+      </GatedPanel>
     </Box>
   )
 }
