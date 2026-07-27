@@ -10,19 +10,27 @@
 //
 // **No buyer email**, because the API does not send one (G3): the seller gets a
 // profile, and chat (M6) is the channel once they have decided.
+//
+// UI Pass 4: the loading state is a row-shaped skeleton, the empty state uses
+// the shared `EmptyState`, and each row uses the shared `PersonRow` (with the
+// dense-queue status dot opted in) instead of a hand-rolled Card/Stack tree.
 import { useCallback, useEffect, useState } from 'react'
 import {
   Alert,
+  Avatar,
   Box,
   Button,
   Card,
   CardContent,
-  CircularProgress,
+  Skeleton,
   Stack,
   Typography,
 } from '@mui/material'
 import { api } from '../lib/api'
+import { EmptyState } from './EmptyState'
+import { PersonRow } from './PersonRow'
 import { StatusChip } from './StatusChip'
+import { blueTint } from '../theme'
 
 interface BuyerProfile {
   display_name: string | null
@@ -55,6 +63,31 @@ function formatBudget(budget: string | number | null): string | null {
 function formatIndustries(industries: string | string[] | null): string | null {
   if (!industries) return null
   return Array.isArray(industries) ? industries.join(', ') : industries
+}
+
+function AccessRequestQueueSkeleton() {
+  return (
+    <Stack spacing={2} role="status" aria-label="Loading access requests">
+      {Array.from({ length: 2 }).map((_, i) => (
+        <Card key={i} variant="outlined">
+          <CardContent>
+            <Stack direction="row" spacing={2} alignItems="flex-start">
+              <Skeleton variant="circular" width={40} height={40} />
+              <Box sx={{ flex: 1 }}>
+                <Skeleton height={22} width="40%" sx={{ mb: 1 }} />
+                <Skeleton height={14} width="30%" sx={{ mb: 0.5 }} />
+                <Skeleton height={14} width="60%" />
+                <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                  <Skeleton width={90} height={32} />
+                  <Skeleton width={70} height={32} />
+                </Stack>
+              </Box>
+            </Stack>
+          </CardContent>
+        </Card>
+      ))}
+    </Stack>
+  )
 }
 
 export function AccessRequestQueue({ listingId }: Props) {
@@ -99,19 +132,11 @@ export function AccessRequestQueue({ listingId }: Props) {
   }
 
   if (rows === null) {
-    return (
-      <Box sx={{ py: 3, display: 'flex', justifyContent: 'center' }}>
-        <CircularProgress aria-label="Loading access requests" size={28} />
-      </Box>
-    )
+    return <AccessRequestQueueSkeleton />
   }
 
   if (rows.length === 0) {
-    return (
-      <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-        No one has asked for access to this listing yet.
-      </Typography>
-    )
+    return <EmptyState message="No one has asked for access to this listing yet." />
   }
 
   return (
@@ -124,43 +149,42 @@ export function AccessRequestQueue({ listingId }: Props) {
       {rows.map((row) => {
         const budget = formatBudget(row.buyer.budget)
         const industries = formatIndustries(row.buyer.target_industries)
+        const name = row.buyer.display_name ?? 'Unnamed buyer'
         return (
-          <Card key={row.id} variant="outlined">
-            <CardContent>
-              <Stack
-                direction="row"
-                justifyContent="space-between"
-                alignItems="flex-start"
-                spacing={2}
-              >
-                <Box>
-                  <Typography variant="subtitle1">
-                    {row.buyer.display_name ?? 'Unnamed buyer'}
+          <PersonRow
+            key={row.id}
+            avatar={
+              <Avatar sx={{ bgcolor: blueTint.wash, color: blueTint.onWash, fontWeight: 700 }}>
+                {name.charAt(0).toUpperCase()}
+              </Avatar>
+            }
+            title={<Typography variant="subtitle1">{name}</Typography>}
+            meta={
+              <>
+                {budget && (
+                  <Typography variant="body2" color="text.secondary">
+                    Budget: {budget}
                   </Typography>
-                  {budget && (
-                    <Typography variant="body2" color="text.secondary">
-                      Budget: {budget}
-                    </Typography>
-                  )}
-                  {industries && (
-                    <Typography variant="body2" color="text.secondary">
-                      {industries}
-                    </Typography>
-                  )}
-                  {row.buyer.experience && (
-                    <Typography variant="body2" sx={{ mt: 1 }}>
-                      {row.buyer.experience}
-                    </Typography>
-                  )}
-                </Box>
-                <StatusChip status={row.status} />
-              </Stack>
-
-              {/* The actions mirror the server's state machine exactly: approve
-                  and deny are legal only from `requested`, revoke only from
-                  `approved`. Offering a button the server would 409 teaches the
-                  seller to distrust the screen. */}
-              <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                )}
+                {industries && (
+                  <Typography variant="body2" color="text.secondary">
+                    {industries}
+                  </Typography>
+                )}
+                {row.buyer.experience && (
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    {row.buyer.experience}
+                  </Typography>
+                )}
+              </>
+            }
+            chip={<StatusChip status={row.status} showDot />}
+            actions={
+              // The actions mirror the server's state machine exactly: approve
+              // and deny are legal only from `requested`, revoke only from
+              // `approved`. Offering a button the server would 409 teaches the
+              // seller to distrust the screen.
+              <>
                 {row.status === 'requested' && (
                   <>
                     <Button
@@ -192,9 +216,9 @@ export function AccessRequestQueue({ listingId }: Props) {
                     Revoke
                   </Button>
                 )}
-              </Stack>
-            </CardContent>
-          </Card>
+              </>
+            }
+          />
         )
       })}
     </Stack>

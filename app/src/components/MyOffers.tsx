@@ -5,7 +5,7 @@
 // the listing it belongs to.
 import { useEffect, useState } from 'react'
 import { observer } from 'mobx-react-lite'
-import { Alert, Box, CircularProgress, Stack, Typography } from '@mui/material'
+import { Alert, Box, Card, CardContent, Skeleton, Stack, Typography } from '@mui/material'
 import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined'
 import { offerStore } from '../stores/offerStore'
 import { OfferThread } from './OfferThread'
@@ -17,6 +17,30 @@ const EMPTY_STATE_POINTS = [
   'Either side can counter. Nothing is binding until someone accepts.',
   'When a seller accepts one offer on a listing, the others are declined automatically.',
 ]
+
+// UI Pass 4 — the loading twin: 2 listing-heading + offer-card shapes.
+function MyOffersSkeleton() {
+  return (
+    <Stack spacing={4} role="status" aria-label="Loading your offers">
+      {Array.from({ length: 2 }).map((_, i) => (
+        <Box key={i}>
+          <Skeleton height={22} width={120} sx={{ mb: 1 }} />
+          <Card variant="outlined">
+            <CardContent>
+              <Stack direction="row" justifyContent="space-between">
+                <Box>
+                  <Skeleton height={22} width={110} sx={{ mb: 0.5 }} />
+                  <Skeleton height={16} width={80} />
+                </Box>
+                <Skeleton width={70} height={24} />
+              </Stack>
+            </CardContent>
+          </Card>
+        </Box>
+      ))}
+    </Stack>
+  )
+}
 
 export const MyOffers = observer(function MyOffers() {
   const [status, setStatus] = useState<'loading' | 'ready' | 'errored'>('loading')
@@ -37,11 +61,7 @@ export const MyOffers = observer(function MyOffers() {
   }, [])
 
   if (status === 'loading') {
-    return (
-      <Box sx={{ py: 3, display: 'flex', justifyContent: 'center' }}>
-        <CircularProgress aria-label="Loading your offers" size={28} />
-      </Box>
-    )
+    return <MyOffersSkeleton />
   }
 
   if (status === 'errored') {

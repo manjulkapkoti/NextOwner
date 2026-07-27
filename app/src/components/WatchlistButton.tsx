@@ -1,11 +1,14 @@
 // M9 — the watchlist toggle (spec 009 plan § Frontend), a small heart
 // affordance on listing surfaces (ListingCard, ListingDetail).
 //
-// Hand-rolled glyph, not @mui/icons-material — that package is not a
-// dependency of this app (see NavBar.tsx's MenuGlyph for the same pattern).
-// A Unicode heart pair styled with `sx` renders reliably without adding one.
+// UI Pass 4: real `Favorite`/`FavoriteBorder` icons from `@mui/icons-material`
+// (now a dependency, added in Pass 1) replace the earlier hand-rolled
+// Unicode heart pair (`♥`/`♡`), which rendered inconsistently across
+// platforms/fonts.
 import { useEffect, type MouseEvent } from 'react'
-import { alpha, Box, IconButton } from '@mui/material'
+import { alpha, IconButton } from '@mui/material'
+import FavoriteIcon from '@mui/icons-material/Favorite'
+import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder'
 import { observer } from 'mobx-react-lite'
 import { authStore } from '../stores/authStore'
 import { watchlistStore } from '../stores/watchlistStore'
@@ -65,17 +68,11 @@ export const WatchlistButton = observer(function WatchlistButton({
         },
       }}
     >
-      <Box
-        aria-hidden
-        component="span"
-        sx={{
-          fontSize: 18,
-          lineHeight: 1,
-          color: watchlisted ? 'error.main' : 'text.secondary',
-        }}
-      >
-        {watchlisted ? '♥' : '♡'}
-      </Box>
+      {watchlisted ? (
+        <FavoriteIcon aria-hidden fontSize="small" sx={{ color: 'error.main' }} />
+      ) : (
+        <FavoriteBorderIcon aria-hidden fontSize="small" sx={{ color: 'text.secondary' }} />
+      )}
     </IconButton>
   )
 })

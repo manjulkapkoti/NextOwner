@@ -10,19 +10,19 @@ import {
   Box,
   Button,
   Card,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Link as MuiLink,
+  Skeleton,
   Stack,
   TextField,
   Typography,
 } from '@mui/material'
 import { ApiError, api } from '../lib/api'
 import { StatusChip } from './StatusChip'
-import { tabularNums } from '../theme'
+import { blueTint, surfaceRecessed, tabularNums } from '../theme'
 
 interface QueueRow {
   id: number
@@ -38,6 +38,37 @@ interface QueueRow {
 function formatPrice(value: string): string {
   const n = Number(value)
   return Number.isFinite(n) ? n.toLocaleString('en-US', { maximumFractionDigits: 0 }) : value
+}
+
+// UI Pass 4 — the loading twin: 3 row-shaped skeleton cards, matching this
+// screen's actual row layout (headline+chip, price line, private-detail
+// block, action buttons) rather than a generic placeholder.
+function AdminQueueSkeleton() {
+  return (
+    <Stack spacing={1.5} role="status" aria-label="Loading the queue">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <Card key={i} sx={{ p: 2.5 }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            justifyContent="space-between"
+            alignItems={{ xs: 'flex-start', sm: 'center' }}
+            gap={2}
+            sx={{ width: '100%' }}
+          >
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Skeleton height={22} width="70%" sx={{ mb: 1 }} />
+              <Skeleton height={16} width="40%" sx={{ mb: 1 }} />
+              <Skeleton height={40} width="90%" />
+            </Box>
+            <Stack direction="row" gap={1} sx={{ flexShrink: 0 }}>
+              <Skeleton width={100} height={36} />
+              <Skeleton width={80} height={36} />
+            </Stack>
+          </Stack>
+        </Card>
+      ))}
+    </Stack>
+  )
 }
 
 export function AdminQueue() {
@@ -109,11 +140,7 @@ export function AdminQueue() {
         </Alert>
       )}
 
-      {rows === null && !error && (
-        <Stack alignItems="center" sx={{ py: 8 }}>
-          <CircularProgress aria-label="loading the queue" />
-        </Stack>
-      )}
+      {rows === null && !error && <AdminQueueSkeleton />}
 
       {rows?.length === 0 && (
         <Card sx={{ p: { xs: 4, sm: 6 }, textAlign: 'center' }}>
@@ -144,18 +171,28 @@ export function AdminQueue() {
                   {row.type} · ${formatPrice(row.asking_price)}
                 </Typography>
                 {/* Private detail — visible because an admin is authorised to
-                    see it and cannot curate blind (spec A5). */}
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                  {row.company_name}
-                  {row.website_url && (
-                    <>
-                      {' · '}
-                      <MuiLink href={row.website_url} target="_blank" rel="noopener noreferrer">
-                        {row.website_url}
-                      </MuiLink>
-                    </>
-                  )}
-                </Typography>
+                    see it and cannot curate blind (spec A5). Wrapped in a
+                    recessed surface under an explicit label (UI Pass 4) so
+                    the privilege boundary is legible, not just enforced. */}
+                <Box sx={{ ...surfaceRecessed, mt: 1, p: 1.25 }}>
+                  <Typography
+                    variant="overline"
+                    sx={{ color: blueTint.onWash, display: 'block', mb: 0.25 }}
+                  >
+                    Private — visible to admins only
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {row.company_name}
+                    {row.website_url && (
+                      <>
+                        {' · '}
+                        <MuiLink href={row.website_url} target="_blank" rel="noopener noreferrer">
+                          {row.website_url}
+                        </MuiLink>
+                      </>
+                    )}
+                  </Typography>
+                </Box>
               </Box>
 
               <Stack direction="row" gap={1} sx={{ flexShrink: 0 }}>

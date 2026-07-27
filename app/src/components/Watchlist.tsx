@@ -7,12 +7,16 @@
 // so un-favoriting from here needs no separate control: the same heart toggle
 // that adds a listing elsewhere removes it here.
 import { useEffect } from 'react'
-import { Alert, Box, CircularProgress, Stack, Typography } from '@mui/material'
+import { Alert, Box } from '@mui/material'
 import { observer } from 'mobx-react-lite'
-import { ListingCard, type PublicListing } from './ListingCard'
+import { useNavigate } from 'react-router-dom'
+import { EmptyState } from './EmptyState'
+import { ListingCard, ListingCardSkeleton, type PublicListing } from './ListingCard'
 import { watchlistStore } from '../stores/watchlistStore'
 
 export const Watchlist = observer(function Watchlist() {
+  const navigate = useNavigate()
+
   useEffect(() => {
     if (!watchlistStore.loaded) {
       void watchlistStore.load()
@@ -29,17 +33,24 @@ export const Watchlist = observer(function Watchlist() {
 
   if (watchlistStore.loading && !watchlistStore.loaded) {
     return (
-      <Stack alignItems="center" sx={{ py: 6 }}>
-        <CircularProgress aria-label="loading watchlist" />
-      </Stack>
+      <Box
+        role="status"
+        aria-label="Loading watchlist"
+        sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2 }}
+      >
+        {Array.from({ length: 4 }).map((_, i) => (
+          <ListingCardSkeleton key={i} />
+        ))}
+      </Box>
     )
   }
 
   if (watchlistStore.entries.length === 0) {
     return (
-      <Typography variant="body2" color="text.secondary">
-        Your watchlist is empty. Favorite a listing from Browse to see it here.
-      </Typography>
+      <EmptyState
+        message="Your watchlist is empty. Favorite a listing from Browse to see it here."
+        action={{ label: 'Browse listings', onClick: () => navigate('/browse') }}
+      />
     )
   }
 
