@@ -30,19 +30,29 @@ from __future__ import annotations
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi.responses import Response
 from sqlmodel import Session, select
 
 from ..db import get_session
 from ..errors import Conflict, InvalidTransition, NotFound
 from ..models import BuyerVerificationDocument, BuyerVerificationEvent, User, _utcnow
-from ..permissions import get_current_user, require_admin
+from ..permissions import (
+    get_current_user,
+    get_owned_or_admin_verification_document,
+    require_admin,
+)
 from ..schemas import (
     AdminVerificationQueueRead,
     VerificationDocumentRead,
     VerificationRead,
     VerificationRejectRequest,
 )
-from ..uploads import display_filename, read_validated_upload, storage
+from ..uploads import (
+    attachment_headers,
+    display_filename,
+    read_validated_upload,
+    storage,
+)
 
 router = APIRouter(tags=["verification"])
 
@@ -182,6 +192,37 @@ def get_my_verification(
             )
             for document in _documents(session, user.id)
         ],
+    )
+
+
+@router.get("/verification/documents/{document_id}")
+def download_verification_document(
+    document: BuyerVerificationDocument = Depends(
+        get_owned_or_admin_verification_document
+    ),
+) -> Response:
+    """Serve a proof-of-funds file to its uploader or a reviewing admin (S4, S5, S10).
+
+    **The dependency is the entire authorization**, and the body deliberately
+    never sees a `document_id` of its own — the same construction M2's
+    `download_document` uses with `require_private_access`, and the reason "B's
+    file is unreachable from A's request" is structural rather than a predicate
+    someone must remember to write. There is nothing left here to get wrong
+    except the response, which is the other half of the seam (S10):
+    `attachment_headers` sanitizes the stored name and serves it as an
+    attachment, so an uploader controls neither a header nor whether their file
+    renders same-origin.
+
+    No `response_model`: this returns bytes, not JSON — the same exception M2's
+    document download already is. The `content_type` came from M10's whitelist
+    and was matched against the file's magic bytes at upload (`uploads.py`), so
+    it is a server-validated value rather than an echo of what the client
+    claimed.
+    """
+    return Response(
+        content=storage.open(document.storage_key),
+        media_type=document.content_type,
+        headers=attachment_headers(document.original_filename),
     )
 
 

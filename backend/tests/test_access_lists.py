@@ -108,11 +108,25 @@ def test_f3_unauthenticated_is_401(client):
 
 # ── G — the seller's queue ───────────────────────────────────────────────────
 
-def test_g1_queue_returns_requests_with_buyer_profile_and_no_verification_field(
+def test_g1_queue_returns_requests_with_buyer_profile(
     client, auth_headers, live_listing, request_access
 ):
-    """Spec D5: FR-14's profile half only — no verification placeholder until
-    M10 owns it."""
+    """Spec 005 D5: FR-14's profile half.
+
+    **Retired at M10, deliberately:** this test used to close with
+    `assert not any("verif" in k.lower() for k in keys)` — "no verification
+    placeholder until M10 owns it", in its own words. M10 is that milestone
+    (spec 010 D7), so the assertion reached its stated expiry and the field it
+    forbade is now required on this exact route by `test_verification.py::test_v8`
+    and `test_verification_security.py::test_s11`. Two tests cannot both be right
+    about one response, and the one whose message named its own end date is the
+    one that goes.
+
+    The half of D5 that has *not* expired is still pinned, one test down in G3:
+    `BuyerProfile` carries no email. That absence is a permanent control, not a
+    deferral — a seller judges a buyer on budget, sector and experience, and
+    contact details are chat's job once they have decided.
+    """
     seller = auth_headers(email="seller@example.com", role="seller")
     listing_id = live_listing(seller)
     buyer_a = auth_headers(email="buyer-a@example.com", role="buyer")
@@ -141,8 +155,9 @@ def test_g1_queue_returns_requests_with_buyer_profile_and_no_verification_field(
     assert row_a["buyer"]["target_industries"] == "SaaS"
     assert row_a["buyer"]["experience"] == "1 prior acquisition"
 
-    keys = _flatten_keys(rows)
-    assert not any("verif" in k.lower() for k in keys), "no verification field until M10 (D5)"
+    # The verification badge that now rides on this response is V8's and S11's
+    # to assert (spec 010) — not re-checked here, so there is exactly one home
+    # for that claim.
 
 
 def test_g2_a_non_owner_gets_404_not_403(client, auth_headers, live_listing):

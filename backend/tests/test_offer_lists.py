@@ -146,8 +146,18 @@ def test_g1_queue_returns_both_buyers_threads_with_profile(
     assert Decimal(str(row_a["buyer"]["budget"])) == Decimal("300000")
     assert row_a["buyer"]["target_industries"] == "SaaS"
 
+    # **Retired at M10**, the twin of the same expiry in
+    # `test_access_lists.py::test_g1`: this line asserted "no verification field
+    # until M10 (D5 deferral)", and M10 is that milestone. `BuyerProfile` is one
+    # model, so the badge spec 010 D7 adds for M5's access-request queue reaches
+    # this M7 queue too — deliberately, since it is the same audience (a seller
+    # already holding a profile view of this exact buyer) making a more
+    # consequential decision. Asserted at its one home, `test_verification.py::test_v8`
+    # and `test_verification_security.py::test_s11`, not re-checked here.
+    #
+    # The permanent half of D5 still holds and is still pinned below: no email.
     keys = _flatten_keys(rows)
-    assert not any("verif" in k.lower() for k in keys), "no verification field until M10 (D5 deferral)"
+    assert "email" not in keys, "BuyerProfile carries no contact details (spec 005 G3/S3)"
 
 
 def test_g2_a_non_owner_gets_404_not_403(client, auth_headers, live_listing):

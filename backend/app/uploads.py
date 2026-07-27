@@ -90,3 +90,25 @@ def display_filename(client_filename: str | None) -> str:
     downstream has to remember that the value is hostile.
     """
     return os.path.basename(client_filename or "upload")
+
+
+def attachment_headers(original_filename: str) -> dict[str, str]:
+    """The response headers for serving a stored file back (M2 rule, M10 reuse).
+
+    The *serving* half of the seam, and it is hostile input too: the column holds
+    whatever a multipart parser accepted, and `a";\\r\\nX-Injected: 1.pdf` passes
+    an extension whitelist unharmed. Dropped straight into a header it breaks out
+    of `filename="…"` and starts a header of its own — so the name is run through
+    `basename`, stripped of quotes and CR/LF, and capped.
+
+    **Returns the whole header, not just the sanitized name**, so `attachment` is
+    not something a caller can forget or downgrade to `inline`. That word is the
+    control that stops a buyer-supplied file from rendering same-origin, which
+    matters more here than at M2: a verification document is uploaded by the
+    least-trusted party in the product and opened by an admin.
+
+    The 200-char cap is a bound on a header we did not author, nothing subtler.
+    """
+    safe = os.path.basename(original_filename)
+    safe = safe.replace('"', "").replace("\r", "").replace("\n", "")[:200]
+    return {"Content-Disposition": f'attachment; filename="{safe or "document"}"'}

@@ -78,6 +78,11 @@ class UserRead(SQLModel):
     nda_signed_at: datetime | None
     nda_version: str | None
     email_verified_at: datetime | None
+    # M10 (spec 010 D7, V9). The caller's own badge, so they know what a seller
+    # currently sees about them (story 6). Safe on this model for the same reason
+    # `nda_signed_at` is: it is the caller's own record, never a cross-user one.
+    verification_status: str
+    verification_reviewed_at: datetime | None
     created_at: datetime
 
     @computed_field  # type: ignore[prop-decorator]
@@ -86,6 +91,18 @@ class UserRead(SQLModel):
         """Derived, never stored twice (M8). The timestamp is the one source of
         truth; this is the boolean the API and the UI actually want."""
         return self.email_verified_at is not None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def verified(self) -> bool:
+        """M10's badge, derived exactly as `email_verified` above is.
+
+        The status string is the one source of truth; this is the boolean a UI
+        renders. Deriving it means a client can never be shown `verified: true`
+        beside a status that says otherwise — the two cannot disagree, because
+        there is only one stored value.
+        """
+        return self.verification_status == "verified"
 
 
 class LoginResponse(SQLModel):
@@ -325,16 +342,35 @@ class BuyerProfile(SQLModel):
     absence of the field *is* the control, exactly as with `UserRead` and
     `password_hash`.
 
-    **No verification field either** (spec 005 D5). M10 owns buyer verification
-    and its fold-in already covers surfacing the badge here. A placeholder now
-    would be an unenforced flag, which `security.md` §7 M8 rightly calls
-    decoration.
+    **The verification badge (M10, spec 010 D7) completes FR-14's promise** —
+    "sellers see buyer profile *and verification status* before approving" — the
+    half spec 005 D5 deferred with "M10 owns surfacing the badge here." It is
+    the one field on this model the buyer cannot author: `verification_status`
+    is written only by `require_admin` routes, which is what makes it worth more
+    to a seller than everything above it.
+
+    **Read through to the live `User` row, always.** Every construction site
+    joins `User` at request time; nothing denormalizes the badge onto an
+    `AccessRequest`/`Offer` row or caches it at approval. That is not an
+    implementation detail — a revoked badge that survives on a seller's queue is
+    exactly the mis-trust event this milestone exists to prevent, and it is M8's
+    lesson in a new place: a projection can outlive the fact it projects. Spec
+    010 S11 fails against any version that caches.
     """
 
     display_name: str | None
     budget: Decimal | None
     target_industries: str | None
     experience: str | None
+    verification_status: str
+    verification_reviewed_at: datetime | None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def verified(self) -> bool:
+        """The badge a seller actually renders — derived from the status, so the
+        two can never disagree (mirrors `UserRead.verified`)."""
+        return self.verification_status == "verified"
 
     @field_serializer("budget", when_used="json")
     def _ser_budget(self, v: Decimal | None) -> str | None:

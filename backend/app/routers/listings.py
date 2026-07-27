@@ -9,8 +9,6 @@ server-generated filename, path confinement in the storage adapter.
 
 from __future__ import annotations
 
-import os
-
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import Response
 from sqlalchemy import Numeric, cast, func, or_
@@ -37,7 +35,12 @@ from ..schemas import (
     ListingUpdate,
     RejectRequest,
 )
-from ..uploads import display_filename, read_validated_upload, storage
+from ..uploads import (
+    attachment_headers,
+    display_filename,
+    read_validated_upload,
+    storage,
+)
 
 router = APIRouter(tags=["listings"])
 
@@ -443,14 +446,15 @@ def download_document(
     if doc is None or doc.listing_id != listing.id:
         raise NotFound("Document not found")
     data = storage.open(doc.storage_key)
-    # Sanitize the download name (strip path + CR/LF) — never trust the stored
-    # original filename in a header (traversal / header-injection).
-    safe = os.path.basename(doc.original_filename)
-    safe = safe.replace('"', "").replace("\r", "").replace("\n", "")[:200]
+    # Never trust the stored original filename in a header (traversal /
+    # header-injection). The sanitize-and-serve-as-attachment rule moved to
+    # `uploads.py` at M10 for the same reason the validator did: the
+    # verification-document download is a second consumer, and two copies of a
+    # header sanitizer drift (spec 010 S10). Behaviour is unchanged.
     return Response(
         content=data,
         media_type=doc.content_type,
-        headers={"Content-Disposition": f'attachment; filename="{safe or "document"}"'},
+        headers=attachment_headers(doc.original_filename),
     )
 
 
