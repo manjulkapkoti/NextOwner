@@ -7,13 +7,13 @@
 > - Full design: `docs/session_recovery.md`.
 
 **Milestone status:**
-- M0–M9 ✅ merged. **M10 ✅ shipped, pending merge** (see In flight).
+- M0–M10 ✅ merged.
 - **App-shell** (`pre-003`) ✅ merged (#25), plus the public landing page (#26) and the register page (#27).
 - **Design system** ✅ merged (#28).
 - **Agentic workflow** ✅ merged (#32).
 - **PR conventions guard** ✅ merged (#37).
 
-**In flight:** **M10 ⭐ (buyer verification)** on `feat/010-buyer-verification` — all six slices done, 33/33 acceptance criteria green, both review passes clean. Awaiting PR review + `/close-feature`.
+**In flight:** nothing.
 **M10 ⭐ (buyer verification)** shipped F11 and the half of FR-14 that M5 deferred:
 - `unverified → pending → verified | rejected`, plus `rejected → pending` (resubmit) and `verified → rejected` (revoke) — one `reject` endpoint doing both deny and revoke (D1), with a `BuyerVerificationEvent` audit row preserving the `from_status` that distinguishes them once `verification_reason` is overwritten (D6).
 - **`get_owned_or_admin_verification_document`** — the first gate where `is_admin` *widens* access to another user's private data outside curation, so it is its own boundary rather than folded into an owner check. One raise for "no such id" and "not yours", so the 404s are identical by construction, not by two messages agreeing (S4).
