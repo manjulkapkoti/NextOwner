@@ -78,6 +78,8 @@ def _to_read(listing: Listing, private: ListingPrivate | None) -> ListingRead:
         customers=listing.customers,
         created_at=listing.created_at,
         published_at=listing.published_at,
+        sold_at=listing.sold_at,
+        final_price=listing.final_price,
         company_name=private.company_name if private else None,
         website_url=private.website_url if private else None,
         detailed_financials=private.detailed_financials if private else None,
@@ -258,6 +260,8 @@ def my_listings(
             asking_price=listing.asking_price,
             created_at=listing.created_at,
             rejection_reason=reasons.get(listing.id),
+            sold_at=listing.sold_at,
+            final_price=listing.final_price,
         )
         for listing in listings
     ]

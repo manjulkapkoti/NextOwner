@@ -169,10 +169,20 @@ class ListingRead(SQLModel):
     company_name: str | None = None
     website_url: str | None = None
     detailed_financials: str | None = None
+    # M12 (spec 012 A5). Null until the deal closes; `final_price` is the
+    # accepted offer's price, derived server-side. On the **owner's** view only
+    # — `ListingPublic` below is a standalone model precisely so that adding a
+    # field here cannot leak it to an anonymous caller (spec 012 S11).
+    sold_at: datetime | None = None
+    final_price: Decimal | None = None
 
     @field_serializer(*_MONEY_FIELDS, when_used="json")
     def _ser_money(self, v: Decimal) -> str:
         return str(v)
+
+    @field_serializer("final_price", when_used="json")
+    def _ser_final_price(self, v: Decimal | None) -> str | None:
+        return None if v is None else str(v)
 
 
 class ListingSummary(SQLModel):
@@ -187,10 +197,17 @@ class ListingSummary(SQLModel):
     # a column would be a second copy that goes stale the moment a listing is
     # rejected twice (spec C6, plan.md § Schema delta).
     rejection_reason: str | None = None
+    # M12: the dashboard shows the sale without a second fetch (spec 012 A5, F5).
+    sold_at: datetime | None = None
+    final_price: Decimal | None = None
 
     @field_serializer("asking_price", when_used="json")
     def _ser_price(self, v: Decimal) -> str:
         return str(v)
+
+    @field_serializer("final_price", when_used="json")
+    def _ser_final_price(self, v: Decimal | None) -> str | None:
+        return None if v is None else str(v)
 
 
 # ── Public marketplace (M4) ──────────────────────────────────────────────────

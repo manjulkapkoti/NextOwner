@@ -122,7 +122,24 @@ class Listing(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
     # Set by admin at M3; indexed at M4 because it is the public browse's
     # default ordering column, so every anonymous request sorts on it.
+    # Records **first** publication and is never restamped — a re-listed deal
+    # that fell through keeps its original date (M12, spec 012 D7).
     published_at: datetime | None = Field(default=None, index=True)
+    # ── The close (M12, spec 012 D4) ────────────────────────────────────────
+    # Written only by `POST /listings/{id}/mark-sold`, in the same conditional
+    # UPDATE that claims the `under_offer → sold` transition, and never
+    # overwritten afterwards (`sold` is terminal in both directions).
+    #
+    # `final_price` is **derived server-side from the accepted offer's price** —
+    # a client that sends one is ignored (Article 2 #4, spec 012 S1). It is a
+    # stored column rather than a read-time join onto the `completed` offer
+    # because a re-listed listing can sell twice: after that, "the completed
+    # offer" is no longer unique, and a derivation would have to encode an
+    # implied ordering. The column records the answer at the one moment it is
+    # unambiguous. Neither field is on `ListingPublic` — a sale price is never
+    # anonymous data (spec 012 S11).
+    sold_at: datetime | None = None
+    final_price: Decimal | None = Field(default=None, sa_type=Money)
 
 
 class ListingPrivate(SQLModel, table=True):
