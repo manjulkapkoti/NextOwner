@@ -4,7 +4,7 @@
 // make "irreversible" visible before it happens: the price is rendered, never
 // entered (F1 — spec D4's server-derivation, at the UI layer), and both paths
 // go through a confirmation the seller has to read (F3/F4).
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DealActions } from './DealActions'
@@ -136,10 +136,23 @@ describe('DealActions', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/cannot go from live to sold/i)
     // The status is the server's to change — no optimistic flip to `sold`.
     expect(onChange).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: /deal fell through/i })).toBeInTheDocument()
+    // The dialog stays open and re-armed: a refused close must leave the seller
+    // somewhere they can read the reason and retry, not dumped back to a card
+    // whose alert the modal had been hiding.
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^mark as sold$/i })).toBeEnabled()
   })
 
-  it('F7 — both actions are disabled while a request is in flight', async () => {
+  // Spec 012 F7 was written as "both actions are disabled" — the wrong noun for
+  // a modal confirm flow. While a request is in flight the confirmation dialog
+  // is open, and MUI's modal makes everything behind it inert and
+  // aria-hidden — so the two trigger buttons are already unreachable, and
+  // asserting on them tests the modal rather than the guard. The property the
+  // criterion is protecting is *no double submit*, and the only element a
+  // second click can reach is the confirm button. Spec amended deliberately
+  // (`/run-milestone`: fix the spec, don't weaken the test), and the exactly-one
+  // -fetch assertion below is what actually pins the property.
+  it('F7 — the confirm action is disabled while a request is in flight', async () => {
     let release: (value: Response) => void = () => {}
     vi.stubGlobal(
       'fetch',
@@ -154,12 +167,19 @@ describe('DealActions', () => {
     renderActions()
 
     await user.click(screen.getByRole('button', { name: /mark as sold/i }))
-    await screen.findByRole('dialog')
-    await user.click(screen.getByRole('button', { name: /^mark as sold$/i }))
+    const dialog = await screen.findByRole('dialog')
+    const confirm = within(dialog).getByRole('button', { name: /^mark as sold$/i })
+    await user.click(confirm)
 
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: /deal fell through/i })).toBeDisabled(),
-    )
+    await waitFor(() => expect(confirm).toBeDisabled())
+    expect(within(dialog).getByRole('button', { name: /cancel/i })).toBeDisabled()
+    // A second click on the still-mounted confirm sends nothing. `fireEvent`
+    // rather than `user.click`, deliberately: userEvent *refuses* to click a
+    // `pointer-events: none` element and throws, which would pass this test for
+    // the wrong reason — the assertion would then be about the testing library,
+    // not about the guard. Dispatching the event directly is the harsher check:
+    // the handler is reachable and still must not fire a second request.
+    fireEvent.click(confirm)
     expect(fetch).toHaveBeenCalledTimes(1)
     release(jsonResponse(200, { ...UNDER_OFFER, status: 'sold' }))
   })

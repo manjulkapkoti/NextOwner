@@ -1,6 +1,7 @@
 // The app shell — routes the components M1/M2 built into a usable app
 // (spec pre-003). Replaces the M0 health page.
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { observer } from 'mobx-react-lite'
 import { Box, Button, Container, Typography } from '@mui/material'
 import {
   BrowserRouter,
@@ -16,6 +17,7 @@ import { AdminQueue } from './components/AdminQueue'
 import { AdminVerificationQueue } from './components/AdminVerificationQueue'
 import { BrowseListings } from './components/BrowseListings'
 import { ChatWindow } from './components/ChatWindow'
+import { DealActions } from './components/DealActions'
 import { ConversationList } from './components/ConversationList'
 import { LandingPage } from './components/LandingPage'
 import { ListingDetail } from './components/ListingDetail'
@@ -28,6 +30,8 @@ import { NavBar } from './components/NavBar'
 import { NotificationInbox } from './components/NotificationInbox'
 import { SavedSearches } from './components/SavedSearches'
 import { Watchlist } from './components/Watchlist'
+import { api } from './lib/api'
+import { offerStore } from './stores/offerStore'
 import { ForgotPasswordPage } from './components/ForgotPasswordPage'
 import { ResetPasswordPage } from './components/ResetPasswordPage'
 import { VerifyEmailPage } from './components/VerifyEmailPage'
@@ -200,8 +204,42 @@ function ChatWindowRoute() {
 // guarded by RequireAuth for UX only; the real boundary is the server's
 // `get_owned_listing` on the queue endpoint, which 404s a listing that is not
 // yours (spec 007 G2, mirroring spec 005's ListingRequestsRoute above).
-function ListingOffersRoute() {
+//
+// M12 adds the deal-close actions above the queue (spec 012 F1-F7). They live
+// on this screen rather than on `/my-listings` because this is where the
+// accepted offer — the thing the recorded sale price comes from — is already
+// on screen. The listing is fetched here (not inside `DealActions`) so the
+// component stays a pure function of what it is handed, and so `onChange`
+// re-reads the server rather than patching a local status.
+const ListingOffersRoute = observer(function ListingOffersRoute() {
   const { id } = useParams()
+  const listingId = Number(id)
+  const [listing, setListing] = useState<{ id: number; status: string } | null>(null)
+
+  // Derived at render from the store the queue below already fills, not
+  // snapshotted into state: `loadDeal` and the queue's own fetch race, and a
+  // snapshot taken in the loser would show the generic copy forever. `observer`
+  // re-renders when the offers land, so the price appears as soon as it exists
+  // and there is no second request for data already on screen.
+  const acceptedPrice =
+    offerStore.listingOffers.find((o) => o.status === 'accepted')?.price ?? null
+
+  const loadDeal = useCallback(async () => {
+    try {
+      const row = (await api(`/my/listings/${listingId}`)) as { id: number; status: string }
+      setListing(row)
+    } catch {
+      // A listing this caller doesn't own 404s here exactly as the queue below
+      // does; the queue owns that error surface, so this stays silent rather
+      // than rendering a second copy of the same message.
+      setListing(null)
+    }
+  }, [listingId])
+
+  useEffect(() => {
+    void loadDeal()
+  }, [loadDeal])
+
   return (
     <>
       <Typography variant="h5" component="h1" gutterBottom>
@@ -211,10 +249,20 @@ function ListingOffersRoute() {
         Every buyer&apos;s negotiation on this listing, oldest first. Accepting one
         automatically declines every other pending offer.
       </Typography>
-      <ListingOffersQueue listingId={Number(id)} />
+      {listing && (
+        <DealActions
+          listing={listing}
+          acceptedPrice={acceptedPrice}
+          onChange={() => {
+            void loadDeal()
+            void offerStore.loadListingOffers(listingId)
+          }}
+        />
+      )}
+      <ListingOffersQueue listingId={listingId} />
     </>
   )
-}
+})
 
 export function AppShell() {
   const navigate = useNavigate()

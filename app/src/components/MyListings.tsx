@@ -12,6 +12,7 @@ import StorefrontOutlined from '@mui/icons-material/StorefrontOutlined'
 import { api } from '../lib/api'
 import { SpotlightCard } from './SpotlightCard'
 import { StatusChip } from './StatusChip'
+import { formatPrice } from './DealActions'
 
 // UI Pass 4 — the loading twin: 3 row-shaped skeleton cards matching this
 // screen's actual row (headline + status chip).
@@ -44,6 +45,10 @@ interface ListingRow {
   headline: string
   status: string
   rejection_reason?: string | null
+  // M12 (spec 012 F5). Null on every listing that has not closed; the price is
+  // the accepted offer's, derived server-side.
+  final_price?: string | null
+  sold_at?: string | null
 }
 
 export function MyListings() {
@@ -125,6 +130,16 @@ export function MyListings() {
                   this string is written by an admin and read by a seller, so
                   it is the one stored-XSS surface in the milestone. Never
                   dangerouslySetInnerHTML. */}
+              {/* M12 — a sold listing shows what it sold for. The seller's own
+                  dashboard is the only place this appears: `final_price` is
+                  absent from `ListingPublic` by schema, so a sale price is
+                  never anonymous data (spec 012 S11). */}
+              {row.status === 'sold' && row.final_price && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Sold for {formatPrice(row.final_price)}
+                </Typography>
+              )}
+
               {row.status === 'rejected' && row.rejection_reason && (
                 <Alert severity="warning" sx={{ mt: 2 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>

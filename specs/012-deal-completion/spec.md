@@ -263,7 +263,14 @@ table.
   chip, the recorded final price, and neither action any longer.
 - **F6** GIVEN a confirmed action that the server refuses with 409, THEN the inline error contract message is
   rendered (`docs/error_handling.md`) and the page does not crash or lose the offers list.
-- **F7** GIVEN a request in flight, THEN both actions are disabled so a double-click cannot send two requests.
+- **F7** GIVEN a request in flight, THEN the confirmation dialog's confirm and cancel actions are both
+  disabled, and a second click on the confirm sends no second request.
+  > *Amended during the build (2026-07-28).* This originally read "both actions are disabled" — the wrong noun
+  > for a modal confirm flow. While the request is in flight the dialog is open, and MUI's modal already makes
+  > the two trigger buttons behind it inert and `aria-hidden`, so asserting on *them* tests the modal rather
+  > than the guard. The property the criterion protects — **no double submit** — is unchanged and is pinned by
+  > the exactly-one-`fetch` assertion; only the element it addresses moved. Recorded rather than silently
+  > edited, per `/run-milestone`'s "fix the spec deliberately and say so".
 
 ---
 
