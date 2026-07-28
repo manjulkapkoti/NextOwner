@@ -54,6 +54,15 @@ Two thin wrappers over it, because the keying rule (D2) is the part most likely 
 - `enforce_per_ip(limiter, request)` → key `f"{limiter_name}:ip:{client_ip(request)}"`
 - `enforce_per_user(limiter, user)` → key `f"{limiter_name}:user:{user.id}"`
 
+**Where each limiter is constructed** — the first draft of this plan left this unstated, and the failing-test pass caught what that ambiguity costs: `_upload_limiter` is described as "shared by both document routes", but if each router builds its own instance then R4 and R5 both still pass while the shared budget quietly does not exist (hence the new **R8**). So, explicitly:
+
+| Limiter | Module | Why there |
+|---|---|---|
+| `_browse_limiter` | `routers/listings.py` | Only that router's public reads use it. |
+| `_access_request_limiter` | `routers/access.py` | Single consumer. |
+| **`_upload_limiter`** | **`app/uploads.py`** | **Two consumers, so it belongs with the seam they already share.** M10 moved the validator and the storage backend there for exactly this reason — one object, imported by both routers, so "shared budget" is true by construction rather than by two modules agreeing. A second instance is then not constructible without deleting the import. |
+| `_forgot_password_address_limiter` | `routers/auth.py` | Beside the per-IP limiter it complements (D6). |
+
 Namespacing the key by limiter matters: two limiters sharing a backend would otherwise share a counter for the same IP, and browse traffic would exhaust the upload cap.
 
 ## Call sites (nine, all one line each)

@@ -27,6 +27,22 @@ os.environ.setdefault("ENABLE_DEBUG_ROUTES", "1")
 # uploads/ (must precede `import app.main` — the storage backend reads it at import).
 os.environ.setdefault("UPLOAD_DIR", tempfile.mkdtemp(prefix="nextowner-test-uploads-"))
 
+# Lift the browse rate cap for the suite (spec pre-011). The production default
+# is 120 requests / IP / minute — comfortably above human browsing, and far below
+# what a *test* does: `test_browse.py`'s reachability walkers (S9, S10) fire 125
+# and 375 browse requests inside one test, because they enumerate every 3-step
+# seller sequence and re-read the public marketplace after each one. Those are
+# M4's crown-jewel invariants and they are machine traffic by construction, so
+# the right answer is to raise the cap for the harness rather than to loosen a
+# real control to accommodate a loop no browser will ever run.
+#
+# This hides nothing pre-011 asserts: every test in `test_rate_limits.py`
+# monkeypatches the limiter's `max_attempts` down to 1 or 2 and asserts the
+# behavior *at* the cap, deliberately never depending on the configured number
+# (see that file's module docstring). Must precede `import app.main` — the
+# limiter reads its ceiling from settings at construction.
+os.environ.setdefault("BROWSE_RATE_LIMIT_MAX", "100000")
+
 import anyio.from_thread
 import pytest
 from fastapi.testclient import TestClient
@@ -110,35 +126,17 @@ def _fresh_rate_limiters():
     pytest run that state would leak between tests — the brute-force tests (F1,
     F3) would trip them and later requests would 429 — so we reset per test.
 
-    **Migrated per spec pre-011 D4**: once `ratelimit.reset_all()` exists (the
-    registry every `RateLimiter` self-registers into), this fixture uses it and
-    stops naming limiters one by one — the whole point of the registry is that
-    a newly-added limiter is reset automatically, with no second edit here.
-    Until that seam lands, this falls back to the by-name reset that predates
-    it, so `test_rate_limits.py` can be written now without breaking every
-    other test in the suite before `reset_all()` exists.
+    **Migrated per spec pre-011 D4**: this resets the registry every
+    `RateLimiter` self-registers into, and names no limiter at all — the whole
+    point of the registry is that a newly-added limiter is reset automatically,
+    with no second edit here. The by-name reset this replaced needed a `hasattr`
+    guard per limiter, and its failure mode was silent: a limiter nobody added to
+    the list stays hot and makes some later test 429 for a reason it never
+    asserts. `test_rate_limits.py::test_s5_*` pins the registry's coverage.
     """
     from app import ratelimit
 
-    if hasattr(ratelimit, "reset_all"):
-        ratelimit.reset_all()
-        yield
-        return
-
-    from app.ratelimit import InMemoryRateLimiterBackend
-    from app.routers import auth as auth_router
-
-    auth_router._login_limiter.backend = InMemoryRateLimiterBackend()
-    auth_router._register_limiter.backend = InMemoryRateLimiterBackend()
-    for limiter in ("_forgot_password_limiter",):     # M8 — mails a third party on demand
-        if hasattr(auth_router, limiter):
-            getattr(auth_router, limiter).backend = InMemoryRateLimiterBackend()
-    try:
-        from app.routers import chat as chat_router
-
-        chat_router._chat_rate_limiter.backend = InMemoryRateLimiterBackend()
-    except ImportError:
-        pass  # M6 slice 1 hasn't landed yet — nothing to reset
+    ratelimit.reset_all()
     yield
 
 

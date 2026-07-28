@@ -102,6 +102,42 @@ class Settings(BaseSettings):
     saved_search_max_per_user: int = 20
     notifications_page_limit: int = 50
 
+    # Rate limits for the surfaces four milestones each deferred (pre-011, D5).
+    # Per-surface rather than one global number: browse is something a real user
+    # does constantly, a password reset is something they do twice a year.
+    #
+    # Per IP per minute. A real visitor paging and filtering fires a handful a
+    # minute; 120 is well clear of human use and still bounds a scraper.
+    browse_rate_limit_max: int = 120
+    browse_rate_limit_window_seconds: int = 60
+    # Per **user** per hour. A genuine buyer asks for access to a few listings in
+    # a sitting; 10/hour makes the fan-out attack (security.md §9, M5) slow
+    # enough to be pointless.
+    access_request_rate_limit_max: int = 10
+    access_request_rate_limit_window_seconds: int = 3600
+    # Per **user** per hour, shared by both document routes. Complements the
+    # *stored* quota above (20 files / 50 MB) with a bound on arrival *rate* —
+    # which is what actually narrows the read-then-insert race D11 accepted.
+    upload_rate_limit_max: int = 20
+    upload_rate_limit_window_seconds: int = 3600
+    # Per **email address** per hour — the victim-side cap (D6), alongside the
+    # per-IP `forgot_password_rate_limit_*` above. They defend different victims:
+    # per-IP stops one attacker burning our mail budget, per-address stops N
+    # attackers burying one person's inbox.
+    forgot_password_address_rate_limit_max: int = 3
+    forgot_password_address_rate_limit_window_seconds: int = 3600
+
+    # **The security-relevant one** (pre-011 D3). How many rightmost
+    # `X-Forwarded-For` entries were appended by infrastructure we run; the real
+    # client is the entry immediately to their left. `0` = ignore the header
+    # entirely, which is correct locally and safe everywhere — a client can send
+    # this header itself, and a limiter keyed on it unconditionally is *weaker*
+    # than no limiter, because the caller picks a fresh key per request. Raise it
+    # only to match a reverse proxy that is actually in front of the app, and
+    # verify against a real request: see `ratelimit.client_ip`, which falls back
+    # to the connection address whenever the header cannot support the count.
+    trusted_proxy_count: int = 0
+
     # Test-only: mount the /_debug/boom route (500-contract tests). Off in prod.
     enable_debug_routes: bool = False
 

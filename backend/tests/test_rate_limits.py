@@ -218,6 +218,44 @@ def test_r5_buyer_verification_upload_rate_cap_is_429(
     assert third.json().get("code") == "rate_limited"
 
 
+def test_r8_the_upload_budget_is_one_per_user_across_both_routes(
+    client, auth_headers, make_listing, submit_verification, monkeypatch
+):
+    """R8 — the sharing itself, which R4 and R5 between them never assert.
+
+    `upload_rate_limit_max`'s comment says "shared by both document routes",
+    and both R4 and R5 pass whether that is true or not: if `listings.py` and
+    `verification.py` each construct their own `_upload_limiter`, each route
+    still refuses at its own cap and each test still goes green — while a
+    caller quietly gets **double** the budget the config promises. The only way
+    to see it is to spend the allowance on one route and then present the other.
+
+    So: exhaust the cap entirely via listing documents, then upload a
+    verification document as the same user. One shared limiter refuses it. Two
+    independent limiters return 201, and that 201 is the bug.
+
+    Per plan.md the shared instance lives in `app/uploads.py` — the module both
+    routers already import their validator and storage backend from (M10) — so
+    "shared" is true by construction rather than by two modules agreeing.
+    """
+    limiter = _locate_upload_limiter()
+    monkeypatch.setattr(limiter, "max_attempts", 2, raising=False)
+
+    owner = auth_headers(email="dual@example.com", role="seller")
+    listing_id = make_listing(owner).json()["id"]
+
+    first = _upload_listing_doc(client, listing_id, owner, filename="one.pdf")
+    second = _upload_listing_doc(client, listing_id, owner, filename="two.pdf")
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+
+    # The budget is spent. A different route must not hand out a fresh one.
+    crossover = submit_verification(owner, filename="proof.pdf")
+
+    assert crossover.status_code == 429, crossover.text
+    assert crossover.json().get("code") == "rate_limited"
+
+
 def test_r6_forgot_password_address_cap_refuses_mail_without_a_visible_429(
     client, auth_headers, outbox, monkeypatch
 ):

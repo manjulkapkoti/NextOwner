@@ -83,10 +83,17 @@ async def limit_request_body(request: Request, call_next):
 
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
-    """Render the 4xx business/permission contract (detail + machine code)."""
+    """Render the 4xx business/permission contract (detail + machine code).
+
+    `response_headers` is carried onto the response because an exception handler
+    that drops headers would silently break a contract that lives in one — a
+    429's `Retry-After` (pre-011 D7) being the first such case. The body shape is
+    unchanged for every error, headers or not.
+    """
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.message, "code": exc.code},
+        headers=getattr(exc, "response_headers", None) or None,
     )
 
 
