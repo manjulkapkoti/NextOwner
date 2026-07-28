@@ -107,6 +107,7 @@ Two things follow from that, and they drive the decisions below:
 - **S10** — GIVEN the calculate limiter's cap, WHEN one IP exceeds it, THEN 429 with a `Retry-After` header and the generic rate-limited body (D8; pre-011's contract).
 - **S11** — GIVEN the lead limiter's much harder cap, WHEN one IP exceeds it, THEN 429 **and no further `ValuationLead` rows are written** — the refusal happens before the write, so the storage surface is actually bounded (D8, pre-011 R1).
 - **S12** — GIVEN a lead is captured (and given a lead submission that fails validation), WHEN everything the server logged during the request is inspected, THEN the email address appears **nowhere** in it (`security.md` §6 "Info leakage: logs containing secrets/PII"; D10's "never logged"). *(This replaces a criterion that originally asserted the same property of an emitted analytics event. There is no analytics event, and there is no `track()` wrapper — see §7.)*
+  **What this criterion does not cover, found by the independent appsec pass:** the address *is* returned to its own sender in a 422 body, because Pydantic v2 echoes the rejected `input`. Not a cross-user leak and not introduced here — `POST /api/auth/register` has echoed rejected passwords since M1 — so it is recorded as a contract-level fix in `docs/security.md` §9 rather than patched on this route. Worth naming the shape of the miss: **"never logged" and "never returned" are different properties, and this criterion only tested one of them.**
 
 ### X — Errors & failure modes (`docs/error_handling.md`)
 
