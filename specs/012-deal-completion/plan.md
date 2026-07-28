@@ -113,10 +113,13 @@ Two `_TEMPLATES` entries:
 "offer_lapsed":    "The deal on “{headline}” did not complete — the listing is back on the market",
 ```
 
-and two entries in `notify_offer`'s recipient map resolving to **`buyer_id` directly**, with a comment saying
-why they are the first two that do not follow `proposed_by_role` (spec D9): only the seller can cause them, so
-the recipient is fixed by role. No new function, no new channel; M8's email dispatcher picks these up as it
-does every other notification type.
+and one new function, **`notify_deal(session, offer, action)`**, sitting beside `notify_offer` and reusing its
+`_offer_parties` helper. It is a separate function rather than two more entries in `notify_offer`'s recipient
+map because the recipient rule genuinely differs (spec D9): every M7 action resolves from `proposed_by_role`
+because either party can propose, while these two are always caused by the seller and always land on the
+**buyer** — including when the accepted row was a seller counter (E3). Folding a role-based rule into a
+map whose docstring promises a proposer-based one would make the shared function lie about itself. No new
+channel: M8's dispatcher picks these rows up like any other notification type.
 
 ---
 
