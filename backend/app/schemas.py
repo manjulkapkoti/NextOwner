@@ -226,7 +226,11 @@ class ListingPublic(SQLModel):
     `detailed_financials`. `status` is excluded even though it is not private —
     browse returns `live` rows only, so the field would be a constant that tells
     a caller nothing while creating a channel for a future state to leak by
-    accident (spec D2). M12 may add a deliberate public "under offer" flag.
+    accident (spec D2). **M12 considered adding a public "under offer" / "sold"
+    flag and declined** (spec 012 D10, 2026-07-28): browse returns `live` rows
+    only, so a sold listing already leaves the marketplace with no field to
+    add — and re-admitting `status` here would reopen the leak channel this
+    model closed, in exchange for a signal nobody asked for.
     """
 
     id: int

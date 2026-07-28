@@ -346,7 +346,7 @@ Write these from the milestone spec *before* implementing (SDD). ☐ = one test 
 - ☐ The NDA gate still guards a `sold` listing's private data (approved buyer 200, everyone else 403).
 
 **After Phase D — the E2E golden path** (one Playwright script; run `fastapi dev` + `npm run dev` first)
-- ☐ Seller signs up → creates listing → admin approves → buyer signs up → finds listing via filter → signs NDA → seller approves → buyer reads private data → chat exchange → buyer submits offer → seller accepts → listing shows "under offer" → *(once M12 lands)* seller marks it sold → listing shows "sold".
+- ☐ Seller signs up → creates listing → admin approves → buyer signs up → finds listing via filter → signs NDA → seller approves → buyer reads private data → chat exchange → buyer submits offer → seller accepts → listing shows "under offer" → seller marks it sold → listing shows "sold". *(The "once M12 lands" caveat was retired 2026-07-28 — M12 shipped `mark-sold`. The golden-path script itself is still Phase D work.)*
 This single test touches every milestone; when it's green, your MVP demonstrably works end to end.
 
 ---

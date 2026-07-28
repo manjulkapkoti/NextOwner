@@ -13,7 +13,7 @@
 | **FR-5** | Sellers create listings with structured fields (type, revenue, profit, MRR, churn, asking price, …) | Yes |
 | **FR-6** | Listings are anonymous publicly; identifying details hidden until NDA | The **public/private table split** is established here (`Listing` vs `ListingPrivate`). Public *serving* is M4; the NDA *gate* is M5. In M2, private data is **owner-only**. |
 | **FR-7** | Listings enter **pending-review**; an admin approves/rejects before publication | The seller-side transition `draft → pending_review` (submit). Admin approve/reject is **M3**. |
-| **FR-8** | Sellers can edit, pause, mark under-offer, or close listings | Edit / pause / resume / close here. `under_offer`/`sold` are M7/M12. |
+| **FR-8** | Sellers can edit, pause, mark under-offer, or close listings | Edit / pause / resume / close here. `under_offer` is M7's, `sold` + re-list are M12's — **both shipped** (2026-07-28), so FR-8's lifecycle is now whole. |
 | **FR-9** | Sellers upload supporting documents, stored privately | Yes — multipart upload, owner-only, path-confined. |
 
 **Scope fold-ins (`milestones.md` § Scope fold-ins → M2), all in:** money is **`Decimal`** never `float`; listing lifecycle (`pause`/`close`, and **editing a `live` listing sends it back to `pending_review`**); **`GET /my/listings`**; **uploads behind a storage port** (`save`/`open` — horizontal-scale blocker #2).

@@ -43,7 +43,7 @@ class ListingDocument(SQLModel, table=True):        # refines the §3.5 document
 ```
 
 **Status state machine (M2 owns these transitions; all others 409):**
-`draft → pending_review` (submit) · `live → pending_review` (edit — anti-bait-and-switch) · `live → paused` (pause) · `paused → live` (resume) · `{draft|pending_review|live|paused} → closed` (close). `live`/`rejected` are admin (M3); `under_offer`/`sold` are M7/M12.
+`draft → pending_review` (submit) · `live → pending_review` (edit — anti-bait-and-switch) · `live → paused` (pause) · `paused → live` (resume) · `{draft|pending_review|live|paused} → closed` (close). `live`/`rejected` are admin (M3); `under_offer` is M7's (shipped), and `sold` plus the `under_offer → live` re-list are M12's (shipped 2026-07-28, spec 012). M12 also added one guard to *this* milestone's edit route: `PUT` is refused while `under_offer` (409 `listing_under_offer`, spec 012 D8) — the anti-bait-and-switch rule below had a gap this state fell through.
 
 ## Endpoints
 

@@ -58,7 +58,10 @@ that agrees with the code already shipped.
 **D2 — An approved buyer keeps access when the listing leaves `live`.**
 The gate is the access request, not the listing's status. `testing_guide.md` §5 M12 requires
 *"the NDA gate still guards a `sold` listing's private data (approved buyer 200, everyone
-else 403)"* — which only parses if approval survives the status change. A seller who pauses a
+else 403)"* — which only parses if approval survives the status change. **Discharged
+2026-07-28: `sold` now exists, and `test_deal_completion_security.py::test_s8_...` asserts
+all three answers (approved 200, signed-but-unapproved 403, revoked 403) against a genuinely
+sold listing — this decision's forward promise is now a live test, not a forecast.** A seller who pauses a
 listing has not withdrawn a granted confidence; **`revoke` is the tool for that**, and it is
 the only one.
 

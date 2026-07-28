@@ -173,7 +173,8 @@ class ListingEvent(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     listing_id: int = Field(foreign_key="listing.id", index=True)
     actor_id: int = Field(foreign_key="user.id")          # server-derived from the JWT
-    action: str                                            # approved | rejected (M12 extends)
+    # approved | rejected (M3) · sold | fell_through (M12, shipped 2026-07-28)
+    action: str
     from_status: str
     to_status: str
     reason: str | None = None                              # required for rejections

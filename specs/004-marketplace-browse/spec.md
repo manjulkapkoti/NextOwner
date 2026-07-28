@@ -56,9 +56,14 @@ literally correct for the first time under D1.
 
 **D2 — `status` is not on the public model.** Public browse returns `live` rows
 only, so a `status` field would be a constant that tells a caller nothing while
-creating a channel for a future state to leak by accident. M12 may add a
+creating a channel for a future state to leak by accident. ~~M12 may add a
 deliberate public "under offer" flag; it will be a named field with its own
-criterion, not an inherited enum.
+criterion, not an inherited enum.~~ **Answered 2026-07-28: M12 declined it**
+(spec 012 D10). A sold listing already leaves the marketplace, because browse
+returns `live` rows only — there was nothing for the flag to do that the
+existing filter did not, and adding one would have reopened this exact channel.
+The conditional half of the rule stands: if such a field is ever wanted, it is a
+named field with its own criterion, never an inherited enum.
 
 **D3 — `/browse` is its own page; `/` stays the landing page.** The marketplace
 grid lives at `/browse` (public), listing detail at `/browse/:id` (public). `/`

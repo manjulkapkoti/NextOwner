@@ -140,9 +140,10 @@ def require_private_access(
     3. An **`approved`** request for this exact `(listing, caller)` pair passes
        (D2). Note what is *not* consulted here: `listing.status`. The gate is the
        access request, so approval survives the seller pausing or closing the
-       listing (D9, spec D2) — and it will still hold when M12 marks a listing
-       `sold`, which `security.md` §7 M12 requires. `revoke` is the only way to
-       take access back, deliberately.
+       listing (D9, spec D2) — and it holds when a listing is marked `sold`,
+       which `security.md` §7 M12 requires and spec 012 S8 now asserts directly
+       (shipped 2026-07-28). `revoke` is the only way to take access back,
+       deliberately.
     4. Everyone else is refused — but *how* depends on whether the listing is
        public knowledge (spec 005 D1). **Never published → 404**, identical to a
        listing that does not exist, because an unapproved draft is still a
