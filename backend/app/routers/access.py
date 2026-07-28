@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..chat_broker import chat_broker
+from ..config import settings
 from ..db import get_session
 from ..errors import Conflict, Forbidden, InvalidTransition, NotFound
 from ..models import (
@@ -43,6 +44,7 @@ from ..permissions import (
     require_request_decider,
     require_signed_nda,
 )
+from ..ratelimit import RateLimiter, enforce_per_user
 from ..schemas import (
     AccessRequestRead,
     AccessRequestWithBuyer,
@@ -52,6 +54,17 @@ from ..schemas import (
 )
 
 router = APIRouter(tags=["access"])
+
+# The fan-out cap (pre-011 R3), keyed per **user**: one signed buyer could
+# otherwise ask for access to every live listing in a loop and fill every
+# seller's queue — the abuse `security.md` §9 recorded at M5. Per user rather
+# than per IP for both halves of D2: a NAT'd office must not share one buyer's
+# budget (S1), and moving address must not hand an attacker a fresh one (S2).
+_access_request_limiter = RateLimiter(
+    max_attempts=settings.access_request_rate_limit_max,
+    window_seconds=settings.access_request_rate_limit_window_seconds,
+    name="access_request",
+)
 
 
 def _record(session: Session, request: AccessRequest, actor: User, action: str,
@@ -96,7 +109,13 @@ def create_access_request(
     `created_at` from the server (B4, Article 2 #4). A body a function does not
     declare is a body FastAPI never reads, which is the cheapest possible
     defence against mass assignment.
+
+    The rate cap (pre-011 R3) runs **before** the lookup and before the insert,
+    so a refused request leaves no `AccessRequest` row — a limiter that counted
+    after the write would bound nothing a seller's queue can feel.
     """
+    enforce_per_user(_access_request_limiter, user)
+
     listing = session.get(Listing, listing_id)
     if listing is None or (listing.published_at is None and listing.owner_id != user.id):
         raise NotFound("Listing not found")

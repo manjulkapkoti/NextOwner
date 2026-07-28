@@ -41,6 +41,7 @@ from ..permissions import (
     get_owned_or_admin_verification_document,
     require_admin,
 )
+from ..ratelimit import enforce_per_user
 from ..schemas import (
     AdminVerificationQueueRead,
     VerificationDocumentRead,
@@ -48,6 +49,7 @@ from ..schemas import (
     VerificationRejectRequest,
 )
 from ..uploads import (
+    _upload_limiter,
     attachment_headers,
     display_filename,
     enforce_upload_quota,
@@ -128,6 +130,13 @@ async def submit_verification_document(
     upload, and nothing about it is overwritten by a later transition. Only
     admin decisions overwrite `verification_reason`, so only they need history.
     """
+    # The arrival-rate cap (pre-011 R5/R8), ahead of everything including the
+    # status check: a flood is a flood whatever state the sender is in, and a
+    # refused request must leave no row and no file. `_upload_limiter` is the
+    # single instance in `uploads.py` that the listing-document route also uses,
+    # so a caller has one upload budget across both routes rather than two.
+    enforce_per_user(_upload_limiter, user)
+
     if user.verification_status not in _UPLOAD_ALLOWED_FROM:
         # i.e. `verified` — the one status a buyer cannot submit from (D3).
         raise Conflict("Already verified", code="already_verified")

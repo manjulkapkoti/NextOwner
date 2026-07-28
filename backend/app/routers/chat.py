@@ -39,6 +39,7 @@ _chat_rate_limiter = RateLimiter(
     max_attempts=settings.chat_rate_limit_max,
     window_seconds=settings.chat_rate_limit_window_seconds,
     backend=InMemoryRateLimiterBackend(),
+    name="chat_frames",
 )
 
 
@@ -97,7 +98,12 @@ async def conversation_socket(
         await websocket.close(code=4004, reason="access_revoked")
         return
 
-    limiter_key = f"{conversation_id}:{user.id}"
+    # Keyed per (conversation, member) — this cap is about frames on one socket,
+    # so it is neither IP- nor account-wide. Namespaced via `key_for` like every
+    # other limiter (pre-011), so it can never share a counter with one of the
+    # HTTP caps. Deliberately still `check()` rather than `enforce()`: the
+    # refusal here is a WebSocket close code, not an HTTP 429.
+    limiter_key = _chat_rate_limiter.key_for("conversation", f"{conversation_id}:{user.id}")
 
     try:
         while True:

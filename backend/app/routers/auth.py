@@ -18,11 +18,11 @@ from sqlmodel import Session, select
 
 from ..config import settings
 from ..db import get_session
-from ..errors import BadRequest, Conflict, RateLimited, Unauthorized
+from ..errors import BadRequest, Conflict, Unauthorized
 from ..mailer import queue_email
 from ..models import User, _utcnow
 from ..permissions import get_current_user
-from ..ratelimit import RateLimiter
+from ..ratelimit import RateLimiter, enforce_per_ip, reset_per_ip
 from ..schemas import (
     ForgotPasswordRequest,
     LoginResponse,
@@ -45,13 +45,21 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # Module-level limiters → one in-process counter per app. The swappable backend
 # (ratelimit.py) is the horizontal-scale seam. Both login AND register are
 # limited (security.md §1.1 — brute force on login, signup spam on register).
+#
+# Their numbers are deliberately **unchanged** by pre-011: they work and they
+# have tests, and re-tuning them in a pass about *missing* limits would muddle
+# what that pass proves. What did change is how the key is derived — via
+# `enforce_per_ip`, so `X-Forwarded-For` handling (D3) lives in one place rather
+# than in `request.client.host` repeated per route.
 _login_limiter = RateLimiter(
     max_attempts=settings.login_rate_limit_max,
     window_seconds=settings.login_rate_limit_window_seconds,
+    name="login",
 )
 _register_limiter = RateLimiter(
     max_attempts=settings.register_rate_limit_max,
     window_seconds=settings.register_rate_limit_window_seconds,
+    name="register",
 )
 
 # A precomputed hash to verify against when the email is unknown, so the unknown
@@ -65,9 +73,7 @@ def register(
     request: Request,
     session: Session = Depends(get_session),
 ) -> User:
-    key = request.client.host if request.client else "unknown"
-    if not _register_limiter.check(key):
-        raise RateLimited("Too many sign-up attempts — try again later")
+    enforce_per_ip(_register_limiter, request)
     if session.exec(select(User).where(User.email == body.email)).first():
         raise Conflict("Email already registered", code="email_taken")
     user = User(
@@ -112,9 +118,7 @@ def login(
     form: OAuth2PasswordRequestForm = Depends(),
     session: Session = Depends(get_session),
 ) -> LoginResponse:
-    key = request.client.host if request.client else "unknown"
-    if not _login_limiter.check(key):
-        raise RateLimited("Too many login attempts — try again later")
+    enforce_per_ip(_login_limiter, request)
 
     user = session.exec(select(User).where(User.email == form.username)).first()
     if user is None or user.deleted_at is not None:
@@ -123,7 +127,7 @@ def login(
     if not verify_password(form.password, user.password_hash):
         raise Unauthorized("Incorrect email or password")
 
-    _login_limiter.reset(key)
+    reset_per_ip(_login_limiter, request)
     return LoginResponse(access_token=create_access_token(str(user.id)))
 
 
@@ -184,7 +188,37 @@ def add_role(
 _forgot_password_limiter = RateLimiter(
     max_attempts=settings.forgot_password_rate_limit_max,
     window_seconds=settings.forgot_password_rate_limit_window_seconds,
+    name="forgot_password_ip",
 )
+
+# The victim-side cap (pre-011 D6/R6) — a **second** limiter, keyed on the email
+# address, alongside (never replacing) the per-IP one above. They defend
+# different victims: the per-IP cap stops one attacker burning our mail budget,
+# this stops N attackers from N addresses burying one person's inbox, which no
+# per-caller cap can see.
+_forgot_password_address_limiter = RateLimiter(
+    max_attempts=settings.forgot_password_address_rate_limit_max,
+    window_seconds=settings.forgot_password_address_rate_limit_window_seconds,
+    name="forgot_password_address",
+)
+
+
+def _address_mail_budget_remains(email: str) -> bool:
+    """Count this attempt against the address's budget; True while under it.
+
+    **Deliberately not `ratelimit.enforce`**, which is the D1 helper every other
+    call site uses. Raising a 429 here would hand an attacker the exact oracle
+    the uniform 202 exists to close (M8 G2/G14): a visible refusal would mean
+    "this address is real and popular enough that someone else is asking about
+    it". So the refusal is invisible — the caller gets the same 202, and the only
+    difference is that no mail goes out. The one surface where a rate limit must
+    change *behaviour* without changing the *response*.
+
+    The key is case-folded and trimmed: `Victim@…` and `victim@…` are one inbox,
+    and a cap a caller resets by pressing Shift is not a cap.
+    """
+    limiter = _forgot_password_address_limiter
+    return limiter.check(limiter.key_for("address", email.strip().lower()))
 
 
 def equalize_unknown_address_cost(session: Session) -> None:
@@ -224,18 +258,26 @@ def forgot_password(
 
     The rate limit matters more here than on login, because the cost of abuse
     lands on a **third party**: an attacker who can call this without bound
-    mails somebody else's inbox on demand.
+    mails somebody else's inbox on demand. Hence **two** caps (pre-011 D6): the
+    per-IP one bounds what a single caller costs us and refuses visibly, while
+    the per-address one bounds what one inbox suffers and refuses *invisibly* —
+    see `_address_mail_budget_remains` for why a 429 there would be an oracle.
 
     An SMTP failure is swallowed by the queue's `send_safe` and never changes
     the response — surfacing it would recreate the very oracle the uniform 202
     exists to close (X3).
     """
-    key = request.client.host if request.client else "unknown"
-    if not _forgot_password_limiter.check(key):
-        raise RateLimited("Too many password-reset requests — try again later")
+    enforce_per_ip(_forgot_password_limiter, request)
+
+    # The address's own budget (pre-011 D6). Counted for **every** attempt,
+    # known address or not, so the counting itself reveals nothing — and read
+    # *before* the lookup so the two caps compose as one decision rather than two
+    # branches. An exhausted budget takes the same path as an unknown address
+    # below: no token, no mail, and the same equalized cost.
+    address_mail_allowed = _address_mail_budget_remains(body.email)
 
     user = session.exec(select(User).where(User.email == body.email)).first()
-    if user is not None and user.deleted_at is None:
+    if address_mail_allowed and user is not None and user.deleted_at is None:
         raw = issue_password_reset(session, user)
         queue_email(
             session,

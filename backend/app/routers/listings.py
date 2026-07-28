@@ -9,11 +9,12 @@ server-generated filename, path confinement in the storage adapter.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Request, UploadFile
 from fastapi.responses import Response
 from sqlalchemy import Numeric, cast, func, or_
 from sqlmodel import Session, select
 
+from ..config import settings
 from ..db import get_session
 from ..errors import InvalidTransition, NotFound
 from ..models import Listing, ListingDocument, ListingEvent, ListingPrivate, User, _utcnow
@@ -24,6 +25,7 @@ from ..permissions import (
     require_admin,
     require_private_access,
 )
+from ..ratelimit import RateLimiter, enforce_per_ip, enforce_per_user
 from ..schemas import (
     DocumentRead,
     ListingCreate,
@@ -36,6 +38,7 @@ from ..schemas import (
     RejectRequest,
 )
 from ..uploads import (
+    _upload_limiter,
     attachment_headers,
     display_filename,
     enforce_upload_quota,
@@ -46,6 +49,17 @@ from ..uploads import (
 router = APIRouter(tags=["listings"])
 
 _EDIT_LOCKED = {"closed", "sold"}     # terminal — can't edit or re-transition
+
+# The anonymous surface's cap (pre-011 R1, R2). **One limiter for both the list
+# and the detail route**, keyed per IP: a scraper walking listing ids is the same
+# abuse as one walking pages, and two independent counters would just double the
+# budget. Pagination already bounds the cost of a single request; this bounds the
+# rate, which is the half M4 deferred (`security.md` §9).
+_browse_limiter = RateLimiter(
+    max_attempts=settings.browse_rate_limit_max,
+    window_seconds=settings.browse_rate_limit_window_seconds,
+    name="browse",
+)
 
 
 def _to_read(listing: Listing, private: ListingPrivate | None) -> ListingRead:
@@ -113,12 +127,16 @@ def _to_public(listing: Listing) -> ListingPublic:
 
 @router.get("/listings", response_model=ListingPage)
 def browse_listings(
+    request: Request,
     query: ListingQuery = Depends(),
     session: Session = Depends(get_session),
 ) -> ListingPage:
     """Public browse (spec 004 A1-A11, B1-B13). No auth — and no widening if a
     token is present (S8): this function never reads the caller's identity at
     all."""
+    # Before any query work — a refused request must cost nothing (pre-011 R1).
+    enforce_per_ip(_browse_limiter, request)
+
     conditions = [Listing.status == "live"]
 
     # Truthiness, not `is not None`, so `?type=` (an empty value, which is how a
@@ -263,6 +281,7 @@ def get_my_listing(
 @router.get("/listings/{listing_id}", response_model=ListingPublic)
 def get_public_listing(
     listing_id: int,
+    request: Request,
     session: Session = Depends(get_session),
 ) -> ListingPublic:
     """The anonymous card (spec 004 C1-C4). Public — no auth.
@@ -271,7 +290,14 @@ def get_public_listing(
     message, so this route is not an existence oracle: an unapproved draft can't
     be probed for (C3). The owner is not special-cased — the public route never
     serves unapproved content, not even to the person who wrote it (C2).
+
+    Shares `_browse_limiter` with the list route (pre-011): the refusal is
+    checked *before* the lookup, so a rate-limited caller cannot learn anything
+    about the id they asked for — the 429 is identical whether the listing is
+    live, a draft, or nonexistent.
     """
+    enforce_per_ip(_browse_limiter, request)
+
     listing = session.get(Listing, listing_id)
     if listing is None or listing.status != "live":
         raise NotFound("Listing not found")
@@ -406,8 +432,19 @@ def close_listing(
 async def upload_document(
     listing: Listing = Depends(get_owned_listing),
     file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> ListingDocument:
+    # The arrival-rate cap (pre-011 R4/R8) — **first**, before the bytes are
+    # validated and long before anything is stored, so a refused upload leaves
+    # no row and no file. (Not "before a byte is read": Starlette has already
+    # spooled the multipart body by the time any handler runs. Nothing this
+    # check can do about that; "before anything is written" is the property that
+    # actually matters, and it holds.) Keyed on the JWT identity,
+    # not the listing: otherwise one seller with fifty listings would get fifty
+    # budgets. The 429 is deliberately distinct from the quota's 413 — "too fast"
+    # and "too much stored" are different problems with different remedies.
+    enforce_per_user(_upload_limiter, user)
     # Type + extension + magic bytes + the streamed size ceiling, all in
     # `uploads.py` since M10 — one validator, shared verbatim with
     # `POST /verification/documents` so the two upload routes cannot drift
