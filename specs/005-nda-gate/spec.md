@@ -17,8 +17,8 @@
 
 **Scope fold-ins** (`docs/milestones.md` § Scope fold-ins → M5), each carried below as criteria:
 revocation endpoint (`approved → revoked`, seller-only); `nda_version` recorded at signature;
-the access-request list shows buyer profile (**verification status is *not* shipped — see
-D5; M10 owns that field**); `GET /my/access-requests` (buyer side). *Notification events are
+the access-request list shows buyer profile (**verification status was *not* shipped at M5 — see
+D5; M10 owned that field and delivered it 2026-07-28**); `GET /my/access-requests` (buyer side). *Notification events are
 **not** emitted as rows — see § Out of scope.*
 
 ---

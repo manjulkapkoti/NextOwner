@@ -98,8 +98,10 @@ Three new functions — **one per trust boundary**, matching the file's existing
   (S3).
 - **`AccessRequestWithBuyer`** — the seller's queue: the above plus the buyer **profile** nested
   under a **`buyer`** key (`row["buyer"]["display_name"]`, `budget`, `target_industries`,
-  `experience`) and explicitly **not** email (G3). **No verification field** — M10 owns it and
-  will add it here (D5). *(The `buyer` key is pinned here 2026-07-20 because the test-writing
+  `experience`) and explicitly **not** email (G3). ~~**No verification field** — M10 owns it and
+  will add it here (D5).~~ **M10 did exactly that on 2026-07-28** (spec 010 D7): `verification_status`
+  + a computed `verified` are on this model now. The "not email" half of the rule is permanent and
+  still pinned by G3. *(The `buyer` key is pinned here 2026-07-20 because the test-writing
   pass had to guess it — nesting rather than flattening keeps the buyer's fields namespaced, so
   M10's verification field lands beside the profile it describes rather than colliding with a
   request-level column.)*
