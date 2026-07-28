@@ -435,9 +435,12 @@ async def upload_document(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> ListingDocument:
-    # The arrival-rate cap (pre-011 R4/R8) — **first**, before a single byte is
-    # read and long before anything is stored, so a refused upload costs the
-    # server nothing and leaves no row and no file. Keyed on the JWT identity,
+    # The arrival-rate cap (pre-011 R4/R8) — **first**, before the bytes are
+    # validated and long before anything is stored, so a refused upload leaves
+    # no row and no file. (Not "before a byte is read": Starlette has already
+    # spooled the multipart body by the time any handler runs. Nothing this
+    # check can do about that; "before anything is written" is the property that
+    # actually matters, and it holds.) Keyed on the JWT identity,
     # not the listing: otherwise one seller with fifty listings would get fifty
     # budgets. The 429 is deliberately distinct from the quota's 413 — "too fast"
     # and "too much stored" are different problems with different remedies.

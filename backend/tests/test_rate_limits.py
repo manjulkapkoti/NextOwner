@@ -497,6 +497,42 @@ def test_s4_trusted_proxy_extracts_the_real_client_not_the_proxys_address(
     assert client_b.status_code == 200, client_b.text
 
 
+def test_s8_a_header_of_only_trusted_entries_falls_back_to_the_peer(
+    client, monkeypatch
+):
+    """S8 — the loop's fall-through, which no other test exercises.
+
+    When every entry in `X-Forwarded-For` is itself a trusted proxy, the
+    right-to-left walk finds no untrusted entry and must fall back to the
+    connection address. Two ways to get this wrong: return the last entry
+    inspected (a proxy's address, shared by every caller behind it — S4's bug
+    reintroduced through the back door), or return an empty string, which makes
+    one bucket for the entire internet.
+
+    Both hops are trusted here, so two requests that differ *only* in their
+    forwarded chain must still land on the same counter — proving the fallback
+    is the peer and not the header.
+    """
+    from app.config import settings
+    from app.routers import listings as listings_router
+
+    monkeypatch.setattr(
+        settings, "trusted_proxies", ["testclient", "10.0.0.1", "10.0.0.2"],
+        raising=False,
+    )
+    monkeypatch.setattr(listings_router._browse_limiter, "max_attempts", 2, raising=False)
+
+    first = client.get("/api/listings", headers={"X-Forwarded-For": "10.0.0.1"})
+    second = client.get("/api/listings", headers={"X-Forwarded-For": "10.0.0.2, 10.0.0.1"})
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+
+    third = client.get("/api/listings", headers={"X-Forwarded-For": "10.0.0.1, 10.0.0.2"})
+
+    assert third.status_code == 429, third.text
+    assert third.json().get("code") == "rate_limited"
+
+
 def test_s7_a_second_forwarded_for_header_line_cannot_shadow_our_proxys(
     client, monkeypatch
 ):
@@ -627,10 +663,19 @@ def test_s5_the_registry_covers_every_rate_limiter_the_app_builds():
 
     So this does not hardcode an expected count (which would pass vacuously
     the day someone adds an eleventh limiter and forgets it here too). It
-    independently rediscovers every `RateLimiter` instance the app actually
-    constructs by introspecting the router modules, and asserts that set is a
-    subset of `ratelimit._REGISTRY` — the registry has to cover what was
-    *built*, not merely what its author remembered to list.
+    rediscovers the limiters by introspection and asserts that set is a subset
+    of `ratelimit._REGISTRY` — the registry has to cover what was *built*, not
+    merely what its author remembered to list.
+
+    **The exact guarantee, stated precisely because the first version of this
+    docstring overstated it** (caught by the pre-011 appsec pass): the scan
+    walks the five *router* modules, so what it proves is "every limiter
+    reachable from a router module is registered" — not "every limiter in the
+    app". Today those coincide, and `_upload_limiter` is caught because both
+    routers `from ..uploads import _upload_limiter`, which binds it into their
+    namespaces too — a real mechanism, not luck. But a limiter defined in a
+    non-router module and never imported by one would evade this check. If that
+    ever happens, widen the scan rather than trusting this test's name.
     """
     from app import ratelimit
     from app.routers import access as access_router
