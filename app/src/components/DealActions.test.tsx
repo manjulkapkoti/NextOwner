@@ -1,4 +1,4 @@
-// M12 — the seller's deal-close actions (spec 012 criteria F1-F7, FR-8).
+// M12 — the seller's deal-close actions (spec 012 criteria F1-F8, FR-8).
 //
 // The two irreversible buttons on the whole product. Everything here exists to
 // make "irreversible" visible before it happens: the price is rendered, never
@@ -105,7 +105,7 @@ describe('DealActions', () => {
     expect((init as RequestInit).body ?? null).toBeNull()
   })
 
-  it('F5b — the fell-through action posts to relist', async () => {
+  it('F8 — the fell-through action posts to relist', async () => {
     const user = userEvent.setup()
     const { onChange } = renderActions()
 

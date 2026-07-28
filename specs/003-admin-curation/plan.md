@@ -15,7 +15,7 @@ Implementation plan for `spec.md`. Schema, endpoints, components, and the **Buil
 | `id` | int PK | |
 | `listing_id` | int FK → `listing.id`, indexed | |
 | `actor_id` | int FK → `user.id` | **server-derived from the JWT**, never from the body |
-| `action` | str | `approved` \| `rejected` — **extended 2026-07-28 by M12 with `sold` and `fell_through`, exactly the two names predicted here** (spec 012 D1, D3) |
+| `action` | str | `approved` \| `rejected` — **extended 2026-07-28 by M12 with `sold` and `fell_through`, exactly the two names predicted here** (spec 012 *criteria* D1/D3 — that spec numbers its Decisions D1-D12 and its audit-row criteria D1-D5 in the same namespace, so the section matters) |
 | `from_status` | str | what it was — makes the row self-contained without replaying history |
 | `to_status` | str | what it became |
 | `reason` | str \| None | required for `rejected`, absent for `approved` |

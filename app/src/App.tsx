@@ -205,7 +205,7 @@ function ChatWindowRoute() {
 // `get_owned_listing` on the queue endpoint, which 404s a listing that is not
 // yours (spec 007 G2, mirroring spec 005's ListingRequestsRoute above).
 //
-// M12 adds the deal-close actions above the queue (spec 012 F1-F7). They live
+// M12 adds the deal-close actions above the queue (spec 012 F1-F8). They live
 // on this screen rather than on `/my-listings` because this is where the
 // accepted offer — the thing the recorded sale price comes from — is already
 // on screen. The listing is fetched here (not inside `DealActions`) so the

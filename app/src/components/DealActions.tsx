@@ -1,4 +1,4 @@
-// M12 — the seller's deal-close actions (spec 012 F1-F7, FR-8).
+// M12 — the seller's deal-close actions (spec 012 F1-F8, FR-8).
 //
 // The two most consequential buttons in the product: one ends a listing's life
 // permanently, the other unwinds a deal both parties had agreed. Everything

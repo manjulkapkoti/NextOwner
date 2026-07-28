@@ -22,7 +22,7 @@ this milestone adds, and a speculative index is a schema claim nothing tests.
 - **`ListingEvent`** gains two `action` values — `sold` and `fell_through`. The column is a free `str`, so this
   is a vocabulary extension, not a migration. `specs/003-admin-curation/plan.md` predicted exactly these two
   names ("extended by M12 for `sold` / `fell_through`"); the comment in `models.py:159`
-  (`# approved | rejected (M12 extends)`) is updated to name them (slice 6).
+  (`# approved | rejected (M12 extends)`) is updated to name them (slice 5).
 - **`OfferEvent`** gains two `action` values — `completed` and `lapsed`.
 
 **Offer status vocabulary** gains two terminal states, `completed` and `lapsed` (spec D5). No schema change:
@@ -30,7 +30,7 @@ this milestone adds, and a speculative index is a schema claim nothing tests.
 remain unconstrained and the new states cannot collide with it.
 
 **Data protection** — no new PII, no new person-referencing table; the new columns are business facts about a
-listing, and the new event rows are audit-exempt on erasure under the existing rule (spec D11,
+listing, and the new event rows are audit-exempt on erasure under the existing rule (spec D12,
 `docs/data_protection.md`).
 
 ---
@@ -46,8 +46,13 @@ Both live in `backend/app/routers/listings.py` beside `pause`/`resume`/`close`, 
 return `ListingRead` — identical in shape to every other seller lifecycle route, which is the point: they are
 the same kind of thing.
 
-**Changed:** `PUT /api/listings/{id}` (`update_listing`) refuses `under_offer` with 409 `listing_under_offer`
-(spec D8/S12). This is a guard added to an existing route, not a new route.
+**Changed — two guards on existing M2 routes, not new routes:**
+- `PUT /api/listings/{id}` (`update_listing`) refuses `under_offer` → 409 `listing_under_offer` (spec D8/S12/S13).
+- `POST /api/listings/{id}/documents` (`upload_document`) refuses `_EDIT_LOCKED` (`closed`/`sold`) → 409 (S14).
+  Added late, after the independent appsec pass; `under_offer` deliberately stays open (S16). Note this also
+  newly blocks uploads on **`closed`**, which M12 did not scope and no criterion covers — accepted as benign
+  (`closed` is terminal, no route accepts it as a from-state, so no seller can be stranded), and recorded
+  here rather than left to be discovered.
 
 ### The atomic close (`mark-sold`)
 
@@ -55,26 +60,37 @@ One transaction, compare-and-swap throughout — the shape M7's `accept_offer` e
 (`security.md` §6 races; spec C5):
 
 1. **Status check first**, Python-side: not `under_offer` → `InvalidTransition` (`invalid_transition`). This
-   decides only *which* 409 the caller gets — the CAS in step 3 is the real guard. Ordering it first is what
+   decides only *which* 409 the caller gets — the CAS in step 2 is the real guard. Ordering it first is what
    makes the two machine codes mean different things: without it, `mark-sold` on a `live` listing would be
    reported as a missing accepted offer, which is true but useless (spec C1 vs C4).
-2. `SELECT` the listing's offer `WHERE status='accepted'`; none → `InvalidTransition(code="no_accepted_offer")`,
-   before any write (spec C4). Its `price` is the value step 3 writes.
-3. `UPDATE listing SET status='sold', sold_at=…, final_price=… WHERE id=? AND status='under_offer'` — rowcount
-   ≠ 1 → `InvalidTransition`, nothing written. The read-then-write alternative is a TOCTOU: production hands
-   each request its own `Session`, so the status read in step 1 is a snapshot, not a lock. The derived price
-   is written in the *same statement* that claims the transition, so a refused close can never leave one
-   behind. The listing is claimed before the offer because the listing status is what two concurrent requests
-   contend for — the loser then never touches the offer at all.
+2. **Claim the contended row:** `UPDATE listing SET status='sold' WHERE id=? AND status='under_offer'` —
+   rowcount ≠ 1 → `session.rollback()` then `InvalidTransition`. The read-then-write alternative is a TOCTOU:
+   production hands each request its own `Session`, so the status read in step 1 is a snapshot, not a lock.
+3. `SELECT … WHERE status='accepted' ORDER BY id`; none → `session.rollback()` +
+   `InvalidTransition(code="no_accepted_offer")` (spec C4). The `ORDER BY` is not cosmetic: if the
+   at-most-one-`accepted` invariant is ever broken by a later milestone, the recorded sale price must degrade
+   *deterministically* rather than arbitrarily.
 4. `UPDATE offer SET status='completed' WHERE id=? AND status='accepted'` — rowcount ≠ 1 → `session.rollback()`
    then 409, exactly as `accept_offer` rolls its own offer CAS back when the listing flip fails. `decided_at`
    and `decided_by_id` are **not** touched: they record the acceptance, and this transition is not one (A3).
-5. `ListingEvent` + `OfferEvent`, `notify_deal`, then one `session.commit()`.
+5. The derived sale fields: `UPDATE listing SET sold_at=…, final_price=…` — same transaction as step 2.
+6. `ListingEvent` + `OfferEvent`, `notify_deal`, then one `session.commit()`.
 
-`relist` is the same shape with `to='live'` and `lapsed`, minus the price derivation — but it **does** still
-require an `accepted` offer to move, so step 2's guard applies to it identically. Both routes run through one
-shared `_resolve_deal` helper parameterized by the two status strings, the two audit action names, and an
-optional price-derivation callback.
+> **The order of steps 2 and 3 was reversed after the independent appsec pass (2026-07-29), and the reason is
+> the whole value of this section.** The original read the offer first and CAS'd the listing second — and
+> because a losing request's `SELECT` reads *committed* state, it always found no `accepted` offer and was
+> refused by `no_accepted_offer` **before reaching the rowcount guard at all**. The guard was dead code: C5
+> passed with both rowcount checks deleted. The guards were never wrong, they were unreachable. Claiming the
+> contended row first makes the guard both the actual refusal and a testable one, and C5 now pins the machine
+> code (`invalid_transition`) rather than merely "was refused". Sabotage-verified: deleting the guard turns C5
+> red. The cost is that the derived price moves to its own statement (step 5) instead of riding along with the
+> claim — atomicity is unchanged, because it was always the single commit and the rollbacks doing that work,
+> never the packing of columns into one statement.
+
+`relist` is the same shape with `to='live'` and `lapsed`, minus step 5 — but it **does** still require an
+`accepted` offer to move, so step 3's guard applies to it identically. Both routes run through one shared
+`_resolve_deal` helper parameterized by the two status strings, the two audit action names, and an optional
+price-derivation callback.
 
 *Note on `_transition`:* `listings.py`'s existing helper already does status-guard → set fields → audit, but it
 guards with a Python-side `if` rather than a CAS. `mark-sold`/`relist` need the CAS (money path, spec C5), so
@@ -93,7 +109,7 @@ yours" (spec D3, S2–S6).
 
 `require_private_access` is **untouched** and must stay untouched: spec S8 asserts that a `sold` listing's data
 room behaves exactly as before. The gate's own docstring already anticipated this milestone — that comment
-moves from future to present tense in slice 6.
+moves from future to present tense in slice 5.
 
 ---
 
@@ -105,7 +121,7 @@ moves from future to present tense in slice 6.
   second fetch (A5, F5).
 - **`ListingPublic`** — **unchanged**, deliberately. It is a standalone model rather than a subclass precisely
   so that adding a field to `ListingRead` cannot leak it here; spec S11 asserts the absent field set directly.
-  Its docstring's "M12 may add a deliberate public 'under offer' flag" is answered with "no" in slice 6 (D10).
+  Its docstring's "M12 may add a deliberate public 'under offer' flag" is answered with "no" in slice 5 (D10).
 - **`OfferRead`** — unchanged. `status` is already a free string, so `completed`/`lapsed` surface with no
   schema change on either party's offer list.
 
@@ -161,7 +177,9 @@ analytics, and a sale price in a console event is the same leak class as one in 
 
 ## Build order
 
-Six slices, each one trust boundary or one coherent surface, each ending in one Conventional Commit.
+Five slices, each one trust boundary or one coherent surface, each ending in one Conventional Commit.
+*(Planned as seven; slices 3-5 merged into one during the build — see the note under slice 3. The numbering
+below is the shipped one, renumbered 2026-07-29 after the docs audit found the count and the list disagreed.)*
 
 1. **`feat:` schema + the owner's read surface.** The two `Listing` columns, `ListingRead` / `ListingSummary`,
    `ListingPublic` untouched. *First because every later slice writes these columns*, and because it turns the
@@ -193,14 +211,21 @@ Six slices, each one trust boundary or one coherent surface, each ending in one 
    > caught it. The ordering rule `_transition`'s docstring already stated — *the status check comes first* —
    > is the reason the two 409s carry different machine codes at all.
 
-5. **`feat:` the seller's deal actions UI.** `DealActions` + store methods + route wiring + the `MyListings`
+4. **`feat:` the seller's deal actions UI.** `DealActions` + store methods + route wiring + the `MyListings`
    final-price row. Last of the code slices — the backend contract is settled by now, so nothing here is built
-   against a moving target. Turns green: **F1–F7**.
+   against a moving target. Turns green: **F1–F8**.
 
-6. **`docs:` retire every expired M12 deferral.** Turns no test green — it is the slice the run-milestone
+5. **`docs:` retire every expired M12 deferral.** Turns no test green — it is the slice the run-milestone
    playbook mandates when a milestone lands a feature earlier specs deferred to it. Run
-   `git grep -in "until M12\|M12 \|(once M12\|M7/M12\|later, M12"` across `specs/`, `docs/`, `backend/` and
-   `app/`, and fix **every** hit in this one commit — the prose copies are the ones that get missed. Known
+   `git grep -in "M12"` — **the bare token, case-insensitive, with no alternation** — across `specs/`, `docs/`,
+   `backend/` and `app/`, and read every hit. Fix them all in this one commit; the prose copies are the ones
+   that get missed.
+   > **The narrower five-alternative grep this line used to prescribe is what let two deferrals through**
+   > (`M7 / M12.` — spaces around the slash; `owned by **M12**;` — punctuation, no trailing space), both caught
+   > by the independent docs audit rather than by the sweep. A pattern list encodes the phrasings you thought
+   > of; the bare token encodes none. Noise is cheaper than a missed claim, and the audit's own method — the
+   > bare token plus a second sweep for future-tense phrasing *near the feature words* but without the token
+   > ("once the sold transition exists") — is the one to copy. Known
    targets, each retired **in place with a dated note**, never silently deleted:
    - `docs/security.md` §7 M12 — the `403` → `404` correction (spec D3), dated.
    - `docs/testing_guide.md` §5 — the "(once M12 lands)" caveat on the golden path; the golden path itself
@@ -223,5 +248,5 @@ Six slices, each one trust boundary or one coherent surface, each ending in one 
 **No checkboxes anywhere in this file, by design.** The red test list is the status
 (`cd backend && pytest -q --lf`) and the red count is the progress bar; a ticked box here would be a second
 source of truth that lies after the first crash, which is exactly why `/resume` rebuilds from git + tests
-alone (constitution Article 3 §1). The suite is **red overall** until slice 5 — that is the queue draining,
+alone (constitution Article 3 §1). The suite is **red overall** until slice 4 — that is the queue draining,
 not a broken build. No slice removes tests.

@@ -485,7 +485,7 @@ def _resolve_deal(
     offer_action: str,
     set_fields_from_offer=None,
 ) -> Listing:
-    """The one transaction both deal resolutions run — CAS, CAS, audit, commit.
+    """The one transaction both deal resolutions run — CAS, read, CAS, audit, commit.
 
     Compare-and-swap rather than read-then-write, the shape `accept_offer`
     established after M7's independent review found the read-then-write version
@@ -496,43 +496,79 @@ def _resolve_deal(
     is checked by rowcount, so exactly one of them can win (spec 012 C5).
     `SELECT ... FOR UPDATE` is not an option — SQLite drops it silently.
 
-    Ordered offer-first-then-listing? No: **listing first**. The listing status
-    is the thing two concurrent requests contend for, so claiming it first means
-    the loser never touches the offer at all.
+    **The listing CAS comes first — before the offer is even read.** The listing
+    status is what two concurrent requests contend for, so claiming it first is
+    what makes the loser lose *there*, having touched nothing else.
+
+    *Reordered 2026-07-29, after M12's independent appsec pass.* The first
+    version read the accepted offer first and CAS'd the listing second, while
+    this docstring already claimed "listing first". That was not merely a stale
+    comment — it made the race guard **unreachable by any test**. A losing
+    request's offer `SELECT` reads committed state, so once the winner has
+    committed, the loser finds no `accepted` offer and is turned away by the
+    *`no_accepted_offer`* branch, never reaching the rowcount check. C5 passed
+    with both rowcount guards deleted. The guards were correct and necessary
+    (Postgres re-evaluates the WHERE under READ COMMITTED); they were simply
+    dead behind an earlier read. Claiming the contended row first makes the
+    guard both the real refusal and a testable one.
     """
     # The status check comes **first**, so a listing in the wrong state is
     # refused as an illegal transition rather than mis-reported as a missing
     # offer — the same ordering rule `_transition` keeps, and the reason the
     # two 409s carry different machine codes at all. This `if` decides the
     # *error code* only; the compare-and-swap below is the actual guard, and it
-    # is what a concurrent request has to lose to (spec 012 C1/C4).
+    # is what a concurrent request has to lose to (spec 012 C1/C5).
     if listing.status != "under_offer":
         raise InvalidTransition(f"Cannot go from {listing.status!r} to {to!r}")
 
+    # ① Claim the contended row. Status only — the derived sale fields need the
+    # offer, which is read next. "Nothing is left behind on a refusal" is a
+    # property of the rollback and the single commit, not of packing every
+    # column into one statement.
+    flipped = session.execute(
+        update(Listing)
+        .where(Listing.id == listing.id, Listing.status == "under_offer")
+        .values(status=to)
+        .execution_options(synchronize_session=False)
+    )
+    if flipped.rowcount != 1:
+        # Lost the race — another request already moved this listing out of
+        # `under_offer`. Roll back before refusing, symmetric with the two
+        # branches below: nothing of ours has landed yet, but a branch that
+        # raises without rolling back is one edit away from leaking partial
+        # state into a session someone else may commit.
+        session.rollback()
+        # **A distinct machine code, deliberately.** The Python-side check above
+        # raises `invalid_transition` too, so a test asserting only that code
+        # cannot tell which guard refused — and C5 would keep passing if a
+        # future `session.refresh()` moved the refusal upstream and left this
+        # CAS dead again, which is the exact regression C5 exists to catch
+        # (appsec re-verification, 2026-07-29). Same medicine as
+        # `assert_refused_by_the_gate`'s `not_found` pin.
+        raise InvalidTransition(
+            "This listing is no longer under offer", code="listing_race_lost"
+        )
+
+    # ② The accepted offer — **ordered**, so that if the "at most one `accepted`
+    # offer per listing" invariant is ever broken by a later milestone, the
+    # recorded sale price degrades *deterministically* rather than arbitrarily.
+    # B5 is the test that asserts the invariant itself, over accept → relist →
+    # accept.
     accepted = session.exec(
-        select(Offer).where(Offer.listing_id == listing.id, Offer.status == "accepted")
+        select(Offer)
+        .where(Offer.listing_id == listing.id, Offer.status == "accepted")
+        .order_by(Offer.id)
     ).first()
     if accepted is None:
         # Unreachable through the product — a listing is `under_offer` only
         # because an accept put it there. Guarded anyway so a data anomaly
         # answers with the contract instead of a `NoneType` 500 (spec 012 C4).
+        session.rollback()
         raise InvalidTransition(
             "This listing has no accepted offer to resolve", code="no_accepted_offer"
         )
 
     now = _utcnow()
-    values = {"status": to}
-    if set_fields_from_offer is not None:
-        values.update(set_fields_from_offer(accepted, now))
-
-    flipped = session.execute(
-        update(Listing)
-        .where(Listing.id == listing.id, Listing.status == "under_offer")
-        .values(**values)
-        .execution_options(synchronize_session=False)
-    )
-    if flipped.rowcount != 1:
-        raise InvalidTransition(f"Cannot go from {listing.status!r} to {to!r}")
 
     moved = session.execute(
         update(Offer)
@@ -547,6 +583,25 @@ def _resolve_deal(
         session.rollback()
         raise InvalidTransition(
             "This listing has no accepted offer to resolve", code="no_accepted_offer"
+        )
+
+    # ③ The derived sale fields, in the same transaction as the claim above.
+    if set_fields_from_offer is not None:
+        # The status is re-stated in the WHERE even though ① already took the
+        # row lock in this transaction: it costs nothing and keeps the one
+        # statement that would otherwise not describe its own precondition
+        # self-documenting if it is ever moved.
+        #
+        # This is also the only failure path in the function without an explicit
+        # rollback — if `set_fields_from_offer` itself raises, the unwind relies
+        # on `get_session`'s `with Session(engine)` closing the session. Safe,
+        # and what S15 already exercises, but worth naming since the other three
+        # paths all roll back by hand.
+        session.execute(
+            update(Listing)
+            .where(Listing.id == listing.id, Listing.status == to)
+            .values(**set_fields_from_offer(accepted, now))
+            .execution_options(synchronize_session=False)
         )
 
     session.add(
@@ -582,10 +637,12 @@ def mark_listing_sold(
 ) -> ListingRead:
     """The close ⭐ — `under_offer → sold`, at the accepted offer's price.
 
-    `final_price` is written in the same conditional UPDATE that claims the
-    transition, so a refused close can never leave a price behind (the rule
-    `_transition`'s `set_fields` encodes for `published_at`, applied here to
-    money). `sold` is terminal in both directions: there is no un-sell, and
+    `final_price` is written in the same **transaction** that claims the
+    transition — not, since 2026-07-29, in the same statement — so a refused
+    close can never leave a price behind. That property is carried by the single
+    commit plus a rollback on every failure path, which is what it always
+    actually rested on; the reorder that moved the price into its own statement
+    is described in `_resolve_deal`. `sold` is terminal in both directions: there is no un-sell, and
     `_EDIT_LOCKED` freezes the row (spec 012 S14).
     """
     _resolve_deal(
@@ -645,6 +702,22 @@ async def upload_document(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> ListingDocument:
+    # A terminal listing accepts nothing new (M12, spec 012 S14). Added
+    # 2026-07-29 after M12's independent appsec pass observed that this route
+    # had no status check at all, which made three separate claims false — the
+    # `mark_listing_sold` docstring's "`_EDIT_LOCKED` freezes the row", S14's
+    # title "a sold listing is frozen", and the general promise that a closed
+    # deal is closed. A data room that keeps accepting documents after the sale
+    # is not frozen; it is merely append-only.
+    #
+    # **`under_offer` is deliberately NOT blocked here**, and that is the
+    # difference between this guard and `update_listing`'s. Due diligence is
+    # exactly when a buyer asks for more documents, so refusing uploads mid-deal
+    # would break the workflow the data room exists for. The bait-and-switch
+    # risk D8 closes does not apply: this route only ever *appends*, there is no
+    # delete or replace route, so nothing the buyer already relied on can be
+    # taken away or altered — and documents never reach any anonymous surface,
+    # so `relist` cannot republish them.
     # The arrival-rate cap (pre-011 R4/R8) — **first**, before the bytes are
     # validated and long before anything is stored, so a refused upload leaves
     # no row and no file. (Not "before a byte is read": Starlette has already
@@ -655,6 +728,30 @@ async def upload_document(
     # budgets. The 429 is deliberately distinct from the quota's 413 — "too fast"
     # and "too much stored" are different problems with different remedies.
     enforce_per_user(_upload_limiter, user)
+    # A terminal listing accepts nothing new (M12, spec 012 S14). Added
+    # 2026-07-29 after M12's independent appsec pass observed this route had no
+    # status check at all, which made three claims false at once — the
+    # `mark_listing_sold` docstring's "`_EDIT_LOCKED` freezes the row", S14's
+    # title "a sold listing is frozen", and the general promise that a closed
+    # deal is closed. A data room that keeps accepting files after the sale is
+    # not frozen; it is merely append-only.
+    #
+    # Placed *after* the rate cap, not before, so the "arrival-rate cap comes
+    # first" rule the comment above states stays literally true — a refusal
+    # here is a cheap authenticated call, but it is still a call.
+    #
+    # **`under_offer` is deliberately NOT blocked**, and that asymmetry with
+    # `update_listing`'s guard is the decision, not an oversight. Due diligence
+    # is exactly when a buyer asks for more documents. D8's bait-and-switch
+    # reasoning does not carry over, for two reasons that must both hold: this
+    # route only ever *appends* (there is no delete or replace route anywhere —
+    # verified, and if one is ever added this guard must be revisited), and
+    # documents never reach an anonymous surface, so `relist` cannot republish
+    # them. Asserted by `test_uploads_stay_open_while_under_offer` (S16), which
+    # exists so a later reader who notices the asymmetry and "tightens" it gets
+    # a red test instead of a silently broken diligence flow.
+    if listing.status in _EDIT_LOCKED:
+        raise InvalidTransition("A closed listing can't accept new documents")
     # Type + extension + magic bytes + the streamed size ceiling, all in
     # `uploads.py` since M10 — one validator, shared verbatim with
     # `POST /verification/documents` so the two upload routes cannot drift

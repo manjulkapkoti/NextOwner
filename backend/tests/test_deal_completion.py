@@ -363,14 +363,32 @@ def test_c5_concurrent_mark_sold_closes_the_deal_exactly_once(
     assert result_a.status == "sold"
 
     try:
-        mark_listing_sold(listing=listing_b, user=seller_view_b, session=session_b)
-        raced = True
-    except InvalidTransition:
-        raced = False
+        with pytest.raises(InvalidTransition) as refused:
+            mark_listing_sold(listing=listing_b, user=seller_view_b, session=session_b)
     finally:
         session_b.close()
 
-    assert raced is False, "B's concurrent close must be refused (409), not honored"
+    # **Which guard refused B is the whole point of this test.** Asserting only
+    # "B was refused" passed with both rowcount checks deleted: B's offer
+    # `SELECT` reads committed state, so after A commits it finds no `accepted`
+    # offer and is turned away by the `no_accepted_offer` branch long before any
+    # compare-and-swap runs. That made the race guard dead code that no test
+    # could reach. Pinning the *code* forces B to lose at the listing CAS —
+    # which is only true because `_resolve_deal` now claims the contended row
+    # first (appsec F2, 2026-07-29). If this ever reads `no_accepted_offer`
+    # again, the ordering has regressed and the guard is dead once more.
+    #
+    # The code is `listing_race_lost`, not the generic `invalid_transition` the
+    # Python-side status check also raises. That distinction was added in the
+    # re-verification round: with a shared code, C5 passed via the CAS only
+    # because `listing_b` happens to be a stale object — a *test* property, not
+    # a code one. One `session.refresh()` anywhere upstream would move the
+    # refusal to the Python check and leave the CAS dead again, with C5 still
+    # green. A distinct code makes only the CAS able to satisfy this.
+    assert refused.value.code == "listing_race_lost", (
+        f"B must lose to the listing compare-and-swap, not to the offer read "
+        f"and not to the Python-side status check — got {refused.value.code!r}"
+    )
     assert [e["action"] for e in listing_events(listing_id)].count("sold") == 1
     assert [e["action"] for e in offer_events(offer_id)].count("completed") == 1
 
@@ -440,27 +458,39 @@ def test_d4_relist_writes_an_offer_event(
     assert event[0]["to_status"] == "lapsed"
 
 
-def test_d5_refused_attempts_write_no_audit_rows(
-    client, auth_headers, under_offer_listing, make_listing, force_status,
-    listing_events, offer_events,
+def test_d5_a_409_refusal_writes_no_audit_rows(
+    client, auth_headers, make_listing, force_status, listing_events
 ):
-    """D5 — a 409 (wrong state) and a 404 (wrong caller) both leave the log alone."""
+    """D5 — a wrong-state `relist` (409) leaves the log alone."""
+    seller = auth_headers(email="seller@example.com", role="seller")
+    wrong_state_id = make_listing(seller).json()["id"]
+    force_status(wrong_state_id, "live")
+
+    assert client.post(
+        f"/api/listings/{wrong_state_id}/relist", headers=seller
+    ).status_code == 409
+
+    assert len(listing_events(wrong_state_id)) == 0
+
+
+def test_d6_a_404_refusal_writes_no_audit_rows(
+    client, auth_headers, under_offer_listing, listing_events, offer_events
+):
+    """D6 — a wrong-caller `mark-sold` (404) leaves the log alone.
+
+    Split from D5 on 2026-07-29: one criterion carried two independent
+    refusals, so one test asserted two unrelated things.
+    """
     seller, buyer = _seller_and_buyer(auth_headers)
     stranger = auth_headers(email="stranger@example.com", role="seller")
     listing_id, offer_id = under_offer_listing(seller, buyer)
     listing_event_count = len(listing_events(listing_id))
     offer_event_count = len(offer_events(offer_id))
 
-    wrong_state_id = make_listing(seller).json()["id"]
-    force_status(wrong_state_id, "live")
-    assert client.post(
-        f"/api/listings/{wrong_state_id}/relist", headers=seller
-    ).status_code == 409
     assert client.post(
         f"/api/listings/{listing_id}/mark-sold", headers=stranger
     ).status_code == 404
 
-    assert len(listing_events(wrong_state_id)) == 0
     assert len(listing_events(listing_id)) == listing_event_count
     assert len(offer_events(offer_id)) == offer_event_count
 

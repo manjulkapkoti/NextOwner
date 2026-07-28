@@ -342,7 +342,7 @@ Write these from the milestone spec *before* implementing (SDD). ☐ = one test 
 - ☐ Seller marks the deal sold → listing `sold` + `sold_at` + final price recorded (derived from the accepted offer, **not** the request body), accepted offer terminal — one transaction, assert all.
 - ☐ Deal fell through (re-list) → listing back to `live`, accepted offer terminal; sibling offers follow the policy the M7 spec decided.
 - ☐ Both paths write `listing_event` / `offer_event` audit rows.
-- ☐ Non-seller attempting either transition → 403. ☐ Either transition on a non-`under_offer` listing → 409.
+- ☐ Non-seller attempting either transition → **404** *(corrected 2026-07-29: this said 403. Both routes go through `get_owned_listing`, which returns 404 for both "no such listing" and "not yours" so a listing's existence is never confirmed — the stronger property, and the convention every seller-only route has used since M2. Matches `security.md` §7 and spec 012 D3. The 403 on the line below is the **NDA gate's** and is correct — this was not a global 403→404 sweep.)* ☐ Either transition on a non-`under_offer` listing → 409.
 - ☐ The NDA gate still guards a `sold` listing's private data (approved buyer 200, everyone else 403).
 
 **After Phase D — the E2E golden path** (one Playwright script; run `fastapi dev` + `npm run dev` first)

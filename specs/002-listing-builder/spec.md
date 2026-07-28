@@ -144,7 +144,7 @@
 
 - **Buyer access to private data / documents** — the NDA gate is **M5**. M2 is owner-only.
 - **Admin approve/reject** (`pending_review → live`/`rejected`) — **M3**.
-- **`under_offer` / `sold`** transitions — M7 / M12.
+- ~~**`under_offer` / `sold`** transitions — M7 / M12.~~ **Both shipped** — `under_offer` at M7, `sold` and the `under_offer → live` re-list at M12 (2026-07-28, spec 012). *(Retired 2026-07-29: M12's own sweep missed this line because its search string could not match `M7 / M12.` — spaces around the slash. Recorded because the lesson is about the search, not the line.)*
 - **Public browse of live listings** — M4.
 - **Malware scanning / archive-bomb defense** — post-MVP (`security.md` §6 notes it).
 - **Owner walkthrough `video_url`** — optional Baton field, not adopted (deferred).

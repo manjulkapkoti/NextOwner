@@ -349,25 +349,64 @@ def test_s13_edit_then_relist_cannot_republish_unreviewed_content(
         ("post", "/pause"),
         ("post", "/resume"),
         ("post", "/close"),
+        # Added 2026-07-29 after the independent appsec pass: this route had no
+        # status check, so "a sold listing is frozen" was false of the data room
+        # — the one part of a listing a buyer actually relies on. A parametrize
+        # that stops at the routes you happened to think of is how a claim like
+        # this ends up narrower than its own title.
+        ("post", "/documents"),
     ],
 )
 def test_s14_a_sold_listing_is_frozen(
     client, auth_headers, under_offer_listing, method, path
 ):
     """S14 — `_EDIT_LOCKED`'s `sold` entry, written at M2, finally reachable."""
-    from tests.conftest import VALID_LISTING
+    from tests.conftest import VALID_LISTING, VALID_PDF
 
     seller, buyer = _seller_and_buyer(auth_headers)
     listing_id, _ = under_offer_listing(seller, buyer)
     client.post(f"/api/listings/{listing_id}/mark-sold", headers=seller)
 
-    kwargs = {"json": VALID_LISTING} if method == "put" else {}
+    if method == "put":
+        kwargs = {"json": VALID_LISTING}
+    elif path == "/documents":
+        kwargs = {"files": {"file": ("late.pdf", VALID_PDF, "application/pdf")}}
+    else:
+        kwargs = {}
     res = getattr(client, method)(f"/api/listings/{listing_id}{path}", headers=seller, **kwargs)
 
     assert res.status_code == 409, f"{method.upper()} {path or '/'}: {res.text}"
     assert client.get(f"/api/my/listings/{listing_id}", headers=seller).json()[
         "status"
     ] == "sold"
+
+
+def test_s16_uploads_stay_open_while_a_deal_is_under_offer(
+    client, auth_headers, live_listing, under_offer_listing
+):
+    """S16 — the deliberate narrowing of S14's guard, asserted (appsec, 2026-07-29).
+
+    `update_listing` refuses `under_offer`; this route does not, because due
+    diligence is exactly when a buyer asks for more documents. That asymmetry
+    looks like an inconsistency to anyone reading the two guards side by side,
+    and the obvious "tidy-up" is to add `under_offer` here — which would break
+    the workflow the data room exists for, mid-deal, with nothing objecting.
+    The decision lived only in a comment until this test; a decision no test
+    defends is a decision the next reader gets to overturn by accident.
+    """
+    from tests.conftest import VALID_PDF
+
+    seller, buyer = _seller_and_buyer(auth_headers)
+    listing_id = live_listing(seller)
+    under_offer_listing(seller, buyer, listing_id=listing_id)
+
+    res = client.post(
+        f"/api/listings/{listing_id}/documents",
+        files={"file": ("diligence-request.pdf", VALID_PDF, "application/pdf")},
+        headers=seller,
+    )
+
+    assert res.status_code == 201, res.text
 
 
 def test_s15_an_internal_failure_returns_the_generic_contract(
