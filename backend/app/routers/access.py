@@ -381,6 +381,12 @@ def listing_access_requests(
                 budget=buyer.budget,
                 target_industries=buyer.target_industries,
                 experience=buyer.experience,
+                # M10: read off the joined `User` row on this request, never a
+                # value copied onto the AccessRequest when it was created — a
+                # revoked badge must vanish from this queue on the seller's very
+                # next read (spec 010 S11).
+                verification_status=buyer.verification_status,
+                verification_reviewed_at=buyer.verification_reviewed_at,
             ),
         )
         for request, buyer in rows

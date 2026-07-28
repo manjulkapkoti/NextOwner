@@ -455,6 +455,13 @@ def listing_offers(
                 budget=buyer.budget,
                 target_industries=buyer.target_industries,
                 experience=buyer.experience,
+                # M10: `BuyerProfile` is one model, so the badge lands on the
+                # seller's offer queue too — the same audience that already holds
+                # a profile view of this exact buyer, now judging their money
+                # rather than their access request. Read live off the joined
+                # `User` row here for the same reason as M5's queue (S11).
+                verification_status=buyer.verification_status,
+                verification_reviewed_at=buyer.verification_reviewed_at,
             ),
         )
         for offer, buyer in rows

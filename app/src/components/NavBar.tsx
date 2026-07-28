@@ -40,6 +40,7 @@ import { brandTint } from '../theme'
 import { authStore, type CurrentUser } from '../stores/authStore'
 import { chatStore } from '../stores/chatStore'
 import { notificationStore } from '../stores/notificationStore'
+import { verificationStore } from '../stores/verificationStore'
 import { watchlistStore } from '../stores/watchlistStore'
 import { Wordmark } from './Wordmark'
 
@@ -117,6 +118,8 @@ export const NavBar = observer(function NavBar() {
     // M9 — a second user logging in on the same session must not inherit the
     // first user's watchlist state.
     watchlistStore.reset()
+    // M10 — same reasoning for verification state.
+    verificationStore.reset()
     navigate('/login')
   }
 
@@ -244,6 +247,21 @@ export const NavBar = observer(function NavBar() {
                 >
                   <MenuItem onClick={() => go('/watchlist')}>Watchlist</MenuItem>
                   <MenuItem onClick={() => go('/saved-searches')}>Saved searches</MenuItem>
+                  {/* M10 — buyer verification (spec 010, D4: no role gate, any
+                      authenticated user may submit). */}
+                  <MenuItem onClick={() => go('/verification')}>Verification</MenuItem>
+                  {/* MUI's Menu clones its children directly and warns against
+                      a Fragment child ("doesn't accept a Fragment as a
+                      child... provide an array instead") — an array with keys
+                      is what it actually wants here. */}
+                  {authStore.user?.is_admin && [
+                    <MenuItem key="curation" onClick={() => go('/admin')}>
+                      Curation queue
+                    </MenuItem>,
+                    <MenuItem key="verifications" onClick={() => go('/admin/verifications')}>
+                      Verifications
+                    </MenuItem>,
+                  ]}
                   <MenuItem onClick={handleLogout}>Logout</MenuItem>
                 </Menu>
               </Stack>
@@ -271,12 +289,23 @@ export const NavBar = observer(function NavBar() {
                 <MenuItem onClick={() => go('/my-offers')}>My offers</MenuItem>
                 <MenuItem onClick={() => go('/watchlist')}>Watchlist</MenuItem>
                 <MenuItem onClick={() => go('/saved-searches')}>Saved searches</MenuItem>
+                {/* M10 — buyer verification (spec 010, D4: no role gate, any
+                    authenticated user may submit). */}
+                <MenuItem onClick={() => go('/verification')}>Verification</MenuItem>
                 <MenuItem onClick={() => go('/notifications')}>
                   Notifications{notificationStore.unreadCount > 0 ? ` (${notificationStore.unreadCount})` : ''}
                 </MenuItem>
                 <MenuItem onClick={() => go('/messages')}>
                   Messages{unreadTotal > 0 ? ` (${unreadTotal})` : ''}
                 </MenuItem>
+                {authStore.user?.is_admin && [
+                  <MenuItem key="curation" onClick={() => go('/admin')}>
+                    Curation queue
+                  </MenuItem>,
+                  <MenuItem key="verifications" onClick={() => go('/admin/verifications')}>
+                    Verifications
+                  </MenuItem>,
+                ]}
                 <MenuItem onClick={handleLogout}>Logout</MenuItem>
               </Menu>
             </>

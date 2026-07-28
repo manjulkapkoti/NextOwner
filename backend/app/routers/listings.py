@@ -9,16 +9,13 @@ server-generated filename, path confinement in the storage adapter.
 
 from __future__ import annotations
 
-import os
-
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import Response
 from sqlalchemy import Numeric, cast, func, or_
 from sqlmodel import Session, select
 
-from ..config import ALLOWED_UPLOAD_TYPES, settings
 from ..db import get_session
-from ..errors import InvalidTransition, NotFound, PayloadTooLarge, UnsupportedMediaType
+from ..errors import InvalidTransition, NotFound
 from ..models import Listing, ListingDocument, ListingEvent, ListingPrivate, User, _utcnow
 from ..notifications import fan_out_saved_searches, notify_listing_decision
 from ..permissions import (
@@ -38,25 +35,17 @@ from ..schemas import (
     ListingUpdate,
     RejectRequest,
 )
-from ..storage import LocalDiskStorageBackend
+from ..uploads import (
+    attachment_headers,
+    display_filename,
+    enforce_upload_quota,
+    read_validated_upload,
+    storage,
+)
 
 router = APIRouter(tags=["listings"])
 
-# One storage backend per process — the swappable seam (horizontal-scale #2).
-_storage = LocalDiskStorageBackend(settings.upload_dir)
-
-_ALLOWED_EXTS = {".pdf", ".png", ".jpg", ".jpeg"}
 _EDIT_LOCKED = {"closed", "sold"}     # terminal — can't edit or re-transition
-_UPLOAD_CHUNK = 1024 * 1024           # 1 MB read chunk
-
-# Magic bytes — the actual content must match its declared type, so a whitelisted
-# content-type can't smuggle a different file (defense that matters at M5, when a
-# buyer downloads a seller's doc).
-_MAGIC: dict[str, tuple[bytes, ...]] = {
-    "application/pdf": (b"%PDF",),
-    "image/png": (b"\x89PNG\r\n\x1a\n",),
-    "image/jpeg": (b"\xff\xd8\xff",),
-}
 
 
 def _to_read(listing: Listing, private: ListingPrivate | None) -> ListingRead:
@@ -419,27 +408,29 @@ async def upload_document(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
 ) -> ListingDocument:
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if file.content_type not in ALLOWED_UPLOAD_TYPES or ext not in _ALLOWED_EXTS:
-        raise UnsupportedMediaType("Only PDF, PNG, or JPEG documents are allowed")
-    # Stream with a hard ceiling — never materialize more than one chunk over the
-    # limit, so a huge upload can't exhaust memory (the DoS the appsec review
-    # caught). The Content-Length middleware is the pre-parse outer guard.
-    buf = bytearray()
-    while chunk := await file.read(_UPLOAD_CHUNK):
-        buf.extend(chunk)
-        if len(buf) > settings.max_upload_bytes:
-            raise PayloadTooLarge("File exceeds the maximum upload size")
-    data = bytes(buf)
-    # The bytes must actually match the declared type (not just its header).
-    if not any(data.startswith(sig) for sig in _MAGIC[file.content_type]):
-        raise UnsupportedMediaType("File content does not match its declared type")
-    suffix = ALLOWED_UPLOAD_TYPES[file.content_type]
-    key = _storage.save(listing.id, data, suffix)        # server-generated name; path confined
+    # Type + extension + magic bytes + the streamed size ceiling, all in
+    # `uploads.py` since M10 — one validator, shared verbatim with
+    # `POST /verification/documents` so the two upload routes cannot drift
+    # (spec 010 D5). The rules are unchanged; only their address moved.
+    data, suffix = await read_validated_upload(file)
+    # M10 retrofit (spec 010 D8): M2 capped each file but never the set, so a
+    # seller could store twenty 10 MB documents on one listing. The quota is the
+    # same shared check the verification route runs, keyed on the listing rather
+    # than the user — "per-listing" is the fold-in's own wording, and it is the
+    # owning entity that varies, not the rule. Before `storage.save`, so a
+    # refused upload leaves nothing on disk.
+    enforce_upload_quota(
+        session,
+        model=ListingDocument,
+        owner_column=ListingDocument.listing_id,
+        owner_id=listing.id,
+        new_size_bytes=len(data),
+    )
+    key = storage.save(listing.id, data, suffix)         # server-generated name; path confined
     doc = ListingDocument(
         listing_id=listing.id,
         storage_key=key,
-        original_filename=os.path.basename(file.filename or "upload"),
+        original_filename=display_filename(file.filename),
         content_type=file.content_type,
         size_bytes=len(data),
     )
@@ -468,15 +459,16 @@ def download_document(
     doc = session.get(ListingDocument, doc_id)
     if doc is None or doc.listing_id != listing.id:
         raise NotFound("Document not found")
-    data = _storage.open(doc.storage_key)
-    # Sanitize the download name (strip path + CR/LF) — never trust the stored
-    # original filename in a header (traversal / header-injection).
-    safe = os.path.basename(doc.original_filename)
-    safe = safe.replace('"', "").replace("\r", "").replace("\n", "")[:200]
+    data = storage.open(doc.storage_key)
+    # Never trust the stored original filename in a header (traversal /
+    # header-injection). The sanitize-and-serve-as-attachment rule moved to
+    # `uploads.py` at M10 for the same reason the validator did: the
+    # verification-document download is a second consumer, and two copies of a
+    # header sanitizer drift (spec 010 S10). Behaviour is unchanged.
     return Response(
         content=data,
         media_type=doc.content_type,
-        headers={"Content-Disposition": f'attachment; filename="{safe or "document"}"'},
+        headers=attachment_headers(doc.original_filename),
     )
 
 

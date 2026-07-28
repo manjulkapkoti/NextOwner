@@ -86,6 +86,16 @@ come back for this. M5 therefore ships the profile and **no verification placeho
 is the M8 notification-table precedent applied to a column instead of a table: *a field
 designed five milestones before its only consumer is speculative, and one M5 writes but
 nobody reads until M10 could not be verified by any test writable at M5 time.*
+
+> **⚠ SUPERSEDED 2026-07-28 by M10 (spec 010 D7).** The deferral above did exactly what it
+> promised and has now expired: `BuyerProfile` carries `verification_status` and a computed
+> `verified`, read live off the `User` row, and this route is one of the two that surfaces
+> them. **The sentence "There is no `verified` field anywhere in the codebase" is no longer
+> true** — left in place rather than rewritten, because the reasoning for deferring is still
+> the right reasoning and deleting it would erase why the field arrived when it did.
+> `test_access_lists.py::test_g1`'s *"no verification field until M10"* assertion was retired
+> in the same change; the half of D5 that has **not** expired — no email on `BuyerProfile` —
+> is still pinned there. See spec 010 D7 and its criteria V8/S11.
 `security.md` §7 M8's own warning — *"an unenforced flag is decoration"* — is the same rule.
 **FR-14 is therefore partially satisfied by M5, deliberately and on the record**, rather than
 satisfied in appearance by a field that means nothing.
@@ -186,7 +196,7 @@ Each GIVEN/WHEN/THEN below becomes **exactly one test** (constitution Article 3 
 
 ### G — The seller's queue (`GET /api/my/listings/{id}/access-requests`, FR-14 — D7)
 
-- **G1** GIVEN a seller with a listing that has two requests, WHEN they fetch that listing's queue, THEN both are returned with each buyer's **profile** — display name, budget, target industries, experience. **No verification status: that half of FR-14 lands with M10** (D5).
+- **G1** GIVEN a seller with a listing that has two requests, WHEN they fetch that listing's queue, THEN both are returned with each buyer's **profile** — display name, budget, target industries, experience. ~~**No verification status: that half of FR-14 lands with M10**~~ (D5) — **that clause expired 2026-07-28: M10 shipped it, and this queue now carries the badge (spec 010 V8/S11). The profile half of this criterion still holds and its test still passes.**
 - **G2** GIVEN a user who does not own that listing, WHEN they fetch its queue, THEN **404** — the route is guarded by the existing `get_owned_listing`, so "not yours" and "doesn't exist" stay indistinguishable (D7; spec 002's existence rule, inherited rather than re-decided).
 - **G3** GIVEN a request from a buyer, WHEN the seller fetches the queue, THEN the response contains **no buyer email** — the seller sees a profile, not contact details (PII minimization, `data_protection.md`).
 - **G4** — GIVEN no credentials, WHEN `GET /api/my/listings/{id}/access-requests` is called, THEN 401 (added with C12, same reason).

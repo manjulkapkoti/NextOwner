@@ -78,6 +78,11 @@ class UserRead(SQLModel):
     nda_signed_at: datetime | None
     nda_version: str | None
     email_verified_at: datetime | None
+    # M10 (spec 010 D7, V9). The caller's own badge, so they know what a seller
+    # currently sees about them (story 6). Safe on this model for the same reason
+    # `nda_signed_at` is: it is the caller's own record, never a cross-user one.
+    verification_status: str
+    verification_reviewed_at: datetime | None
     created_at: datetime
 
     @computed_field  # type: ignore[prop-decorator]
@@ -86,6 +91,18 @@ class UserRead(SQLModel):
         """Derived, never stored twice (M8). The timestamp is the one source of
         truth; this is the boolean the API and the UI actually want."""
         return self.email_verified_at is not None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def verified(self) -> bool:
+        """M10's badge, derived exactly as `email_verified` above is.
+
+        The status string is the one source of truth; this is the boolean a UI
+        renders. Deriving it means a client can never be shown `verified: true`
+        beside a status that says otherwise — the two cannot disagree, because
+        there is only one stored value.
+        """
+        return self.verification_status == "verified"
 
 
 class LoginResponse(SQLModel):
@@ -325,16 +342,35 @@ class BuyerProfile(SQLModel):
     absence of the field *is* the control, exactly as with `UserRead` and
     `password_hash`.
 
-    **No verification field either** (spec 005 D5). M10 owns buyer verification
-    and its fold-in already covers surfacing the badge here. A placeholder now
-    would be an unenforced flag, which `security.md` §7 M8 rightly calls
-    decoration.
+    **The verification badge (M10, spec 010 D7) completes FR-14's promise** —
+    "sellers see buyer profile *and verification status* before approving" — the
+    half spec 005 D5 deferred with "M10 owns surfacing the badge here." It is
+    the one field on this model the buyer cannot author: `verification_status`
+    is written only by `require_admin` routes, which is what makes it worth more
+    to a seller than everything above it.
+
+    **Read through to the live `User` row, always.** Every construction site
+    joins `User` at request time; nothing denormalizes the badge onto an
+    `AccessRequest`/`Offer` row or caches it at approval. That is not an
+    implementation detail — a revoked badge that survives on a seller's queue is
+    exactly the mis-trust event this milestone exists to prevent, and it is M8's
+    lesson in a new place: a projection can outlive the fact it projects. Spec
+    010 S11 fails against any version that caches.
     """
 
     display_name: str | None
     budget: Decimal | None
     target_industries: str | None
     experience: str | None
+    verification_status: str
+    verification_reviewed_at: datetime | None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def verified(self) -> bool:
+        """The badge a seller actually renders — derived from the status, so the
+        two can never disagree (mirrors `UserRead.verified`)."""
+        return self.verification_status == "verified"
 
     @field_serializer("budget", when_used="json")
     def _ser_budget(self, v: Decimal | None) -> str | None:
@@ -612,3 +648,118 @@ class ResetPasswordRequest(SQLModel):
 
 class VerifyEmailRequest(SQLModel):
     token: str = Field(min_length=1, max_length=512)
+
+
+# ── M10 — buyer verification (the manual Persona mock) ───────────────────────
+#
+# Naming note: these are **buyer** verification (a proof-of-funds document an
+# admin reviews), not `VerifyEmailRequest` above (a token redemption, M8). Two
+# unrelated state machines that share a word in prose; the models keep them apart.
+
+
+class VerificationDocumentRead(SQLModel):
+    """One submitted proof-of-funds file, as its uploader and an admin see it.
+
+    **No `storage_key`** (spec 010 S9), and its absence is the control — the same
+    construction as `UserRead` and `password_hash`. The key is `{owner}/{uuid}`:
+    returning it would hand a caller both a live user-id enumeration and the exact
+    shape of the paths behind the download route, which is the first thing anyone
+    probing for a static-serving mistake or a traversal wants.
+
+    **No `user_id` either**, unlike M2's `DocumentRead.listing_id`. Every surface
+    this appears on already establishes whose documents these are — the caller's
+    own (`VerificationRead`) or the queue row's buyer — so the field would be
+    redundant on one and a cross-user identifier on the other.
+    """
+
+    id: int
+    original_filename: str
+    content_type: str
+    size_bytes: int
+    uploaded_at: datetime
+
+
+class VerificationRead(SQLModel):
+    """The caller's own verification state (`GET /api/verification`).
+
+    Carries the *outcome* and nothing else about the submission — the one part of
+    `data_protection.md` §4's letter this milestone can keep while holding the
+    document itself (spec 010 D9). `verification_reason` is echoed back
+    deliberately: a rejection the buyer cannot act on is worse than none (the same
+    reasoning that makes M3's listing-rejection reason required), and it is
+    length-capped at the boundary it is written through for exactly that reason
+    (`verification_reason_max_chars`).
+    """
+
+    verification_status: str
+    verification_reviewed_at: datetime | None
+    verification_reason: str | None
+    documents: list[VerificationDocumentRead]
+
+
+class AdminVerificationQueueRead(SQLModel):
+    """One row of the admin review queue (`GET /api/admin/verifications`, V3, S8).
+
+    **Standalone, and deliberately not `UserRead` or `User`.** Reusing either
+    would satisfy every core criterion — display name, budget, industries and
+    documents would all be there — while serializing `password_hash`, `is_admin`
+    and `nda_signed_at` to whoever holds an admin token. That is a schema bug no
+    permission test can catch, which is why S8 asserts this exact field set as an
+    allow-list. **Do not add fields here without changing S8 first**: the model
+    and the test are one control in two halves.
+
+    `email` is in scope *because* this surface is admin-only — the same reasoning
+    `AdminListingRead` already applies to seller identity at M3, and the same
+    warning applies: never mount this model on a route guarded by anything
+    weaker than `require_admin`.
+
+    Absent by construction: `verification_reason` and `verification_reviewed_at`.
+    An admin about to decide does not need to be told what a *previous* decision
+    said — and where the history genuinely matters, `BuyerVerificationEvent` is
+    the record, not a field on a queue row (D6).
+    """
+
+    user_id: int
+    email: str
+    display_name: str | None
+    budget: Decimal | None
+    target_industries: str | None
+    experience: str | None
+    verification_status: str
+    documents: list[VerificationDocumentRead]
+
+    @field_serializer("budget", when_used="json")
+    def _ser_budget(self, value: Decimal | None) -> str | None:
+        """Money as an exact string, never a float — the same serializer
+        `BuyerProfile._ser_budget` and `ListingRead._ser_money` already apply."""
+        return None if value is None else str(value)
+
+
+class VerificationRejectRequest(SQLModel):
+    """`POST /api/admin/verifications/{user_id}/reject` body (X2, X6).
+
+    **One field, deliberately.** `{"reason": "x", "to_status": "verified"}` has
+    nothing to assign from — the same structural control S1 pins on the profile
+    route, applied to the one endpoint in this milestone that *can* reach
+    `verified`/`rejected`.
+
+    Bound to `settings.verification_reason_max_chars` rather than M3's
+    `RejectRequest` literal, even though the two happen to agree today: this
+    reason is stored *and echoed back to the buyer* through `GET /verification`,
+    so it is an unbounded-input surface of its own (`security.md` §1.1), and
+    sharing M3's hardcoded ceiling is exactly the drift the setting exists to
+    prevent. Over-long is a 422 at the boundary, so the state machine never sees
+    it.
+
+    The strip-then-check validator is M3's, for M3's reason: `min_length` alone
+    accepts `"   "`, and a rejection the buyer cannot act on is worse than none.
+    """
+
+    reason: str = Field(min_length=1, max_length=settings.verification_reason_max_chars)
+
+    @field_validator("reason")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("A rejection reason is required")
+        return v

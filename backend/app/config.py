@@ -42,6 +42,26 @@ class Settings(BaseSettings):
     # ceiling to allow multipart overhead.
     max_request_bytes: int = 12 * 1024 * 1024         # 12 MB
 
+    # Per-owner upload quota (M10, spec 010 D8/D11 — the `milestones.md` M10
+    # fold-in, "a per-listing upload count / total-size quota"). "Owner" is the
+    # owning *entity*: a listing for `ListingDocument`, a user for
+    # `BuyerVerificationDocument`. `max_upload_bytes` above bounds one file; these
+    # bound the set, which a 20-file owner could otherwise multiply.
+    #
+    # Deliberately generous (D11): a DoS control, not a workflow limit. A review
+    # cycle needs one document, so a caller reaching 20 is churning the queue —
+    # which is precisely what the fold-in asked us to bound. The cost of the
+    # generosity is recorded, not hidden: at the cap a rejected buyer's
+    # resubmission *is* refused, and the way out is an admin, not a retry.
+    max_documents_per_owner: int = 20
+    max_total_upload_bytes_per_owner: int = 50 * 1024 * 1024      # 50 MB
+
+    # The admin-authored buyer-verification rejection reason (M10, spec 010 X6).
+    # Free text that is stored *and echoed back to the buyer* via
+    # `GET /api/verification`, so it is bounded at the boundary like the two
+    # `offer_*_max_chars` fields above (`security.md` §1.1).
+    verification_reason_max_chars: int = 1000
+
     # Chat (M6, spec 006). The size cap is a WS boundary rule (D2), not a
     # column constraint; the rate cap is per-connection, mirroring the auth
     # limiters' shape (`security.md` §6 DoS surface).

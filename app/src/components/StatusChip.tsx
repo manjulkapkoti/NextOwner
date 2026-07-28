@@ -11,6 +11,14 @@ import { badge } from '../theme'
 
 // The server's listing state machine. Unknown values fall back to neutral
 // rather than crashing, so a new backend status degrades to a plain chip.
+//
+// M10 adds the buyer-verification vocabulary (`unverified`/`pending`/
+// `verified`/`rejected` — spec 010 D1). `rejected` is shared verbatim with the
+// listing state machine below: both mean the same thing ("reviewed and
+// refused," red), and the two domains never render side by side, so one key
+// safely serves both rather than inventing `verification_rejected`. `pending`
+// is a new key (listings use `pending_review`, not `pending`), so there is no
+// collision to resolve there either.
 const STATUS: Record<string, { label: string; tone: keyof typeof badge }> = {
   draft: { label: 'Draft', tone: 'neutral' },
   pending_review: { label: 'In review', tone: 'pending' },
@@ -19,6 +27,9 @@ const STATUS: Record<string, { label: string; tone: keyof typeof badge }> = {
   under_offer: { label: 'Under offer', tone: 'underOffer' },
   sold: { label: 'Sold', tone: 'premium' },
   rejected: { label: 'Rejected', tone: 'rejected' },
+  unverified: { label: 'Unverified', tone: 'neutral' },
+  pending: { label: 'Pending review', tone: 'pending' },
+  verified: { label: 'Verified', tone: 'verified' },
 }
 
 export function StatusChip({ status, showDot = false }: { status: string; showDot?: boolean }) {

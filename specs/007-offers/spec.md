@@ -218,7 +218,7 @@ Each GIVEN/WHEN/THEN below becomes **exactly one test** (constitution Article 3 
 
 ### G — The seller's queue (`GET /api/my/listings/{id}/offers`)
 
-- **G1** GIVEN a seller with a listing that has offer threads from two buyers, WHEN they fetch that listing's offers, THEN both buyers' full threads are returned, each carrying the buyer's **profile** (mirrors spec 005's `BuyerProfile` — no verification status, same D5 deferral to M10).
+- **G1** GIVEN a seller with a listing that has offer threads from two buyers, WHEN they fetch that listing's offers, THEN both buyers' full threads are returned, each carrying the buyer's **profile** (mirrors spec 005's `BuyerProfile` — ~~no verification status, same D5 deferral to M10~~ **expired 2026-07-28: M10 landed the badge, and because `BuyerProfile` is one model, this offer queue surfaces it too — deliberately, per spec 010 slice 4. `test_offer_lists.py::test_g1`'s deferral assertion was retired with it; the profile half of this criterion is unchanged**).
 - **G2** GIVEN a user who does not own that listing, WHEN they fetch its offers, THEN **404** — guarded by the existing `get_owned_listing`, so a draft's existence stays hidden exactly as spec 005's G2 already established.
 - **G3** GIVEN a buyer's offer, WHEN the seller's queue response is inspected, THEN it carries **no buyer email** — a profile, not contact details (PII minimization, mirrors spec 005 G3).
 - **G4** GIVEN no credentials, WHEN `GET /api/my/listings/{id}/offers` is called, THEN 401.

@@ -74,6 +74,29 @@ class User(SQLModel, table=True):
     # verification could never bootstrap).
     email_verified_at: datetime | None = None
 
+    # M10 buyer verification (spec 010 D1) — **not** M8's email verification
+    # above. Two unrelated state machines that both got called "verification" in
+    # prose: `email_verified_at` is a token redemption, this is a proof-of-funds
+    # document an admin reviewed.
+    #
+    # A status string rather than a timestamp-as-boolean like the three pairs
+    # above, because this machine has four values, not two:
+    # `unverified → pending → verified | rejected`, plus `rejected → pending`
+    # (resubmit) and `verified → rejected` (admin revoke). Indexed because the
+    # admin queue selects on it.
+    #
+    # All three are **server-controlled**: no request body in this milestone has a
+    # field they could be assigned from (`ProfileUpdate` does not declare them,
+    # and the reject route's model carries only `reason`), so mass-assignment is
+    # impossible by schema rather than filtered at runtime (spec 010 S1).
+    #
+    # `verification_reason` holds only the *current* decision and is overwritten
+    # by the next one — which is exactly what `BuyerVerificationEvent` exists to
+    # preserve (Article 2 #5, spec 010 D6).
+    verification_status: str = Field(default="unverified", index=True)
+    verification_reviewed_at: datetime | None = None
+    verification_reason: str | None = None
+
     # Erasure-ready (data_protection.md §3) — anonymize-in-place, never hard-delete
     deleted_at: datetime | None = None
 
@@ -459,6 +482,82 @@ class EmailVerificationToken(SQLModel, table=True):
     token_hash: str = Field(unique=True, index=True)
     expires_at: datetime
     used_at: datetime | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class BuyerVerificationDocument(SQLModel, table=True):
+    """A buyer's uploaded proof-of-funds file (M10, FR-3/F11, spec 010 D5).
+
+    The same shape as `ListingDocument`, keyed by `user_id` instead of
+    `listing_id` — and stored through the same seam: `StorageBackend.save()`'s
+    first positional parameter names *an owning entity*, not specifically a
+    listing, so `save(user.id, ...)` reuses M2's confinement, server-generated
+    uuid key and never-statically-served path verbatim. `storage_key` is opaque
+    and never leaves the server (spec 010 S9); `original_filename` is
+    display-only and NEVER used to build a path.
+
+    **This milestone's most sensitive artifact** — a financial/identity document
+    we hold ourselves rather than handing to a KYC vendor, which is an explicit,
+    recorded deviation from `data_protection.md` §4 for the MVP (spec 010 D9):
+    F11 ships *manual* review, and an admin cannot review a file no system of
+    ours holds. Erasure therefore **hard-deletes** row + file (D10), unlike the
+    audit table below.
+
+    No status column: the submission's state lives on `User.verification_status`
+    (one home per fact), because the decision is about the *buyer*, not about a
+    particular file — a resubmission adds a row and moves the user's status.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)   # server-derived from the JWT
+    # `{user_id}/{uuid}{suffix}` — the SAME directory namespace `ListingDocument`
+    # uses for `{listing_id}/…`, because both go through `save()`'s one owning-id
+    # slot. Harmless for confidentiality (uuid names; access is authorized off
+    # this row, never off the path) but a real hazard for D10's erasure: delete
+    # each key individually via `storage.delete(doc.storage_key)` and NEVER
+    # `rmtree({base}/{user_id})`, which would destroy listing `user_id`'s data
+    # room. Closing this structurally means a namespaced key, which changes the
+    # `StorageBackend` port's `int` contract (that `int()` coercion is itself a
+    # control) — deliberately not done mid-milestone; see spec 010 D10.
+    storage_key: str
+    original_filename: str
+    content_type: str
+    size_bytes: int
+    uploaded_at: datetime = Field(default_factory=_utcnow)
+
+
+class BuyerVerificationEvent(SQLModel, table=True):
+    """Append-only audit of buyer-verification decisions (M10, spec 010 D6).
+
+    Justified against Article 2 #5's test — *what does this preserve that the row
+    itself loses?* `User.verification_reason` holds only the current decision, so
+    a rejection reason is silently overwritten the moment a resubmission is later
+    approved. "Was this buyer ever rejected, and why" is precisely the question a
+    future fraud review asks and the `User` row alone cannot answer.
+    `from_status` carries the other loss: it is the only thing distinguishing a
+    *deny* (`pending → rejected`) from a *revoke* (`verified → rejected`), which
+    are the same endpoint by design (D1).
+
+    Mirrors `ListingEvent`: one row per *completed* transition — never per
+    attempt, so an illegal move (409) leaves no trace of what was tried — and
+    `actor_id` comes from the JWT, never a request body.
+
+    **Decisions only.** A buyer's own upload writes no event: the
+    `BuyerVerificationDocument` row is already an unoverwritable record of it,
+    and duplicating it here would be the projection-masquerading-as-audit mistake
+    M8 warns about.
+
+    Audit-exempt on erasure (D10): ids, status strings, and an operator-authored
+    reason — no document content and no buyer-authored PII.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)   # the buyer whose status changed
+    actor_id: int = Field(foreign_key="user.id")              # the admin — from the JWT
+    action: str                                                # approved | rejected
+    from_status: str                                           # pending | verified (D1/X4)
+    to_status: str                                             # verified | rejected
+    reason: str | None = None                                  # copied at write time
     created_at: datetime = Field(default_factory=_utcnow)
 
 

@@ -152,4 +152,73 @@ describe('NavBar', () => {
     const link = await screen.findByRole('link', { name: /messages/i })
     await waitFor(() => expect(within(link).getByText('3')).toBeInTheDocument())
   })
+
+  // M10 — buyer verification (spec 010, D4: no role gate). The link belongs
+  // beside Watchlist/Saved searches in both menus, for any authenticated user.
+  it('M10: offers Verification from both the account menu and the mobile menu', async () => {
+    authStore.setToken('a.b.c')
+    render(
+      <MemoryRouter initialEntries={['/my-listings']}>
+        <NavBar />
+      </MemoryRouter>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /account menu/i }))
+    expect(screen.getByRole('menuitem', { name: /^verification$/i })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('menuitem', { name: /^verification$/i }))
+
+    await userEvent.click(screen.getByRole('button', { name: /open menu/i }))
+    expect(screen.getByRole('menuitem', { name: /^verification$/i })).toBeInTheDocument()
+  })
+
+  // M10 — the admin section ("Curation queue" / "Verifications") is hidden
+  // from an ordinary authenticated user entirely, not just unreachable.
+  it('M10: hides the admin section from a non-admin', async () => {
+    // Stubbed so the mount-time chatStore/notificationStore refresh (spec 006
+    // J1) resolves cleanly instead of hitting an un-mocked network call.
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, [])))
+    authStore.setToken('a.b.c')
+    authStore.user = {
+      id: 1,
+      email: 'buyer@example.com',
+      is_buyer: true,
+      is_seller: false,
+      is_admin: false,
+      display_name: null,
+    } as unknown as typeof authStore.user
+    render(
+      <MemoryRouter initialEntries={['/my-listings']}>
+        <NavBar />
+      </MemoryRouter>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /account menu/i }))
+    expect(screen.queryByRole('menuitem', { name: /curation queue/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /^verifications$/i })).not.toBeInTheDocument()
+  })
+
+  // M10 — an admin sees both admin destinations, alongside the ordinary
+  // buyer-facing "Verification" link (a dual account is not unusual, FR-2).
+  it('M10: shows Curation queue and Verifications to an admin', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, [])))
+    authStore.setToken('a.b.c')
+    authStore.user = {
+      id: 1,
+      email: 'admin@example.com',
+      is_buyer: true,
+      is_seller: false,
+      is_admin: true,
+      display_name: null,
+    } as unknown as typeof authStore.user
+    render(
+      <MemoryRouter initialEntries={['/my-listings']}>
+        <NavBar />
+      </MemoryRouter>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /account menu/i }))
+    expect(screen.getByRole('menuitem', { name: /curation queue/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /^verifications$/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /^verification$/i })).toBeInTheDocument()
+  })
 })

@@ -22,6 +22,7 @@ from .db import get_session
 from .errors import Forbidden, InvalidTransition, NotFound, Unauthorized
 from .models import (
     AccessRequest,
+    BuyerVerificationDocument,
     Conversation,
     Listing,
     Notification,
@@ -395,6 +396,39 @@ def get_owned_watchlist_entry(
     if entry is None:
         raise NotFound("Watchlist entry not found")
     return entry
+
+
+def get_owned_or_admin_verification_document(
+    document_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> BuyerVerificationDocument:
+    """Trust boundary: may this caller see this proof-of-funds file? (M10, S4/S5)
+
+    The most sensitive artifact M10 stores, behind an id an attacker can simply
+    increment — the whole attack is `GET /api/verification/documents/1..N` from
+    any account, so this function is what stands between a for-loop and every
+    buyer's bank statement.
+
+    **Two legitimate viewers, and the second one is the interesting one.** The
+    uploader, obviously. And an admin — because F11 ships *manual* review and
+    spec 010 D9 records that we hold the document ourselves precisely because
+    there is no vendor to hold it; a reviewer who cannot open the file cannot
+    review it. That makes this the first gate in the codebase where `is_admin`
+    widens access to another user's private data outside curation, so it is
+    written as its own boundary rather than folded into an owner check.
+
+    Everyone else gets the **same 404 a nonexistent id gets** — one raise, not
+    two, so the "helpful" split (`"Not your document"` here, `"Document not
+    found"` there) cannot appear. That split is a working oracle for which
+    document ids exist, i.e. for how many buyers have submitted; S4 asserts the
+    two responses byte-for-byte. Same shape and same reasoning as
+    `get_owned_watchlist_entry` and `get_owned_notification` above.
+    """
+    document = session.get(BuyerVerificationDocument, document_id)
+    if document is None or (document.user_id != user.id and not user.is_admin):
+        raise NotFound("Document not found")
+    return document
 
 
 def get_owned_listing(

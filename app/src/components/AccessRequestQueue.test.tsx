@@ -1,10 +1,8 @@
 // M5 — the seller's per-listing access-request queue (spec 005 criterion J4;
 // FR-14; `GET /api/my/listings/{id}/access-requests`, D7).
 //
-// D5 (owner-approved 2026-07-20): M5 ships the buyer's profile half of FR-14
-// only — no verification badge. That field is M10's to add, so it is
-// deliberately absent from the mock row below and this file makes no
-// assertion about one either way, positive or negative.
+// M10 (spec 010 D7, V8, S11) completes FR-14's verification half — see the
+// two tests at the bottom of this file for the badge itself.
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,9 +20,14 @@ const BUYER = {
   budget: '250000.00',
   target_industries: ['saas', 'ecommerce'],
   experience: 'Former operator of two SaaS exits.',
+  verification_status: 'unverified',
+  verified: false,
 }
 
-function stubQueue(initialStatus: 'requested' | 'approved' | 'denied') {
+function stubQueue(
+  initialStatus: 'requested' | 'approved' | 'denied',
+  buyer: typeof BUYER = BUYER,
+) {
   let status: string = initialStatus
   const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
     const url = String(input)
@@ -49,7 +52,7 @@ function stubQueue(initialStatus: 'requested' | 'approved' | 'denied') {
           status,
           created_at: '2026-07-19T10:00:00Z',
           decided_at: status === 'requested' ? null : '2026-07-19T11:00:00Z',
-          buyer: BUYER,
+          buyer,
         },
       ])
     }
@@ -118,5 +121,25 @@ describe('AccessRequestQueue', () => {
       const calls = fetchMock.mock.calls.map((c) => String(c[0]))
       expect(calls.some((u) => u.includes('/access-requests/11/revoke'))).toBe(true)
     })
+  })
+
+  // Spec 010 V8 — FR-14's completion: a verified buyer's badge is visible to
+  // the seller deciding on the request.
+  it('spec 010 V8: a verified buyer shows the Verified badge', async () => {
+    stubQueue('requested', { ...BUYER, verification_status: 'verified', verified: true })
+    render(<AccessRequestQueue listingId={7} />)
+
+    await waitFor(() => expect(screen.getByText('Jordan Buyer')).toBeInTheDocument())
+    expect(screen.getByText('Verified')).toBeInTheDocument()
+  })
+
+  // Spec 010 S11 — the negative twin: a not-(or-no-longer-)verified buyer
+  // never shows the badge, so a revoke cannot leave a stale one behind.
+  it('spec 010 S11: a buyer whose badge was revoked (rejected) shows no Verified badge', async () => {
+    stubQueue('requested', { ...BUYER, verification_status: 'rejected', verified: false })
+    render(<AccessRequestQueue listingId={7} />)
+
+    await waitFor(() => expect(screen.getByText('Jordan Buyer')).toBeInTheDocument())
+    expect(screen.queryByText('Verified')).not.toBeInTheDocument()
   })
 })

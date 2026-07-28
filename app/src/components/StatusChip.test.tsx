@@ -13,6 +13,10 @@ describe('StatusChip', () => {
       ['under_offer', /^Under offer$/],
       ['sold', /^Sold$/],
       ['rejected', /^Rejected$/],
+      // M10 — buyer verification (spec 010 D1).
+      ['unverified', /^Unverified$/],
+      ['pending', /^Pending review$/],
+      ['verified', /^Verified$/],
     ]
     for (const [status, label] of cases) {
       const { unmount } = render(<StatusChip status={status} />)
