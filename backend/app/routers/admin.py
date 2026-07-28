@@ -14,10 +14,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
 
+from ..config import settings
 from ..db import get_session
-from ..models import Listing, ListingPrivate, User
+from ..models import Listing, ListingPrivate, User, ValuationLead
 from ..permissions import require_admin
-from ..schemas import AdminListingRead
+from ..schemas import AdminListingRead, ValuationLeadRead
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -60,3 +61,38 @@ def admin_listings(
             )
         )
     return rows
+
+
+@router.get("/valuation-leads", response_model=list[ValuationLeadRead])
+def admin_valuation_leads(
+    _admin: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> list[ValuationLeadRead]:
+    """The leads the public calculator captured (M11, FR-23, spec 011 D3, A1-A3).
+
+    **The one privileged surface in M11**, and the only route in the milestone
+    that reads an identity at all — the other two are anonymous by design. It
+    exists because a captured lead nobody can read is not a captured lead, and
+    because this codebase has a recorded lesson about tables written milestones
+    before their only consumer (`milestones.md` § Scope fold-ins → M8).
+
+    It lives here rather than in `routers/valuation.py` because this file already
+    *is* "the routes behind `require_admin`": splitting one trust boundary across
+    two modules is how a guard eventually gets forgotten on one of them.
+
+    Newest-first because a lead magnet's value decays — the person who typed
+    their numbers in this morning is the one worth calling. Capped at
+    `valuation_leads_page_limit`, the same unbounded-pagination control M4's
+    browse and M8's inbox apply (`security.md` §6 DoS surface).
+
+    `ValuationLeadRead` carries an email address, which is why it is returned
+    **only** here. Like `AdminListingRead` above, it is safe solely because
+    `require_admin` re-reads `is_admin` from the DB on every request (S3), so it
+    must never be reused on a route with a weaker guard.
+    """
+    leads = session.exec(
+        select(ValuationLead)
+        .order_by(ValuationLead.created_at.desc(), ValuationLead.id.desc())
+        .limit(settings.valuation_leads_page_limit)
+    ).all()
+    return [ValuationLeadRead.model_validate(lead, from_attributes=True) for lead in leads]
