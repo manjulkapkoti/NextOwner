@@ -174,6 +174,26 @@ export const NavBar = observer(function NavBar() {
             Browse
           </Button>
 
+          {/* M11 — the valuation calculator (spec 011 U8). Beside Browse, in the
+              always-visible row rather than the account menu: it is a lead
+              magnet aimed at people who have never signed up, so a link that
+              only appears once you have an account is the one placement that
+              defeats its purpose. Hidden below `sm` — the two supply-side and
+              demand-side entry points compete for the same narrow strip, and
+              Browse wins it. */}
+          <Button
+            color="inherit"
+            component={RouterLink}
+            to="/valuation"
+            sx={{
+              whiteSpace: 'nowrap',
+              display: { xs: 'none', sm: 'inline-flex' },
+              ...navSx('/valuation'),
+            }}
+          >
+            Valuation
+          </Button>
+
           {authStore.isAuthenticated ? (
             <>
               {/* >=sm: 4 inline controls + the bell/envelope/avatar cluster. */}

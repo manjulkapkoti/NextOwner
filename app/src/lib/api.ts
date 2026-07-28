@@ -30,8 +30,18 @@ export class ApiError extends Error {
 //  - and if a stale token did ride along, its 401 would bounce a logged-out
 //    visitor off a public page to the login form — a session concern breaking
 //    a surface that has no session.
-export async function publicApi(path: string) {
-  const res = await fetch(`/api${path}`, { headers: { 'Content-Type': 'application/json' } })
+//
+// M11 widened this to carry a body (`opts`), for the valuation calculator's two
+// POST routes. Deliberately a widening of *this* function rather than a third
+// client: the two properties above — no JWT, no `auth:unauthorized` — are
+// exactly what a public write needs too, and a lead form that bounced a
+// logged-out visitor to /login on a stale token would be the same bug on a
+// costlier surface.
+export async function publicApi(path: string, opts: RequestInit = {}) {
+  const res = await fetch(`/api${path}`, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...opts.headers },
+  })
   if (!res.ok) {
     let body: { detail?: unknown; code?: string } | null = null
     try {

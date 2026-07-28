@@ -34,6 +34,7 @@ import { VerifyEmailPage } from './components/VerifyEmailPage'
 import { RegisterForm } from './components/RegisterForm'
 import { RequireAdmin } from './components/RequireAdmin'
 import { RequireAuth } from './components/RequireAuth'
+import { ValuationCalculator } from './components/ValuationCalculator'
 import { VerificationStatus } from './components/VerificationStatus'
 import { Wordmark } from './components/Wordmark'
 import { authStore } from './stores/authStore'
@@ -258,6 +259,18 @@ export function AppShell() {
             browsing is the anonymous half of the trust gate (spec 004 F9). */}
         <Route path="/browse" element={<BrowseListings />} />
         <Route path="/browse/:id" element={<ListingDetail />} />
+        {/* M11 — the valuation calculator (spec 011, F12/FR-23). Public for the
+            same reason browse is, only more so: it is a lead magnet, and its
+            entire audience is people who have never signed up. A RequireAuth
+            here would defeat the feature (spec U1). */}
+        <Route
+          path="/valuation"
+          element={
+            <Container maxWidth="md" sx={{ mt: 4, mb: 6 }}>
+              <ValuationCalculator />
+            </Container>
+          }
+        />
         <Route
           path="/my-listings"
           element={

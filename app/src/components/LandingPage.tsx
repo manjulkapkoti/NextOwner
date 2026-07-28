@@ -16,9 +16,11 @@ import {
   Chip,
   Container,
   Divider,
+  Link as MuiLink,
   Stack,
   Typography,
 } from '@mui/material'
+import { Link as RouterLink } from 'react-router-dom'
 import { observer } from 'mobx-react-lite'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import TravelExploreOutlinedIcon from '@mui/icons-material/TravelExploreOutlined'
@@ -274,6 +276,20 @@ export const LandingPage = observer(function LandingPage() {
               cta={{ label: 'Browse listings', to: '/browse' }}
             />
           </Box>
+
+          {/* M11 — the calculator (spec 011). Placed under the two spotlight
+              cards rather than beside them, because it is not a third
+              destination: it is the step *before* "List your business", for the
+              seller who is curious but not yet decided. Giving it equal billing
+              would imply the site's main offer is a number, when the offer is
+              choosing a successor. */}
+          <Typography variant="body2" sx={{ color: 'text.secondary', pt: 0.5 }}>
+            Not sure yet?{' '}
+            <MuiLink component={RouterLink} to="/valuation" sx={{ fontWeight: 600 }}>
+              See what your business might be worth
+            </MuiLink>{' '}
+            — a rough range in a minute, no account needed.
+          </Typography>
 
           <Stack
             direction="row"
