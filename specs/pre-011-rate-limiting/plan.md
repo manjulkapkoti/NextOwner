@@ -20,7 +20,7 @@ Following the `forgot_password_rate_limit_*` naming M8 established. Values are d
 | `upload_rate_limit_window_seconds` | `3600` | |
 | `forgot_password_address_rate_limit_max` | `3` | Per **email address** per hour — the victim-side cap (D6), alongside M8's existing per-IP `3 / 15 min`. |
 | `forgot_password_address_rate_limit_window_seconds` | `3600` | |
-| `trusted_proxy_count` | `0` | **The security-relevant one** (D3). `0` = ignore `X-Forwarded-For` entirely, which is correct locally and safe everywhere. A deployment behind one reverse proxy sets `1`. |
+| `trusted_proxies` | `[]` (empty) | **The security-relevant one** (D3). A list of proxy addresses we actually run. Empty = the immediate peer is never trusted, so `X-Forwarded-For` is ignored entirely — correct locally and safe everywhere. A deployment sets the address(es) of its own reverse proxy / CDN egress. **Replaced a `trusted_proxy_count` integer** (see D3's amendment): a count could not express a single-nginx chain, and its safety depended on the operator matching hop depth exactly, where being *too high* reads attacker-supplied text. A wrong allowlist entry can only merge callers into one bucket, which is the safe direction. |
 
 ## `ratelimit.py` — the helper and the registry
 

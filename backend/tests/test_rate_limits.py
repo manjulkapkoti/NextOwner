@@ -415,10 +415,11 @@ def test_s2_changing_ip_does_not_reset_an_identity_keyed_limit(
 def test_s3_a_client_supplied_x_forwarded_for_cannot_evade_the_ip_limit(
     client, monkeypatch
 ):
-    """S3 — the crown jewel of this file (D3). `trusted_proxy_count` stays at
-    its default `0` — deliberately *not* monkeypatched here, because `0` is
-    the vulnerable-by-default case if `client_ip` ever trusted the header
-    unconditionally, and it is the actual local-dev configuration.
+    """S3 — the crown jewel of this file (D3). `trusted_proxies` stays at its
+    default (empty) — deliberately *not* monkeypatched here, because an empty
+    allowlist means the immediate peer is never trusted, which is both the
+    local-dev configuration and the vulnerable-by-default case if `client_ip`
+    ever read the header without checking who the peer is.
 
     The weakest implementation that would still pass R1 is `client_ip`
     reading `X-Forwarded-For` whenever present, trusted or not — a caller
@@ -432,7 +433,7 @@ def test_s3_a_client_supplied_x_forwarded_for_cannot_evade_the_ip_limit(
     from app.config import settings
     from app.routers import listings as listings_router
 
-    assert getattr(settings, "trusted_proxy_count", 0) == 0
+    assert not getattr(settings, "trusted_proxies", [])
 
     monkeypatch.setattr(listings_router._browse_limiter, "max_attempts", 2, raising=False)
 
@@ -450,39 +451,111 @@ def test_s3_a_client_supplied_x_forwarded_for_cannot_evade_the_ip_limit(
 def test_s4_trusted_proxy_extracts_the_real_client_not_the_proxys_address(
     client, monkeypatch
 ):
-    """S4 — the deployment case D3 exists for, and the mirror of S3: with
-    exactly one trusted hop, the address `n` positions from the *right* is
-    the real client, not the whole header and not `request.client.host`
-    (which behind a real proxy would be the proxy itself, shared by every
-    caller). The weakest implementation that would still pass S3 alone is one
-    that, once `trusted_proxy_count > 0`, falls back to keying on
-    `request.client.host` regardless of the header's content — that would
-    make two different clients behind the same proxy share one bucket, which
-    is exactly what this test's second client would trip if the cap were
-    already spent by the first.
+    """S4 — the deployment case D3 exists for, and the mirror of S3: when the
+    immediate peer *is* one of our own proxies, two different clients behind it
+    must get their own counters rather than sharing the proxy's.
+
+    The weakest implementation that would still pass S3 is one that keys on
+    `request.client.host` unconditionally — behind a real proxy that is the
+    proxy's address for every caller in the world, so the cap would be shared
+    globally and the first busy client would lock everyone out. That is the
+    failure this test's second client trips.
+
+    `TestClient` reports `request.client.host` as `"testclient"`, so that is
+    what goes in the allowlist — which is exactly the deployment shape D3
+    describes (the peer we accept forwarded headers from), not a shortcut.
     """
     from app.config import settings
     from app.routers import listings as listings_router
 
-    monkeypatch.setattr(settings, "trusted_proxy_count", 1, raising=False)
+    monkeypatch.setattr(settings, "trusted_proxies", ["testclient"], raising=False)
     monkeypatch.setattr(listings_router._browse_limiter, "max_attempts", 1, raising=False)
 
-    client_a_first = client.get(
-        "/api/listings", headers={"X-Forwarded-For": "9.9.9.1, 10.0.0.1"}
-    )
+    client_a_first = client.get("/api/listings", headers={"X-Forwarded-For": "9.9.9.1"})
     assert client_a_first.status_code == 200, client_a_first.text
 
     client_a_exhausted = client.get(
-        "/api/listings", headers={"X-Forwarded-For": "9.9.9.1, 10.0.0.1"}
+        "/api/listings", headers={"X-Forwarded-For": "9.9.9.1"}
     )
     assert client_a_exhausted.status_code == 429, client_a_exhausted.text
 
-    # Same trusted last hop, different first hop — a different client behind
-    # the identical proxy must get its own counter.
-    client_b = client.get(
-        "/api/listings", headers={"X-Forwarded-For": "9.9.9.2, 10.0.0.1"}
-    )
+    # A different client behind the identical trusted proxy gets its own counter.
+    client_b = client.get("/api/listings", headers={"X-Forwarded-For": "9.9.9.2"})
     assert client_b.status_code == 200, client_b.text
+
+
+def test_s6_a_forged_prepended_entry_is_never_the_key(client, monkeypatch):
+    """S6 — the failure mode the replaced hop-count design had (D3's amendment).
+
+    Once the peer is trusted, the header *is* read — so the question becomes
+    which entry. A client can prepend anything it likes, and those forgeries
+    land to the **left** of the address our own proxy appended. Walking from the
+    right and stopping at the first non-trusted entry therefore reads the real
+    client and never the forgery.
+
+    The implementation this catches is any that takes the header's *leftmost*
+    entry (the widespread "first entry is the client" folklore, true only when
+    no client ever lies) or that indexes by a hop count an operator can set too
+    high. Either way the attacker picks the key, gets a fresh counter per
+    request, and the cap never fires. So: same real client, a *different*
+    forged prefix each time, and the third request must still be refused.
+    """
+    from app.config import settings
+    from app.routers import listings as listings_router
+
+    monkeypatch.setattr(settings, "trusted_proxies", ["testclient"], raising=False)
+    monkeypatch.setattr(listings_router._browse_limiter, "max_attempts", 2, raising=False)
+
+    first = client.get("/api/listings", headers={"X-Forwarded-For": "1.1.1.1, 9.9.9.1"})
+    second = client.get("/api/listings", headers={"X-Forwarded-For": "2.2.2.2, 9.9.9.1"})
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+
+    third = client.get("/api/listings", headers={"X-Forwarded-For": "3.3.3.3, 9.9.9.1"})
+
+    assert third.status_code == 429, third.text
+    assert third.json().get("code") == "rate_limited"
+
+
+def test_r9_the_in_memory_backend_evicts_keys_whose_window_has_elapsed(monkeypatch):
+    """R9 — the limiter must not become the memory leak it was added to prevent.
+
+    `InMemoryRateLimiterBackend` has never evicted. That was defensible while
+    only login/register/forgot-password were keyed per IP: the key space was
+    bounded by addresses that bother to attempt authentication. Keying **public
+    browse** per IP changes it entirely — the key space becomes every address
+    that ever fetches a listing, and an attacker rotating source addresses grows
+    the dict without bound *through the control added to stop them*. That is a
+    new denial-of-service path opened by a mitigation, which is why it is fixed
+    in this pass rather than recorded in §9.
+
+    Tested at the backend rather than through a route because the property is
+    about the store, not about any endpoint: ten thousand distinct keys are one
+    dict, and no HTTP test can observe a dict's size honestly.
+
+    Time is advanced by monkeypatching the clock rather than by sleeping — the
+    backend uses `time.monotonic`, and a real sleep would make this the slowest
+    test in the suite for no added confidence.
+    """
+    from app import ratelimit
+
+    backend = ratelimit.InMemoryRateLimiterBackend()
+    fake_now = [1000.0]
+    monkeypatch.setattr(ratelimit.time, "monotonic", lambda: fake_now[0])
+
+    for n in range(50):
+        backend.hit(f"browse:ip:10.0.0.{n}", window_seconds=60)
+    assert len(backend._hits) == 50, "arrangement: 50 distinct keys recorded"
+
+    # Every one of those windows has now fully elapsed.
+    fake_now[0] += 3600
+    backend.hit("browse:ip:203.0.113.9", window_seconds=60)
+
+    remaining = set(backend._hits)
+    assert remaining == {"browse:ip:203.0.113.9"}, (
+        f"{len(remaining) - 1} elapsed key(s) retained — the store grows without "
+        "bound for every distinct address ever seen"
+    )
 
 
 def test_s5_the_registry_covers_every_rate_limiter_the_app_builds():
