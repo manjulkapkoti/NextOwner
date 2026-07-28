@@ -316,6 +316,28 @@ def update_listing(
 ) -> ListingRead:
     if listing.status in _EDIT_LOCKED:
         raise InvalidTransition("A closed listing can't be edited")
+    # A listing under offer has a counterparty relying on its terms, so the
+    # terms hold until the deal resolves (M12, spec 012 D8/S12).
+    #
+    # This closes a hole that predates M12: `under_offer` was in neither
+    # `_EDIT_LOCKED` nor the re-review set below, so a seller could rewrite a
+    # listing's financials while a buyer's offer stood accepted on the old ones
+    # — already a bait-and-switch against that buyer, and M12's `relist` would
+    # then have republished the never-re-reviewed content to the marketplace.
+    # The corridor `under_offer → edit → relist → public read` is what S13
+    # asserts; every individual door here already had a test, which is why
+    # nobody saw the corridor between them.
+    #
+    # Refused rather than re-reviewed on purpose: adding `under_offer` to the
+    # re-review set would move the listing to `pending_review` while an accepted
+    # offer stood, breaking the deal state to fix a content problem. And this is
+    # deliberately *not* `_EDIT_LOCKED`, which means "terminal — cannot edit or
+    # re-transition"; `under_offer` must still transition, which is M12's whole
+    # subject.
+    if listing.status == "under_offer":
+        raise InvalidTransition(
+            "A listing under offer can't be edited", code="listing_under_offer"
+        )
     private = session.get(ListingPrivate, listing.id)
     for field, value in body.model_dump(exclude_unset=True).items():
         if field in ("company_name", "website_url", "detailed_financials"):
