@@ -212,7 +212,19 @@ cd backend
 python -m venv .venv
 .venv\Scripts\activate                     # Windows
 pip install "fastapi[standard]" sqlmodel pyjwt bcrypt python-multipart
-fastapi dev app/main.py                    # → http://localhost:8000
+uvicorn app.main:app --reload --no-proxy-headers    # → http://localhost:8000
+# `--no-proxy-headers` is NOT optional, and it is a security setting, not a
+# preference (spec pre-011 D3, security.md §9). Uvicorn enables
+# ProxyHeadersMiddleware by default with trusted_hosts="127.0.0.1", and it
+# OVERWRITES scope["client"] from the caller's X-Forwarded-For before any of
+# our code runs. That is exactly this layout — the Vite dev proxy is on the
+# same host — so with it on, a browser sending its own X-Forwarded-For makes
+# `request.client.host` an attacker-chosen value, our trusted-proxy allowlist
+# sees an untrusted peer and keys on it, and every per-IP rate limit becomes
+# evadable by varying one header. Turning it off makes OUR allowlist the only
+# place that header is ever interpreted.
+# (`fastapi dev app/main.py` is the friendlier command but exposes no way to
+# disable it, which is why this uses uvicorn directly.)
 # open http://localhost:8000/docs — interactive Swagger UI, free with FastAPI.
 # You can exercise every endpoint from the browser before any frontend exists.
 

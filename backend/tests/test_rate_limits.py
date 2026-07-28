@@ -4,7 +4,7 @@ Written failing first (constitution Article 3 §2). Nothing this file exercises
 exists yet: `ratelimit.client_ip`, `ratelimit.enforce_per_ip`,
 `ratelimit.enforce_per_user`, `ratelimit.reset_all`, the limiter registry, and
 every call site in plan.md § Call sites are all unwritten, and the new
-`config.py` settings (`browse_rate_limit_max` and friends, `trusted_proxy_count`)
+`config.py` settings (`browse_rate_limit_max` and friends, `trusted_proxies`)
 do not exist. Every test below is expected to fail — most with an `AttributeError`
 on a limiter or setting that has not been built yet, which is the correct
 failure mode: it proves the test reaches for the real thing rather than a mock
@@ -21,9 +21,9 @@ docstring so it doesn't read as an accident:
 - S1 gets a shared IP for free — it only needs two different authenticated
   users.
 - S2 and R6 need to *vary* the apparent source address, which is only possible
-  by sending `X-Forwarded-For` with `trusted_proxy_count` monkeypatched to `1`
+  by sending `X-Forwarded-For` with the peer added to `trusted_proxies`
   — the exact deployment shape D3 describes, not a way of cheating the test.
-- S3 is the mirror image: `trusted_proxy_count` stays at its default `0`, the
+- S3 is the mirror image: `trusted_proxies` stays empty (the default), the
   client varies `X-Forwarded-For` on every request, and the limit must still
   bite. This is the most important test in the file — a limiter that trusts a
   client-supplied header is weaker than no limiter at all, because the caller
@@ -271,7 +271,7 @@ def test_r6_forgot_password_address_cap_refuses_mail_without_a_visible_429(
     stay the uniform `202 {"status": "accepted"}`, and the only observable
     difference is that the 3rd mail never goes out.
 
-    Uses `X-Forwarded-For` with `trusted_proxy_count` monkeypatched to `1` to
+    Uses `X-Forwarded-For` with the peer and proxy hop in `trusted_proxies` to
     present three distinct source addresses — `TestClient` cannot otherwise
     vary `request.client.host`, and a fixed reverse-proxy hop count is exactly
     the deployment D3 describes, not a way of rigging the test.
@@ -279,7 +279,9 @@ def test_r6_forgot_password_address_cap_refuses_mail_without_a_visible_429(
     from app.config import settings
     from app.routers import auth as auth_router
 
-    monkeypatch.setattr(settings, "trusted_proxy_count", 1, raising=False)
+    monkeypatch.setattr(
+        settings, "trusted_proxies", ["testclient", "10.0.0.1"], raising=False
+    )
     monkeypatch.setattr(
         auth_router._forgot_password_address_limiter, "max_attempts", 2, raising=False
     )
@@ -299,9 +301,18 @@ def test_r6_forgot_password_address_cap_refuses_mail_without_a_visible_429(
     assert [r.status_code for r in responses] == [202, 202, 202], [r.text for r in responses]
     assert [r.json() for r in responses] == [{"status": "accepted"}] * 3
 
-    assert len(outbox.to(victim_email)) == 2, (
-        "the address cap must stop the 3rd mail even though each of the 3 "
-        "requests came from a distinct, never-before-seen IP"
+    # Count *reset* mail specifically, not everything addressed to the victim:
+    # registering them (the arrangement above) already sent M8's email
+    # verification link to the same address. Asserting on the total would make
+    # a signup consume the reset budget — which would be a real bug, not a
+    # test detail: a later legitimate "resend verification" could then be
+    # suppressed by an attacker's reset flood. The cap is on reset requests,
+    # which is what D6 says and what the setting's name says.
+    resets = [m for m in outbox.to(victim_email) if m["subject"].startswith("Reset")]
+    assert len(resets) == 2, (
+        "the address cap must stop the 3rd reset mail even though each of the "
+        f"3 requests came from a distinct, never-before-seen IP (saw {len(resets)}: "
+        f"{[m['subject'] for m in outbox.to(victim_email)]})"
     )
 
 
@@ -380,13 +391,15 @@ def test_s2_changing_ip_does_not_reset_an_identity_keyed_limit(
     retries against.
 
     Varies the apparent address via `X-Forwarded-For` with
-    `trusted_proxy_count` monkeypatched to `1` (harness note, module
+    the peer and proxy hop placed in `trusted_proxies` (harness note, module
     docstring) — `TestClient` cannot otherwise change `request.client.host`.
     """
     from app.config import settings
     from app.routers import access as access_router
 
-    monkeypatch.setattr(settings, "trusted_proxy_count", 1, raising=False)
+    monkeypatch.setattr(
+        settings, "trusted_proxies", ["testclient", "10.0.0.1"], raising=False
+    )
     monkeypatch.setattr(
         access_router._access_request_limiter, "max_attempts", 1, raising=False
     )
@@ -482,6 +495,51 @@ def test_s4_trusted_proxy_extracts_the_real_client_not_the_proxys_address(
     # A different client behind the identical trusted proxy gets its own counter.
     client_b = client.get("/api/listings", headers={"X-Forwarded-For": "9.9.9.2"})
     assert client_b.status_code == 200, client_b.text
+
+
+def test_s7_a_second_forwarded_for_header_line_cannot_shadow_our_proxys(
+    client, monkeypatch
+):
+    """S7 — the hole that hides behind `request.headers.get()`.
+
+    `X-Forwarded-For` is a list header, and a sender may split it across
+    multiple header *lines* instead of commas — RFC 7230 §3.2.2 makes the two
+    forms equivalent, and a proxy appending its own line rather than extending
+    the client's is entirely conformant. `.get()` returns only the **first**
+    line. So a client that sends its own `X-Forwarded-For` line first gets that
+    line walked, our proxy's line never read, and the attacker back in control
+    of the key — with `trusted_proxies` configured correctly and S3/S6 both
+    still green, because neither sends two lines.
+
+    The fix is to join every line in receipt order before walking. This test is
+    what keeps it: a refactor back to `.get()` is a one-character change that
+    nothing else in this file would notice.
+
+    Same shape as S6 — the forged line varies per request, so if it were the
+    key each request would get a fresh counter and the third would return 200.
+    """
+    from app.config import settings
+    from app.routers import listings as listings_router
+
+    monkeypatch.setattr(settings, "trusted_proxies", ["testclient"], raising=False)
+    monkeypatch.setattr(listings_router._browse_limiter, "max_attempts", 2, raising=False)
+
+    def _two_lines(forged: str):
+        # httpx preserves a list of tuples as repeated header lines.
+        return client.get(
+            "/api/listings",
+            headers=[("x-forwarded-for", forged), ("x-forwarded-for", "9.9.9.1")],
+        )
+
+    first = _two_lines("1.1.1.1")
+    second = _two_lines("2.2.2.2")
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+
+    third = _two_lines("3.3.3.3")
+
+    assert third.status_code == 429, third.text
+    assert third.json().get("code") == "rate_limited"
 
 
 def test_s6_a_forged_prepended_entry_is_never_the_key(client, monkeypatch):

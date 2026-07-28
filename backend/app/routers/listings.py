@@ -25,7 +25,7 @@ from ..permissions import (
     require_admin,
     require_private_access,
 )
-from ..ratelimit import RateLimiter, enforce_per_ip
+from ..ratelimit import RateLimiter, enforce_per_ip, enforce_per_user
 from ..schemas import (
     DocumentRead,
     ListingCreate,
@@ -38,6 +38,7 @@ from ..schemas import (
     RejectRequest,
 )
 from ..uploads import (
+    _upload_limiter,
     attachment_headers,
     display_filename,
     enforce_upload_quota,
@@ -431,8 +432,16 @@ def close_listing(
 async def upload_document(
     listing: Listing = Depends(get_owned_listing),
     file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> ListingDocument:
+    # The arrival-rate cap (pre-011 R4/R8) — **first**, before a single byte is
+    # read and long before anything is stored, so a refused upload costs the
+    # server nothing and leaves no row and no file. Keyed on the JWT identity,
+    # not the listing: otherwise one seller with fifty listings would get fifty
+    # budgets. The 429 is deliberately distinct from the quota's 413 — "too fast"
+    # and "too much stored" are different problems with different remedies.
+    enforce_per_user(_upload_limiter, user)
     # Type + extension + magic bytes + the streamed size ceiling, all in
     # `uploads.py` since M10 — one validator, shared verbatim with
     # `POST /verification/documents` so the two upload routes cannot drift

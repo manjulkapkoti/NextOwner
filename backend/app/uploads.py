@@ -31,10 +31,27 @@ from sqlmodel import Session, SQLModel, select
 
 from .config import ALLOWED_UPLOAD_TYPES, settings
 from .errors import PayloadTooLarge, UnsupportedMediaType
+from .ratelimit import RateLimiter
 from .storage import LocalDiskStorageBackend
 
 # One storage backend per process — the swappable seam (horizontal-scale #2).
 storage = LocalDiskStorageBackend(settings.upload_dir)
+
+# **One** upload rate limiter for **both** document routes (pre-011 R8), keyed
+# per user. It lives here for the same reason the validator does: two instances
+# that agree today are the shape that drifts, and here the drift is invisible —
+# each route would still refuse at its own cap while the caller quietly enjoys
+# double the budget `upload_rate_limit_max` promises. One instance makes the
+# sharing true by construction rather than by two modules agreeing.
+#
+# Complements the *stored* quota below: `enforce_upload_quota` bounds how much a
+# caller keeps, this bounds how fast it arrives — which is what actually narrows
+# the read-then-insert race that quota check accepts (spec 010 D11).
+_upload_limiter = RateLimiter(
+    max_attempts=settings.upload_rate_limit_max,
+    window_seconds=settings.upload_rate_limit_window_seconds,
+    name="upload",
+)
 
 ALLOWED_EXTS = {".pdf", ".png", ".jpg", ".jpeg"}
 

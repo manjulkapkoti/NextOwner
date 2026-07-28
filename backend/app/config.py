@@ -127,16 +127,21 @@ class Settings(BaseSettings):
     forgot_password_address_rate_limit_max: int = 3
     forgot_password_address_rate_limit_window_seconds: int = 3600
 
-    # **The security-relevant one** (pre-011 D3). How many rightmost
-    # `X-Forwarded-For` entries were appended by infrastructure we run; the real
-    # client is the entry immediately to their left. `0` = ignore the header
-    # entirely, which is correct locally and safe everywhere — a client can send
-    # this header itself, and a limiter keyed on it unconditionally is *weaker*
-    # than no limiter, because the caller picks a fresh key per request. Raise it
-    # only to match a reverse proxy that is actually in front of the app, and
-    # verify against a real request: see `ratelimit.client_ip`, which falls back
-    # to the connection address whenever the header cannot support the count.
-    trusted_proxy_count: int = 0
+    # **The security-relevant one** (pre-011 D3). The addresses of proxies we
+    # actually run. Empty (the default) means the immediate peer is never
+    # trusted, so `X-Forwarded-For` is ignored entirely — correct locally and
+    # safe everywhere, because a client can send that header itself and a limiter
+    # keyed on it unconditionally is *weaker* than no limiter (the caller picks a
+    # fresh counter per request). A deployment lists its own reverse proxy / CDN
+    # egress addresses here. Set from the environment as JSON, e.g.
+    # `TRUSTED_PROXIES='["10.0.0.1"]'`.
+    #
+    # Replaced a `trusted_proxy_count` integer (D3's amendment): a count could
+    # not express a single-nginx chain, and its safety depended on the operator
+    # matching hop depth exactly — set too high, the index landed inside
+    # attacker-supplied text. A wrong entry here can only merge callers into one
+    # bucket, which is the safe direction.
+    trusted_proxies: list[str] = []
 
     # Test-only: mount the /_debug/boom route (500-contract tests). Off in prod.
     enable_debug_routes: bool = False

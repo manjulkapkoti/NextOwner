@@ -37,27 +37,74 @@ class RateLimiterBackend(Protocol):
     def clear(self) -> None: ...
 
 
+# How often the store sweeps elapsed keys (D9). Not a correctness parameter —
+# a key's own window decides whether it is live — only how much untidy state is
+# tolerated between sweeps. Sweeping on *every* write would be O(keys) per
+# request, which under exactly the address-rotating flood this exists to survive
+# is quadratic: the cure would be the denial of service.
+_SWEEP_INTERVAL_SECONDS = 60
+
+
 class InMemoryRateLimiterBackend:
-    """Fixed-window counter in a dict. Single-instance only, by construction."""
+    """Fixed-window counter in a dict. Single-instance only, by construction.
+
+    **Evicts keys whose window has fully elapsed** (pre-011 D9/R9). It never used
+    to, which was defensible while the only IP-keyed routes were login, register
+    and forgot-password: that key space is bounded by addresses that bother to
+    attempt authentication. Keying public browse per IP makes the key space
+    *every address that ever fetches a listing*, so without eviction an attacker
+    rotating source addresses grows this dict without bound — exhausting memory
+    through the very control added to stop them. A mitigation that opens a new
+    denial-of-service path is not a mitigation.
+
+    Eviction changes no counter's value: a key is dropped only once every one of
+    its timestamps is outside its own window, which is exactly the state in which
+    `hit` would have filtered them all away anyway.
+    """
 
     def __init__(self) -> None:
         self._hits: dict[str, list[float]] = {}
+        # Each key's window, so the sweep can judge a key by the limiter that
+        # owns it rather than by whichever window the current caller passed.
+        self._windows: dict[str, int] = {}
+        # Set lazily on the first hit, never at construction: the clock a caller
+        # (or a test) installs may not be the one this object was built under.
+        self._last_sweep: float | None = None
 
     def hit(self, key: str, window_seconds: int) -> int:
         now = time.monotonic()
+        self._sweep(now)
         recent = [t for t in self._hits.get(key, []) if now - t < window_seconds]
         recent.append(now)
         self._hits[key] = recent
+        self._windows[key] = window_seconds
         return len(recent)
+
+    def _sweep(self, now: float) -> None:
+        """Drop every key whose window has fully elapsed — opportunistically, on
+        write, with no background task (D9)."""
+        if self._last_sweep is None or now - self._last_sweep < _SWEEP_INTERVAL_SECONDS:
+            if self._last_sweep is None:
+                self._last_sweep = now
+            return
+
+        self._last_sweep = now
+        for key, timestamps in list(self._hits.items()):
+            if not timestamps or now - timestamps[-1] >= self._windows.get(key, 0):
+                del self._hits[key]
+                self._windows.pop(key, None)
 
     def reset(self, key: str) -> None:
         self._hits.pop(key, None)
+        self._windows.pop(key, None)
 
     def clear(self) -> None:
         """Drop every counter. Test isolation (D4); a shared backend flushes the
         limiter's key namespace instead — which is safe precisely because
         `RateLimiter.key_for` namespaces every key by limiter name."""
         self._hits.clear()
+        self._windows.clear()
+        self._last_sweep = None
 
 
 # Every `RateLimiter` ever constructed, in construction order (D4). The test
@@ -110,44 +157,58 @@ def reset_all() -> None:
 
 
 def client_ip(request: Request) -> str:
-    """The address to key an anonymous limit on.
+    """The address to key an anonymous limit on (D3).
 
     `X-Forwarded-For` is a client-supplied header. Trusting it unconditionally
     makes a limiter *weaker than none*: the caller picks a fresh key per request
-    and the counter never reaches its cap. So it is read only as far as
-    `settings.trusted_proxy_count` entries from the RIGHT — those were appended
-    by infrastructure we run, while everything to their left is attacker input.
+    and the counter never reaches its cap. So the header is evidence only when
+    the connection it arrived on came from a proxy we run, and even then only the
+    part of it our own infrastructure wrote:
 
-    Concretely: skip the rightmost `trusted_proxy_count` entries (our own
-    proxies' addresses, written by the hop behind them) and take the next one to
-    the left — that is the address the innermost trusted proxy actually observed.
-    Anything an attacker prepends stays to the left of that position and is never
-    read. Two deliberate properties:
+    1. **If the immediate peer is not in `settings.trusted_proxies`, the header is
+       ignored entirely** and the connection address is the key. With the default
+       (empty) allowlist that is always the case, which is both correct for local
+       dev and safe in front of anything.
+    2. **Otherwise walk the header right-to-left, skipping entries that are
+       themselves trusted proxies, and take the first entry that is not.** That
+       entry is the address our innermost proxy actually observed. Anything an
+       attacker prepends sits to its *left* and is never read.
 
-    - **`0` (the default) ignores the header entirely**, which is both correct
-      for local dev and safe in front of any deployment: an unproxied app that
-      trusted the header would hand every caller a free counter per request.
-    - **Every failure falls back to `request.client.host`**, never to header
-      content: too few entries to satisfy the hop count means the header was not
-      written by the infrastructure we assumed, so it is not evidence. Setting
-      the count too high therefore degrades to "everyone behind the proxy shares
-      one bucket" (a tight limit), never to "the caller picks their own key".
+    Every failure degrades to `request.client.host`, never to header content: an
+    absent header, an empty one, or one whose entries are all trusted means the
+    header carries no evidence about who called. The worst a misconfigured
+    allowlist can do is merge callers into one bucket — a tighter limit, never a
+    free key per request. That is the property the replaced hop-count design did
+    not have: it could be set too high, and then the index landed inside
+    attacker-supplied text.
+
+    Entries are compared verbatim (whitespace-stripped). A proxy that writes a
+    form we did not list — a port suffix, a bracketed IPv6 literal — simply is
+    not recognised as trusted, which again fails toward one shared bucket.
+
+    **All `X-Forwarded-For` lines are joined, not just the first.** A client can
+    send its own header line, and a proxy that appends a *second* line rather
+    than extending the first is entirely conformant (RFC 7230 §3.2.2 — repeated
+    field lines are equivalent to one comma-joined value). Reading only
+    `headers.get(...)` would then read the attacker's line and never our proxy's,
+    handing the caller the key. Joining in receipt order keeps our proxy's entry
+    where the right-to-left walk expects it: last.
 
     Read from `settings` at **call** time, not import time, so the value is
-    configurable per deployment (and monkeypatchable in the S3/S4 tests).
+    configurable per deployment (and monkeypatchable in the S3/S4/S6 tests).
     """
     direct = request.client.host if request.client else "unknown"
 
-    trusted = getattr(settings, "trusted_proxy_count", 0) or 0
-    if trusted <= 0:
+    trusted = frozenset(getattr(settings, "trusted_proxies", None) or ())
+    if direct not in trusted:
         return direct
 
-    forwarded = request.headers.get("x-forwarded-for", "")
+    forwarded = ",".join(request.headers.getlist("x-forwarded-for"))
     entries = [part.strip() for part in forwarded.split(",") if part.strip()]
-    index = len(entries) - 1 - trusted
-    if index < 0:
-        return direct
-    return entries[index]
+    for entry in reversed(entries):
+        if entry not in trusted:
+            return entry
+    return direct
 
 
 def enforce(limiter: RateLimiter, key: str, *, retry_after: int | None = None) -> None:
