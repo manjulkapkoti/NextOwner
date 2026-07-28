@@ -808,8 +808,12 @@ class ValuationRequest(SQLModel):
     )
     # Optional with a neutral default, so leaving a field blank costs a visitor
     # nothing (spec C5) — omitting growth must not read as "declining".
-    growth_pct: Decimal = Field(default=Decimal("0"), ge=-100, le=1000, max_digits=6, decimal_places=2)
-    churn_pct: Decimal = Field(default=Decimal("0"), ge=0, le=100, max_digits=6, decimal_places=2)
+    growth_pct: Decimal = Field(
+        default=Decimal("0"), ge=-100, le=1000, max_digits=6, decimal_places=2
+    )
+    churn_pct: Decimal = Field(
+        default=Decimal("0"), ge=0, le=100, max_digits=6, decimal_places=2
+    )
 
     @model_validator(mode="after")
     def _profit_within_revenue(self) -> "ValuationRequest":

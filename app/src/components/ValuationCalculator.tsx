@@ -122,7 +122,8 @@ export function ValuationCalculator() {
     // under an input the visitor just fixed reads as "still wrong".
     setErrors((current) => {
       if (!current[field]) return current
-      const { [field]: _removed, ...rest } = current
+      const rest = { ...current }
+      delete rest[field]
       return rest
     })
   }
