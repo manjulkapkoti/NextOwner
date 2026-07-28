@@ -103,10 +103,7 @@ Frontend states (`error_handling.md` §3): initial/empty (U7), loading with the 
 
 ## Analytics events
 
-- `valuation_calculated` — `{ type, driver }`
-- `valuation_lead_captured` — `{ type }`
-
-Neither carries an email, an amount, or an identity (S12; `security.md` § Audit & logging).
+**None** — see spec §7. The `track()` wrapper Article 4 describes does not exist and this milestone does not build it; the standing rule since M8 is to emit nothing untested. What *is* tested is the inverse property: S12 asserts the email address appears in **no** log line the request produces, which is the leak the instrumentation would otherwise be the vehicle for.
 
 ## Data protection (`docs/data_protection.md` §6)
 

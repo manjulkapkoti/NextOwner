@@ -784,15 +784,32 @@ class ValuationRequest(SQLModel):
     answer to give.
     """
 
+    # **`max_digits`/`decimal_places` are load-bearing, not tidiness.** `ge`/`le`
+    # bound a number's *magnitude* and say nothing about its *precision*:
+    # `"0." + "1" * 100_000` is smaller than one, passes every bound above, and
+    # the `Money` TypeDecorator persists it verbatim as a 100 kB string. On an
+    # unauthenticated write route that is a storage-amplification path — a body
+    # just under `max_request_bytes` becomes a multi-megabyte row, and the admin
+    # list route then has to serve it back. Caught by the M11 inline branch
+    # review; the shape of the miss is worth remembering, because the two
+    # constraints look interchangeable and are not.
+    #
+    # 14/2 matches the money shape the rest of the codebase already uses (M4's
+    # browse casts to `Numeric(14, 2)` for its range filters).
     type: Literal["saas", "ecommerce", "content", "agency", "marketplace"]
-    ttm_revenue: Decimal = Field(ge=0, le=settings.valuation_max_amount)
+    ttm_revenue: Decimal = Field(
+        ge=0, le=settings.valuation_max_amount, max_digits=14, decimal_places=2
+    )
     ttm_profit: Decimal = Field(
-        ge=-settings.valuation_max_amount, le=settings.valuation_max_amount
+        ge=-settings.valuation_max_amount,
+        le=settings.valuation_max_amount,
+        max_digits=14,
+        decimal_places=2,
     )
     # Optional with a neutral default, so leaving a field blank costs a visitor
     # nothing (spec C5) — omitting growth must not read as "declining".
-    growth_pct: Decimal = Field(default=Decimal("0"), ge=-100, le=1000)
-    churn_pct: Decimal = Field(default=Decimal("0"), ge=0, le=100)
+    growth_pct: Decimal = Field(default=Decimal("0"), ge=-100, le=1000, max_digits=6, decimal_places=2)
+    churn_pct: Decimal = Field(default=Decimal("0"), ge=0, le=100, max_digits=6, decimal_places=2)
 
     @model_validator(mode="after")
     def _profit_within_revenue(self) -> "ValuationRequest":

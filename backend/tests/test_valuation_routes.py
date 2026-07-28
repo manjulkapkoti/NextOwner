@@ -340,3 +340,27 @@ def test_x8_4xx_bodies_carry_the_error_contract_shape(client, path):
     blob = r.text.lower()
     for leak in ("traceback", "sqlalchemy", 'file "', ".py"):
         assert leak not in blob
+
+
+@pytest.mark.parametrize("path", BOTH_ROUTES)
+def test_x9_absurd_decimal_precision_is_422_and_writes_nothing(client, session, path):
+    """X9 — magnitude bounds are not precision bounds.
+
+    Added by the M11 inline branch review. `0.111…` (100,000 digits) is smaller
+    than one, so it satisfies every `ge`/`le` on the field — and the `Money`
+    TypeDecorator stores `str(value)`, so the row would have carried 100 kB of
+    digits. On an **unauthenticated** write route that is storage amplification:
+    a body just under `max_request_bytes` becomes a multi-megabyte row, five
+    times an hour per address, and the admin list route then has to serve it
+    back.
+
+    Asserted on both routes and against the row count, because the 422 alone is
+    not the property that matters — "nothing was written" is.
+    """
+    absurd = "0." + "1" * 100_000
+    before = _lead_count(session)
+
+    r = client.post(path, json=_body_for(path, ttm_revenue=absurd, ttm_profit="0"))
+    assert r.status_code == 422
+    assert "ttm_revenue" in _field_names(r.json())
+    assert _lead_count(session) == before

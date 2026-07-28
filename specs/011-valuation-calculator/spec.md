@@ -106,7 +106,7 @@ Two things follow from that, and they drive the decisions below:
 - **S9** — GIVEN an authenticated user calls `POST /api/valuation` **with** a valid token, WHEN the response is compared to the anonymous one for the same inputs, THEN they are identical and no identity is recorded — a token present on a public route must not widen behavior or silently attribute the lead (the S8-shaped rule spec 004 applied to browse).
 - **S10** — GIVEN the calculate limiter's cap, WHEN one IP exceeds it, THEN 429 with a `Retry-After` header and the generic rate-limited body (D8; pre-011's contract).
 - **S11** — GIVEN the lead limiter's much harder cap, WHEN one IP exceeds it, THEN 429 **and no further `ValuationLead` rows are written** — the refusal happens before the write, so the storage surface is actually bounded (D8, pre-011 R1).
-- **S12** — GIVEN a lead is captured, WHEN the analytics event emitted for it is inspected, THEN it carries **no email address** and no other PII (`security.md` § Audit & logging; §7 lead-capture).
+- **S12** — GIVEN a lead is captured (and given a lead submission that fails validation), WHEN everything the server logged during the request is inspected, THEN the email address appears **nowhere** in it (`security.md` §6 "Info leakage: logs containing secrets/PII"; D10's "never logged"). *(This replaces a criterion that originally asserted the same property of an emitted analytics event. There is no analytics event, and there is no `track()` wrapper — see §7.)*
 
 ### X — Errors & failure modes (`docs/error_handling.md`)
 
@@ -120,6 +120,7 @@ Two things follow from that, and they drive the decisions below:
 - **X6** — GIVEN a malformed `email` on the lead route, WHEN it is sent, THEN 422 and **no row is written**.
 - **X7** — GIVEN a forced internal error inside the valuation router, WHEN a route is called, THEN the generic 500 contract (`detail`, `request_id`) is returned with no stack trace, SQL, or internal detail (reuses the M1 global handler — no new code, one new test).
 - **X8** — GIVEN any 4xx from these routes, WHEN the body is inspected, THEN it carries the `{detail, code}` shape and leaks no internal detail (`error_handling.md` §1).
+- **X9** — GIVEN a numeric input whose *magnitude* is in range but whose *precision* is absurd (e.g. `"0."` followed by 100,000 digits), WHEN either public route is called, THEN 422 and no row is written. *(Added during the M11 inline branch review, which found that `ge`/`le` bound magnitude only: such a value passed every existing check and the `Money` TypeDecorator would have persisted it verbatim, making the unauthenticated lead route a storage-amplification path — a body just under `max_request_bytes` becoming a multi-megabyte row. Fixed with `max_digits`/`decimal_places`. Recorded here rather than folded silently into X4, because "bounded" and "bounded in both dimensions" are the distinction that was missed.)*
 
 ### U — UI (`app/`)
 
@@ -202,8 +203,9 @@ The inner clamps are what make V9/V10 true: an absurd input is *ignored past the
 
 ## 7. Analytics events
 
-- `valuation_calculated` — props: `type`, `driver`. **No amounts, no email, no identity.**
-- `valuation_lead_captured` — props: `type`. **No email** (S12).
+**None.** This spec initially named two (`valuation_calculated`, `valuation_lead_captured`) — which was wrong on a fact worth recording rather than quietly deleting: **the `track(event, props)` wrapper constitution Article 4 describes has never been built.** Nine milestones have each written an "Analytics events" section, and from M8 onward the answer has been "none planned … the standing rule is to emit nothing untested" (plan 010 § Analytics events). This milestone follows that rule rather than becoming the one that quietly builds an analytics layer as a side effect of a lead form.
+
+Recorded because a lead magnet is the *first* surface where a conversion funnel actually wants instrumentation, so this is where the gap starts to cost something. If a later milestone builds `track()`, this page is its obvious first caller, and the props are already scoped: `{type, driver}` on calculate and `{type}` on capture — **never** the email address (D10).
 
 ## 8. Out of scope
 
