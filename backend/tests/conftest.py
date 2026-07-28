@@ -109,7 +109,22 @@ def _fresh_rate_limiters():
     — by design; the swappable backend is the horizontal-scale seam). Across a
     pytest run that state would leak between tests — the brute-force tests (F1,
     F3) would trip them and later requests would 429 — so we reset per test.
+
+    **Migrated per spec pre-011 D4**: once `ratelimit.reset_all()` exists (the
+    registry every `RateLimiter` self-registers into), this fixture uses it and
+    stops naming limiters one by one — the whole point of the registry is that
+    a newly-added limiter is reset automatically, with no second edit here.
+    Until that seam lands, this falls back to the by-name reset that predates
+    it, so `test_rate_limits.py` can be written now without breaking every
+    other test in the suite before `reset_all()` exists.
     """
+    from app import ratelimit
+
+    if hasattr(ratelimit, "reset_all"):
+        ratelimit.reset_all()
+        yield
+        return
+
     from app.ratelimit import InMemoryRateLimiterBackend
     from app.routers import auth as auth_router
 
