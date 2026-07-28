@@ -76,7 +76,7 @@ class ValuationLeadRead(BaseModel)            # the admin row
 ```
 
 - `ValuationRequest` lists **only** the five inputs — so `low`, `high`, `driver`, `id`, `is_admin` have no field to bind to and mass-assignment is impossible *by schema*, not by runtime filtering (S4/S5, `security.md` §6).
-- Bounds live on the fields (`ge`/`le`) plus one `model_validator` for the cross-field `ttm_profit <= ttm_revenue` rule (X3), so every X-group failure is a Pydantic 422 with a field name.
+- Bounds live on the fields — `ge`/`le` for magnitude **and `max_digits`/`decimal_places` for precision** — plus one `model_validator` for the cross-field `ttm_profit <= ttm_revenue` rule (X3), so every X-group failure is a Pydantic 422 with a field name. The precision half was added by the branch review (X9): `ge`/`le` alone accept `"0."` followed by 100,000 digits, which `Money` would persist verbatim.
 - `ValuationEstimateRead` is a **standalone** model referencing no ORM row — it cannot leak a field of another table because it has no relationship to one (S8). Same construction rule `WatchlistEntryRead` follows: built field by field, never spread from a row.
 - `ValuationLeadRead` carries `email` and is returned **only** by the `require_admin` route.
 
@@ -92,7 +92,7 @@ class ValuationLeadRead(BaseModel)            # the admin row
 
 | Condition | Status | Mechanism |
 |---|---|---|
-| Bad/missing/out-of-range input, bad email | 422 | Pydantic field + `model_validator` (X1–X6) |
+| Bad/missing/out-of-range input, bad email | 422 | Pydantic field + `model_validator` (X1–X6, X9) |
 | Rate limit exceeded | 429 + `Retry-After` | `enforce_per_ip` → existing `RateLimited` (S10, S11) |
 | Non-admin / anonymous on the admin route | 403 / 401 | existing `require_admin` / `get_current_user` (S1–S3) |
 | Anything unhandled | 500 generic | existing `main.py` catch-all (X7) |
@@ -133,11 +133,13 @@ valuation_max_amount: Decimal = Decimal("1000000000")  # input ceiling (X4)
 
 1. **Config + the pure model.** `config.py` additions, then `valuation.py`: bands, clamps, `estimate_valuation`. No FastAPI, no DB. **Turns green:** V1–V13. *Why first:* it is the only part of the milestone with no dependencies, and it is where every number the rest of the milestone reports comes from. Getting the table test green first means every later failure is a plumbing failure, never an arithmetic one.
 
-2. **Request/response schemas + validation.** `ValuationRequest`, `ValuationLeadCreate`, `ValuationEstimateRead` with all bounds and the cross-field validator. **Turns green:** X1–X6, X8 (once slice 3 mounts a route to send them at — the validator tests that can run headless run here; the rest land with slice 3). *Why second:* the boundary that rejects hostile input must exist before the route that accepts it, not after. Writing it as a separate slice also keeps S4's "impossible by schema" claim honest — the request model is *designed* without those fields, rather than having them stripped later.
+2. **Request/response schemas + validation.** `ValuationRequest`, `ValuationLeadCreate`, `ValuationEstimateRead` with all bounds and the cross-field validator. **Turns green:** nothing on its own — every X-group test posts to a route, so they land with slices 3 and 4. *Why second:* the boundary that rejects hostile input must exist before the route that accepts it, not after. Writing it as a separate slice also keeps S4's "impossible by schema" claim honest — the request model is *designed* without those fields, rather than having them stripped later.
 
-3. **`POST /api/valuation` — the public, non-writing route.** New router + `main.py` mount + the calculate limiter. **Turns green:** C1–C5, S4, S6, S9, S10, X7, and the remainder of the X group. *Why third:* it is the milestone's whole feature with none of its risk — it reads nothing, writes nothing, and authenticates nobody. Once it is green, everything left is about persistence and identity.
+3. **`POST /api/valuation` — the public, non-writing route.** New router + `main.py` mount + the calculate limiter. **Turns green, on the calculate path only:** C1–C5, S4, S10, X1–X5, X7–X9. *Why third:* it is the milestone's whole feature with none of its risk — it reads nothing, writes nothing, and authenticates nobody. Once it is green, everything left is about persistence and identity.
 
-4. **`ValuationLead` + `POST /api/valuation/leads` — the writing route.** The model, the table, the lead limiter, and the server-side recomputation. **Turns green:** L1–L4, S5, S7, S11, S12. *Why here and not earlier:* this is the first slice where an anonymous request causes a row to exist. It deliberately lands *after* the limiter pattern is proven on the harmless route (slice 3), so the cap on the harmful one is applied by a mechanism that already has a passing test.
+4. **`ValuationLead` + `POST /api/valuation/leads` — the writing route.** The model, the table, the lead limiter, and the server-side recomputation. **Turns green:** L1–L4, S5, S6, S7, S9, S11, S12, plus the `/leads` half of every X-group parametrization. *Why here and not earlier:* this is the first slice where an anonymous request causes a row to exist. It deliberately lands *after* the limiter pattern is proven on the harmless route (slice 3), so the cap on the harmful one is applied by a mechanism that already has a passing test.
+
+   > **S6 and S9 sit here, not in slice 3 — and this line is a correction.** The first draft of this plan put both in slice 3 because both are *parametrized over* the calculate route. They are not reachable there: `test_s6` asserts the table still works by capturing a lead afterwards, and `test_s9` inspects a stored row, so **both need `/leads` regardless of which path the parametrization is on**. Caught by the M11 docs audit, which noticed the branch's own commit messages disagreed with this section — the commits were right and the plan was wrong. Exactly the failure `CLAUDE.md`'s M10 lesson predicts (*"a Build-order slice→test mapping is worth what the last run of it proved"*), and the reason the red list, not this section, is the status.
 
 5. **`GET /api/admin/valuation-leads` — the one privileged surface.** Added to `routers/admin.py` behind `require_admin`, with the page cap. **Turns green:** A1–A3, S1–S3, S8. *Why last on the backend:* it is the only slice with a trust boundary, and it needs rows to exist (slice 4) before "wrong identity cannot read them" means anything. A 403 test against an empty table proves less than a 403 test against a table with somebody's email in it.
 

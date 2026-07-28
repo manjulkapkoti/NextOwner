@@ -178,18 +178,23 @@ export const NavBar = observer(function NavBar() {
               always-visible row rather than the account menu: it is a lead
               magnet aimed at people who have never signed up, so a link that
               only appears once you have an account is the one placement that
-              defeats its purpose. Hidden below `sm` — the two supply-side and
-              demand-side entry points compete for the same narrow strip, and
-              Browse wins it. */}
+              defeats its purpose.
+              **Visible at every breakpoint, including xs.** A first draft hid it
+              below `sm` on the grounds that Browse should win the narrow strip —
+              which the M11 docs audit caught contradicting this milestone's own
+              stated reasoning one file over: `ValuationCalculator.tsx` justifies
+              its native `<select>` because this audience "arrives cold and
+              disproportionately on a phone." Hiding the only persistent path to
+              that page on exactly that viewport is the contradiction, and the
+              landing-page CTA does not cover it (a visitor already on /browse
+              never sees the landing page). The two supply-side and demand-side
+              entry points now share the strip; `Browse` is the shorter label and
+              still comes first. */}
           <Button
             color="inherit"
             component={RouterLink}
             to="/valuation"
-            sx={{
-              whiteSpace: 'nowrap',
-              display: { xs: 'none', sm: 'inline-flex' },
-              ...navSx('/valuation'),
-            }}
+            sx={{ whiteSpace: 'nowrap', ...navSx('/valuation') }}
           >
             Valuation
           </Button>
