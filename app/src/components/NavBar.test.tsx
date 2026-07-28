@@ -221,4 +221,30 @@ describe('NavBar', () => {
     expect(screen.getByRole('menuitem', { name: /^verifications$/i })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: /^verification$/i })).toBeInTheDocument()
   })
+
+  // M11 — spec 011 U8. Written failing first: the link does not exist yet.
+  //
+  // Asserted for a **logged-out** visitor specifically. The calculator is a lead
+  // magnet aimed at people who have never signed up, so a link that only appears
+  // once you have an account is the one placement that defeats its purpose —
+  // and, being inside the account menu, is exactly where it would land by
+  // habit.
+  //
+  // **What this test cannot see, recorded so a green run is not over-read:**
+  // jsdom does not evaluate media queries, so a `display: { xs: 'none' }` on
+  // this link would leave the test passing while the link was invisible on
+  // every phone. That is not hypothetical — it is what the first draft of the
+  // component did, and only the M11 docs audit caught it, by reading two files'
+  // rationale against each other rather than by running anything. The breakpoint
+  // behaviour is covered, if at all, by the Playwright layout job, not here.
+  it('U8: the valuation calculator is reachable from the nav when logged out', () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <NavBar />
+      </MemoryRouter>,
+    )
+
+    const link = screen.getByRole('link', { name: /valuation|what.*worth/i })
+    expect(link).toHaveAttribute('href', '/valuation')
+  })
 })

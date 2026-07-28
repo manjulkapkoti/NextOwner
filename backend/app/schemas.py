@@ -763,3 +763,138 @@ class VerificationRejectRequest(SQLModel):
         if not v.strip():
             raise ValueError("A rejection reason is required")
         return v
+
+
+# ── Valuation calculator (M11, spec 011) ─────────────────────────────────────
+
+class ValuationRequest(SQLModel):
+    """`POST /api/valuation` body — the five inputs from spec §6.1, and nothing else.
+
+    **The absent fields are the security control.** There is no `low`, `high`,
+    `driver`, `disclaimer`, `id` or `is_admin` here, so a body carrying them is
+    not *filtered* — those names have nothing to bind to (spec S4/S5,
+    `security.md` §6 mass-assignment). That is the schema-level form of the rule,
+    the one that cannot be undone by someone later deleting a runtime check.
+
+    `type` is a closed whitelist rather than a free string (D12), which is also
+    the whole of this milestone's injection story: the value never reaches a
+    query, because it never gets past this line. Note the deliberate asymmetry
+    with `Listing.type`, which *is* free text — a listing's type is displayed and
+    filtered on, while this one is a lookup **key**, and an unknown key has no
+    answer to give.
+    """
+
+    # **`max_digits`/`decimal_places` are load-bearing, not tidiness.** `ge`/`le`
+    # bound a number's *magnitude* and say nothing about its *precision*:
+    # `"0." + "1" * 100_000` is smaller than one, passes every bound above, and
+    # the `Money` TypeDecorator persists it verbatim as a 100 kB string. On an
+    # unauthenticated write route that is a storage-amplification path — a body
+    # just under `max_request_bytes` becomes a multi-megabyte row, and the admin
+    # list route then has to serve it back. Caught by the M11 inline branch
+    # review; the shape of the miss is worth remembering, because the two
+    # constraints look interchangeable and are not.
+    #
+    # 14/2 matches the money shape the rest of the codebase already uses (M4's
+    # browse casts to `Numeric(14, 2)` for its range filters).
+    type: Literal["saas", "ecommerce", "content", "agency", "marketplace"]
+    ttm_revenue: Decimal = Field(
+        ge=0, le=settings.valuation_max_amount, max_digits=14, decimal_places=2
+    )
+    ttm_profit: Decimal = Field(
+        ge=-settings.valuation_max_amount,
+        le=settings.valuation_max_amount,
+        max_digits=14,
+        decimal_places=2,
+    )
+    # Optional with a neutral default, so leaving a field blank costs a visitor
+    # nothing (spec C5) — omitting growth must not read as "declining".
+    growth_pct: Decimal = Field(
+        default=Decimal("0"), ge=-100, le=1000, max_digits=6, decimal_places=2
+    )
+    churn_pct: Decimal = Field(
+        default=Decimal("0"), ge=0, le=100, max_digits=6, decimal_places=2
+    )
+
+    @model_validator(mode="after")
+    def _profit_within_revenue(self) -> "ValuationRequest":
+        """Profit cannot exceed revenue (spec X3, §6.1).
+
+        A cross-field rule, so it lives here rather than on either field. Left to
+        the model it would be absorbed silently: `estimate_valuation` would
+        happily multiply a profit its own revenue cannot support, and the tool
+        would report the resulting number with the same confidence as a real one.
+        """
+        if self.ttm_profit > self.ttm_revenue:
+            raise ValueError("ttm_profit cannot exceed ttm_revenue")
+        return self
+
+
+class ValuationLeadCreate(ValuationRequest):
+    """`POST /api/valuation/leads` body — the same inputs plus an address.
+
+    Inherits every bound above, which is the point: a validation rule enforced on
+    the calculate route and forgotten on the lead route would be enforced
+    everywhere *except* the one place the value gets persisted.
+
+    `EmailStr` validates at the boundary (spec S7), before the address is stored
+    or rendered to an admin — so the stored-XSS question never arises rather than
+    being deferred to whatever escaping the admin page happens to do.
+    """
+
+    email: EmailStr
+
+
+class ValuationEstimateRead(BaseModel):
+    """What both public routes return.
+
+    A **standalone** model referencing no ORM row (plan § Response models): it
+    cannot leak a column of another table because it has no relationship to one
+    (spec S8). Same construction rule `WatchlistEntryRead` follows.
+
+    `disclaimer` is part of the payload, not UI chrome (D11) — a client that
+    renders the number and drops the caveat is a bug we can prevent here.
+    """
+
+    low: Decimal
+    high: Decimal
+    driver: Literal["profit", "revenue", "none"]
+    explanation: str
+    disclaimer: str
+
+    @field_serializer("low", "high", when_used="json")
+    def _ser_money(self, value: Decimal) -> str:
+        return str(value)
+
+
+class ValuationLeadRead(BaseModel):
+    """One captured lead, for `GET /api/admin/valuation-leads` **only**.
+
+    The one response model in this milestone that carries PII, returned by the
+    one route behind `require_admin`. Built field by field rather than spread
+    from the row, so a column added to `ValuationLead` later cannot ride out
+    without someone deciding it should.
+    """
+
+    id: int
+    email: EmailStr
+    type: str
+    ttm_revenue: Decimal
+    ttm_profit: Decimal
+    growth_pct: Decimal
+    churn_pct: Decimal
+    estimate_low: Decimal
+    estimate_high: Decimal
+    driver: str
+    created_at: datetime
+
+    @field_serializer(
+        "ttm_revenue",
+        "ttm_profit",
+        "growth_pct",
+        "churn_pct",
+        "estimate_low",
+        "estimate_high",
+        when_used="json",
+    )
+    def _ser_money(self, value: Decimal) -> str:
+        return str(value)

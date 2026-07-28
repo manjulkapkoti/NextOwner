@@ -586,3 +586,54 @@ class OfferEvent(SQLModel, table=True):
     from_status: str | None = None        # null only for action="submitted"
     to_status: str
     created_at: datetime = Field(default_factory=_utcnow)
+
+
+class ValuationLead(SQLModel, table=True):
+    """A prospective seller who ran the calculator and left an address (M11,
+    FR-23, spec 011).
+
+    The only table in the codebase whose subject is **not a user**. Everything
+    else here references someone who registered; this references someone who has
+    not — which is the whole point of a lead magnet, and drives three decisions
+    that read as omissions unless you know they were chosen:
+
+    - **No `user_id` FK** (D10). Adding one "just in case" would create exactly
+      the identity linkage spec S9 exists to prevent: a lead captured by a
+      signed-in visitor must not silently become an identified lead.
+    - **`email` is indexed but NOT unique** (D7). A unique constraint would
+      produce a distinguishable duplicate error, turning a public form into an
+      email-enumeration oracle — the same question M1's login and M8's
+      forgot-password both refuse to answer. Repeat submissions are bounded by
+      the rate limit instead, which refuses without revealing anything.
+    - **No event/audit table** (D9). Article 2 #5's test — *what does this
+      preserve that the row itself loses?* — returns nothing: a lead has no state
+      machine, nothing overwrites it, and it never justifies a decision about
+      anybody. It is a marketing artifact, and M8's rule that a projection must
+      never become an audit row applies here to a different kind of row.
+
+    `estimate_low`/`estimate_high`/`driver` are **server-computed** and stored
+    alongside the inputs (spec L2/S5): this is the number an admin will quote
+    back, so a client-supplied one reaching this table is the one mass-assignment
+    in the milestone with a lasting consequence.
+
+    **Erasure: hard-delete the rows matching the address** (`data_protection.md`
+    §3's per-child-table question, answered in D10). Nothing references a lead, so
+    anonymizing in place would leave a row of business figures attached to a
+    tombstone with no evidentiary purpose — contrast offers and access requests,
+    which are kept for audit with the author anonymized.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    email: str = Field(index=True)                      # PII — never logged (D10)
+    type: str
+    ttm_revenue: Decimal = Field(sa_type=Money)
+    ttm_profit: Decimal = Field(sa_type=Money)
+    growth_pct: Decimal = Field(sa_type=Money)
+    churn_pct: Decimal = Field(sa_type=Money)
+    # Server-computed, never read from the request body (L2/S5).
+    estimate_low: Decimal = Field(sa_type=Money)
+    estimate_high: Decimal = Field(sa_type=Money)
+    driver: str
+    # Indexed: the admin list's only ordering is newest-first, and its only
+    # bound is a page cap (A1/A2).
+    created_at: datetime = Field(default_factory=_utcnow, index=True)

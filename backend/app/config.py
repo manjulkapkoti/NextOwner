@@ -5,6 +5,8 @@ import time. The JWT signing key and DB URL live here, never hardcoded in code
 (`security.md` §Secrets). `.env.example` ships with placeholders.
 """
 
+from decimal import Decimal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -126,6 +128,23 @@ class Settings(BaseSettings):
     # attackers burying one person's inbox.
     forgot_password_address_rate_limit_max: int = 3
     forgot_password_address_rate_limit_window_seconds: int = 3600
+
+    # Valuation calculator (M11, spec 011 D8). Two public routes, two very
+    # different caps, because they cost us different things: the calculate route
+    # does arithmetic on validated numbers and stores nothing, while the lead
+    # route writes a PII row per call. The second number is the one that actually
+    # bounds the table — a generous cap there would make the lead form an open
+    # write endpoint for anyone with a script.
+    valuation_rate_limit_max: int = 30                # per IP per minute
+    valuation_rate_limit_window_seconds: int = 60
+    valuation_lead_rate_limit_max: int = 5            # per IP per hour — this one writes
+    valuation_lead_rate_limit_window_seconds: int = 3600
+    # The same unbounded-pagination control M4's browse and M8's inbox apply.
+    valuation_leads_page_limit: int = 50
+    # Input ceiling for the money fields (spec X4). An unbounded numeric input is
+    # an arithmetic and storage surface like any other (`security.md` §2) — and
+    # a business worth more than this is not using a rule-of-thumb calculator.
+    valuation_max_amount: Decimal = Decimal("1000000000")
 
     # **The security-relevant one** (pre-011 D3). The addresses of proxies we
     # actually run. Empty (the default) means the immediate peer is never

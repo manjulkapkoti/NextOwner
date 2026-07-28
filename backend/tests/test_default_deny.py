@@ -35,6 +35,17 @@ import re
 #     than any record — `forgot-password` deliberately answers an identical 202
 #     to every caller so it cannot become an account-existence oracle.
 #     `resend-verification` is NOT here: it is authenticated, and correctly 401s.
+#   - the two M11 valuation routes: a lead magnet aimed at people who have never
+#     signed up, so a session gate would defeat the feature (spec 011 D1/D2).
+#     Neither reads the caller's identity at all — a token present changes
+#     nothing (S9) — and neither can serve another table: `calculate` takes no
+#     session dependency and writes nothing, while `leads` only ever *inserts*.
+#     What guards them instead of a gate is the trio a public write needs: a
+#     closed input whitelist, a standalone response model with no ORM
+#     relationship to leak through, and a per-IP cap enforced before the write
+#     (S4/S6/S8/S10/S11). `GET /api/admin/valuation-leads` — the route that
+#     *reads* the captured addresses — is deliberately NOT here: it is behind
+#     `require_admin` and correctly 401s.
 PUBLIC_BY_DESIGN = {
     ("GET", "/api/health"),
     ("GET", "/api/listings"),
@@ -44,6 +55,8 @@ PUBLIC_BY_DESIGN = {
     ("POST", "/api/auth/forgot-password"),
     ("POST", "/api/auth/reset-password"),
     ("POST", "/api/auth/verify-email"),
+    ("POST", "/api/valuation"),
+    ("POST", "/api/valuation/leads"),
 }
 
 # Mounted only when ENABLE_DEBUG_ROUTES is set (conftest sets it so the 500

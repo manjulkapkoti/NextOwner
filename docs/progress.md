@@ -7,13 +7,21 @@
 > - Full design: `docs/session_recovery.md`.
 
 **Milestone status:**
-- M0–M10 ✅ merged.
+- M0–M11 ✅ merged.
 - **App-shell** (`pre-003`) ✅ merged (#25), plus the public landing page (#26) and the register page (#27).
 - **Design system** ✅ merged (#28).
 - **Agentic workflow** ✅ merged (#32).
 - **PR conventions guard** ✅ merged (#37).
 
 **In flight:** nothing.
+
+**M11 (valuation calculator)** shipped F12 + both halves of FR-23 — and is the first milestone since M1 whose threat model has no owner and no counterparty on most of its surface:
+- **The calculation is server-owned** (`backend/app/valuation.py`, D1). `design_implementation.md` offered a pure-frontend build; the endpoint was chosen because the multiples are published business policy, the lead row must store a number *we* computed, and one rule with two language implementations drifts.
+- **Two routes, not one with an optional `email`** (D2) — that split *is* the security design. `POST /api/valuation` stores nothing and takes no session dependency at all; `POST /api/valuation/leads` is the only writer, with a much harder cap (5/hour vs 30/min per IP) enforced **before** the insert.
+- **No new `permissions.py` function** (D4), the first such milestone since M3/M4 — recorded as a decision, not an omission. `GET /api/admin/valuation-leads` reuses `require_admin` and is the milestone's one trust boundary.
+- **`ValuationLead` has no `user_id` FK and no unique constraint on `email`** (D7/D10): the first closes identity linkage a visitor never consented to, the second stops the public form becoming an email-existence oracle. No audit table — Article 2 #5's "what does it overwrite?" test returns nothing for a marketing artifact (D9).
+- **Spec §6 is normative**: the bands, clamps and 12 worked cases the table test derives from, so the expected numbers come from the spec rather than from the code.
+
 **M10 ⭐ (buyer verification)** shipped F11 and the half of FR-14 that M5 deferred:
 - `unverified → pending → verified | rejected`, plus `rejected → pending` (resubmit) and `verified → rejected` (revoke) — one `reject` endpoint doing both deny and revoke (D1), with a `BuyerVerificationEvent` audit row preserving the `from_status` that distinguishes them once `verification_reason` is overwritten (D6).
 - **`get_owned_or_admin_verification_document`** — the first gate where `is_admin` *widens* access to another user's private data outside curation, so it is its own boundary rather than folded into an owner check. One raise for "no such id" and "not yours", so the 404s are identical by construction, not by two messages agreeing (S4).
@@ -47,9 +55,14 @@
 **Open PRs:** none.
 
 ## ▶ NEXT ACTION
-**Review the M10 PR, then `/close-feature`.** After it merges: **`/run-milestone valuation-calculator`** (M11).
+**`/run-milestone deal-completion`** (M12 — the last numbered milestone: `under_offer → sold` / fell-through, with the final price server-derived from the accepted offer).
 
 ## Carryover notes
+- **What M11's two independent review passes established — and the one thing neither of them found first:**
+  - **The inline review found the only code defect: `ge`/`le` bound a number's *magnitude*, not its *precision*.** `"0."` followed by 100,000 digits passed every validator, and the `Money` TypeDecorator stores `str(value)`, so an unauthenticated `POST /valuation/leads` would have written a 100 kB row — a body just under the 12 MB request cap becoming a multi-megabyte row, served back later by the admin list. Fixed with `max_digits`/`decimal_places` and criterion X9. **Generalize: "the input is bounded" is two claims, and a range check only makes one of them.**
+  - **The appsec pass found nothing blocking and confirmed X9 by running the routes**, not by reading the tests. Its one durable contribution is a `security.md` §9 item that is *older than this milestone*: Pydantic v2's 422 body echoes the rejected `input`, so a bad email comes back to its sender — and `POST /auth/register` has returned rejected **passwords** the same way since M1. Not a cross-user leak, so it is a contract-level fix rather than a route patch. **The shape of the miss is the lesson: S12 asserted the address is "never logged" and tested exactly that. True, and never the whole question — *never logged* and *never returned* are different properties, and only one had a test.**
+  - **The docs audit found four defects, and the one that matters is the one no test could ever have caught.** `ValuationCalculator.tsx` justified its native `<select>` because this audience "arrives cold and disproportionately on a phone," while `NavBar.tsx` hid the only persistent link to that page below the `sm` breakpoint — a contradiction between two files in the same diff, each internally reasonable. **jsdom does not evaluate media queries, so U8 passed while the link was invisible on every phone.** It was found by reading two files' stated rationale against each other. The other three: a false historical claim in D4 ("every other milestone since M1 added a `permissions.py` function" — M3 and M4 did not, and they are the *closest* precedents), a Build order asserting S6/S9 turn green a slice before the route they need, and a `plan.md` still describing 8 X-criteria after X9 made 9.
+  - **The Build-order defect is the M10 lesson repeating verbatim, one milestone later.** M10's carryover records slice lists that "summed to 30, not 33." M11's put two tests in the wrong slice — and this time **the branch's own commit messages were right while the plan was wrong**, because the commits were written against a suite that had just run. That is the whole argument for the constitution's rule that the red list, not `plan.md`, is the status.
 - **What M10's two independent review passes established:**
   - **The appsec pass found nothing blocking, and its one real contribution was overruling a framing I had accepted.** I had signed off on the quota's check-then-insert race as "the same microsecond-wide class D12(c) and M7's `counter` already accept." That was too generous: `ratelimit.py` is wired into `auth.py` and `chat.py` **only**, so neither upload route is rate-limited at all — the window is bounded by how many concurrent connections one account opens, which is attacker-controlled, on a control whose entire purpose is bounding abuse. Damage per burst is still capped (`max_upload_bytes` 10 MB, `max_request_bytes` 12 MB), so it is a `security.md` §9 item rather than a blocker. **Generalize: when you justify an accepted risk by analogy to a previously accepted one, check that the *bound* transfers too — "same class of race" hid a completely different window size.**
   - **The docs audit found three staleness defects, all the same shape: a claim true when written that silently stopped being true.** (1) specs 005 D5/G1 and 007 G1 still asserted *"there is no `verified` field anywhere in the codebase"* and cited the two deferral tests M10 retired — the retirement was recorded only in M10's own progress notes, not in the specs a reader would open. (2) `data_protection.md` §4 still mandated *"the M10 mock must model this: our DB never receives the document"* — and spec 010 D9's own text claimed a reader of that file would not be misled, which was false, because §4 was never touched. **A "recorded deviation" that lives only in the deviating document is not recorded; the binding doc has to say it too.** (3) `plan.md`'s Build-order slice lists summed to **30, not 33** — V15, S6 and S12 appeared in no slice at all, and that survived two earlier rounds of correction to those same paragraphs.
