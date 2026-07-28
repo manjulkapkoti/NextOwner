@@ -221,4 +221,22 @@ describe('NavBar', () => {
     expect(screen.getByRole('menuitem', { name: /^verifications$/i })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: /^verification$/i })).toBeInTheDocument()
   })
+
+  // M11 — spec 011 U8. Written failing first: the link does not exist yet.
+  //
+  // Asserted for a **logged-out** visitor specifically. The calculator is a lead
+  // magnet aimed at people who have never signed up, so a link that only appears
+  // once you have an account is the one placement that defeats its purpose —
+  // and, being inside the account menu, is exactly where it would land by
+  // habit.
+  it('U8: the valuation calculator is reachable from the nav when logged out', () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <NavBar />
+      </MemoryRouter>,
+    )
+
+    const link = screen.getByRole('link', { name: /valuation|what.*worth/i })
+    expect(link).toHaveAttribute('href', '/valuation')
+  })
 })
