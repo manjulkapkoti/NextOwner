@@ -12,7 +12,7 @@ import StorefrontOutlined from '@mui/icons-material/StorefrontOutlined'
 import { api } from '../lib/api'
 import { SpotlightCard } from './SpotlightCard'
 import { StatusChip } from './StatusChip'
-import { formatPrice } from './DealActions'
+import { formatPrice } from '../lib/money'
 
 // UI Pass 4 — the loading twin: 3 row-shaped skeleton cards matching this
 // screen's actual row (headline + status chip).

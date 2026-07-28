@@ -7,13 +7,26 @@
 > - Full design: `docs/session_recovery.md`.
 
 **Milestone status:**
-- M0–M11 ✅ merged.
+- M0–M12 ✅ merged — **the numbered sequence is complete.**
 - **App-shell** (`pre-003`) ✅ merged (#25), plus the public landing page (#26) and the register page (#27).
 - **Design system** ✅ merged (#28).
 - **Agentic workflow** ✅ merged (#32).
 - **PR conventions guard** ✅ merged (#37).
 
 **In flight:** nothing.
+
+**M12 (deal completion)** finished the listing state machine M7 stopped short of — and is the first milestone whose most valuable finding was a defect in *already-shipped* code:
+- **`mark-sold` and `relist`** over one shared `_resolve_deal` transaction: claim the listing with a compare-and-swap, read the accepted offer, move it, stamp the sale, two audit rows, one commit. `final_price` is derived from the accepted offer's price and nothing else (D4) — the routes take no body at all.
+- **Two new offer terminal states, `completed` and `lapsed`** (D5). The accepted offer *must* leave `accepted` when its listing leaves `under_offer`, or a re-listed listing that sells again carries two and the price derivation has no unambiguous source. `declined` was rejected as a reuse: the seller accepted it, and "the counterparty said no" and "both said yes and it still collapsed" are different business facts the comps corpus will need apart.
+- **No new `permissions.py` function** (D2) — the fourth such milestone, after M3/M4/M11. `get_owned_listing` already *was* this boundary. Non-owner gets **404, not the 403 `security.md` §7 predicted** (D3); the doc was corrected, with the reason, rather than the code bent to match it.
+- **⚠ D8 — a bait-and-switch hole that predates M12.** `update_listing` locked edits for `{closed, sold}` and re-reviewed only from `("live", "paused")`, leaving `under_offer` in neither: a seller could rewrite a listing's financials while a buyer's offer stood accepted on the old terms, and `relist` would then republish never-re-reviewed content. Fixed *before* the feature that would have worsened it, and pinned by S12 (the door) and S13 (the `edit → relist → public read` sequence). **Every individual door had a negative test; the corridor between them had none, because no single milestone owned it.**
+- **Re-list does not resurrect auto-declined siblings** (D6) — M7 already told those buyers no, and M8 notified them. A re-listed listing goes back to market clean.
+- **Declined: a public "under offer"/"sold" flag** (D10), closing spec 004's open musing. Browse returns `live` only, so a sold listing already leaves the marketplace; re-admitting `status` to the public schema would reopen the channel M4 closed for nothing.
+
+**M12's three process lessons, all about claims outliving their evidence:**
+- **A guard behind an earlier read is dead code no test can reach.** `_resolve_deal` originally read the accepted offer *before* the listing compare-and-swap, so a losing request always hit `no_accepted_offer` and never reached the rowcount check — the race test passed with both guards deleted. Found by the independent appsec pass, not by the suite. And the *first* fix was still not durable: both refusals shared the machine code `invalid_transition`, so the test only distinguished them by accident of how it built its stale object. The CAS now raises its own code. **When a test proves a guard fires, ask which guard.**
+- **A spec can be invisible to its own enforcement.** `check_spec_coverage.py` reported *10/10, all criteria cited* for a spec with 47 — three format defects hid the rest and the entire crown-jewel S-family was uncounted, so CI would have gone green on 21% of it. Twelve criteria had no `WHEN` clause at all. Now 50/50 — and worth stating precisely: the checker proves **citation, not verification** (the original F5 was cited by a test asserting none of its clauses).
+- **A deferral sweep finds the phrasings you thought of.** The prescribed grep missed `M7 / M12.` (spaces round the slash) and `owned by **M12**;` (punctuation) — both caught by the independent docs audit. The playbook now prescribes the bare token. Same root cause as the D8 corridor: searching for the expected shape rather than the claim. That audit also caught that the payments banner had assigned the completion invoice and asset-transfer checklist to M12, which shipped without them — **leaving two items unowned**, the exact condition that banner exists to prevent. Handed back, ownership recorded in one place.
 
 **M11 (valuation calculator)** shipped F12 + both halves of FR-23 — and is the first milestone since M1 whose threat model has no owner and no counterparty on most of its surface:
 - **The calculation is server-owned** (`backend/app/valuation.py`, D1). `design_implementation.md` offered a pure-frontend build; the endpoint was chosen because the multiples are published business policy, the lead row must store a number *we* computed, and one rule with two language implementations drifts.
@@ -55,7 +68,11 @@
 **Open PRs:** none.
 
 ## ▶ NEXT ACTION
-**`/run-milestone deal-completion`** (M12 — the last numbered milestone: `under_offer → sold` / fell-through, with the final price server-derived from the accepted offer).
+**The numbered milestones M0–M12 are done.** Two candidates, and the choice is the owner's:
+- **Phase D — the Playwright E2E golden path** (`testing_guide.md` §5). M12 landed the `sold` transition the path needs, so it can now run end to end: sign-up → gated data → offer → accept → **sold**. One script that touches every milestone; when it is green the MVP demonstrably works.
+- **Production hardening** — `security.md` §9's deferred deploy-time items (session hardening/refresh tokens, the Postgres swap, the perf harness for the p95 NFR), which the production pivot makes real work rather than a someday list.
+
+Still unsequenced and owned by `product-lead`, not by a milestone: **payments** (paywall + escrow), **trust & safety / admin ops**, and now the **completion invoice (L2) + asset-transfer checklist (L3)** that M12 de-scoped — see `milestones.md` § *Not yet sequenced*.
 
 ## Carryover notes
 - **What M11's two independent review passes established — and the one thing neither of them found first:**

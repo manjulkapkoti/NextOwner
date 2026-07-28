@@ -29,6 +29,7 @@ import {
 } from '@mui/material'
 import { offerStore } from '../stores/offerStore'
 import { ApiError } from '../lib/api'
+import { formatPrice } from '../lib/money'
 
 interface DealListing {
   id: number
@@ -66,16 +67,6 @@ const COPY: Record<Action, { trigger: string; confirm: string; title: string; bo
       'approved terms. Buyers whose offers were declined when you accepted are not restored — ' +
       'they will need to make a new offer.',
   },
-}
-
-export function formatPrice(value: string | null): string | null {
-  if (value === null || value === '') return null
-  const amount = Number(value)
-  // Fall back to the raw string rather than rendering `NaN`: the API sends
-  // money as an exact decimal string, and a value this cannot parse is a
-  // reason to show it verbatim, not to invent one.
-  if (!Number.isFinite(amount)) return value
-  return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 }
 
 export function DealActions({ listing, acceptedPrice, onChange }: Props) {
