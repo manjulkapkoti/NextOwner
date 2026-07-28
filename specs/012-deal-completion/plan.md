@@ -22,7 +22,7 @@ this milestone adds, and a speculative index is a schema claim nothing tests.
 - **`ListingEvent`** gains two `action` values — `sold` and `fell_through`. The column is a free `str`, so this
   is a vocabulary extension, not a migration. `specs/003-admin-curation/plan.md` predicted exactly these two
   names ("extended by M12 for `sold` / `fell_through`"); the comment in `models.py:159`
-  (`# approved | rejected (M12 extends)`) is updated to name them (slice 7).
+  (`# approved | rejected (M12 extends)`) is updated to name them (slice 6).
 - **`OfferEvent`** gains two `action` values — `completed` and `lapsed`.
 
 **Offer status vocabulary** gains two terminal states, `completed` and `lapsed` (spec D5). No schema change:
@@ -54,20 +54,27 @@ the same kind of thing.
 One transaction, compare-and-swap throughout — the shape M7's `accept_offer` established and proved
 (`security.md` §6 races; spec C5):
 
-1. `UPDATE listing SET status='sold', sold_at=…, final_price=… WHERE id=? AND status='under_offer'` — rowcount
+1. **Status check first**, Python-side: not `under_offer` → `InvalidTransition` (`invalid_transition`). This
+   decides only *which* 409 the caller gets — the CAS in step 3 is the real guard. Ordering it first is what
+   makes the two machine codes mean different things: without it, `mark-sold` on a `live` listing would be
+   reported as a missing accepted offer, which is true but useless (spec C1 vs C4).
+2. `SELECT` the listing's offer `WHERE status='accepted'`; none → `InvalidTransition(code="no_accepted_offer")`,
+   before any write (spec C4). Its `price` is the value step 3 writes.
+3. `UPDATE listing SET status='sold', sold_at=…, final_price=… WHERE id=? AND status='under_offer'` — rowcount
    ≠ 1 → `InvalidTransition`, nothing written. The read-then-write alternative is a TOCTOU: production hands
-   each request its own `Session`, so a status read at dependency time is a snapshot, not a lock.
-   **`final_price` is resolved *before* this statement** (step 0 below), so the CAS writes the derived value in
-   the same statement that claims the transition.
-   *Step 0:* `SELECT` the listing's offer `WHERE status='accepted'`; none → `InvalidTransition(code="no_accepted_offer")`
-   before any write (spec C4).
-2. `UPDATE offer SET status='completed' WHERE id=? AND status='accepted'` — rowcount ≠ 1 → `session.rollback()`
+   each request its own `Session`, so the status read in step 1 is a snapshot, not a lock. The derived price
+   is written in the *same statement* that claims the transition, so a refused close can never leave one
+   behind. The listing is claimed before the offer because the listing status is what two concurrent requests
+   contend for — the loser then never touches the offer at all.
+4. `UPDATE offer SET status='completed' WHERE id=? AND status='accepted'` — rowcount ≠ 1 → `session.rollback()`
    then 409, exactly as `accept_offer` rolls its own offer CAS back when the listing flip fails. `decided_at`
    and `decided_by_id` are **not** touched: they record the acceptance, and this transition is not one (A3).
-3. `_transition`-style `ListingEvent` + `_record`-style `OfferEvent`, then one `session.commit()`.
+5. `ListingEvent` + `OfferEvent`, `notify_deal`, then one `session.commit()`.
 
 `relist` is the same shape with `to='live'` and `lapsed`, minus the price derivation — but it **does** still
-require an `accepted` offer to move, so step 0's guard applies to it identically.
+require an `accepted` offer to move, so step 2's guard applies to it identically. Both routes run through one
+shared `_resolve_deal` helper parameterized by the two status strings, the two audit action names, and an
+optional price-derivation callback.
 
 *Note on `_transition`:* `listings.py`'s existing helper already does status-guard → set fields → audit, but it
 guards with a Python-side `if` rather than a CAS. `mark-sold`/`relist` need the CAS (money path, spec C5), so
@@ -86,7 +93,7 @@ yours" (spec D3, S2–S6).
 
 `require_private_access` is **untouched** and must stay untouched: spec S8 asserts that a `sold` listing's data
 room behaves exactly as before. The gate's own docstring already anticipated this milestone — that comment
-moves from future to present tense in slice 7.
+moves from future to present tense in slice 6.
 
 ---
 
@@ -98,7 +105,7 @@ moves from future to present tense in slice 7.
   second fetch (A5, F5).
 - **`ListingPublic`** — **unchanged**, deliberately. It is a standalone model rather than a subclass precisely
   so that adding a field to `ListingRead` cannot leak it here; spec S11 asserts the absent field set directly.
-  Its docstring's "M12 may add a deliberate public 'under offer' flag" is answered with "no" in slice 7 (D10).
+  Its docstring's "M12 may add a deliberate public 'under offer' flag" is answered with "no" in slice 6 (D10).
 - **`OfferRead`** — unchanged. `status` is already a free string, so `completed`/`lapsed` surface with no
   schema change on either party's offer list.
 
@@ -154,7 +161,7 @@ analytics, and a sale price in a console event is the same leak class as one in 
 
 ## Build order
 
-Seven slices, each one trust boundary or one coherent surface, each ending in one Conventional Commit.
+Six slices, each one trust boundary or one coherent surface, each ending in one Conventional Commit.
 
 1. **`feat:` schema + the owner's read surface.** The two `Listing` columns, `ListingRead` / `ListingSummary`,
    `ListingPublic` untouched. *First because every later slice writes these columns*, and because it turns the
@@ -165,27 +172,32 @@ Seven slices, each one trust boundary or one coherent surface, each ending in on
    slice is a **bug fix to shipped code**, and is sequenced ahead of the feature that would have made it worse.
    Turns green: **S12, S13**.
 
-3. **`feat:` `POST /listings/{id}/mark-sold`** — the atomic close: price derivation, both CASs, both audit
-   rows. The milestone's money path, so it lands alone. Turns green: **A1–A5, C1, C3, C4, C5, D1, D2, S1, S2,
-   S4 (mark-sold half), S5, S6, S7 (mark-sold half), S8, S9, S10, S14, S15**.
-   *(S8–S10 and S14 are regression assertions that first become **reachable** here — they cannot pass before
-   this slice because there is no way to produce a `sold` listing without it. They are red until slice 3 for a
-   real reason, not vacuously.)*
+3. **`feat:` both deal resolutions + their notifications.** `POST /listings/{id}/mark-sold` and
+   `POST /listings/{id}/relist` over one shared `_resolve_deal` transaction (CAS the listing, CAS the accepted
+   offer, two audit rows, `notify_deal`, one commit), plus the two templates. Turns green: **A1–A5, B1–B6,
+   C1–C5, D1–D5, E1–E3, S1–S10, S13, S14, S15**.
+   *(S8–S10 and S14 are regression assertions that first become **reachable** here — nothing can produce a
+   `sold` listing before this slice, so they were red for a real reason, not vacuously.)*
 
-4. **`feat:` `POST /listings/{id}/relist`** — the fell-through path, the `lapsed` terminal state, and the
-   sibling-untouched guarantee. After `mark-sold` because it is the same transaction shape minus the
-   derivation, and because B5/B6 (re-list then re-sell) depend on slice 3 existing. Turns green: **B1–B6, C2,
-   D3, D4, D5, S3, S4 (relist half), S7 (relist half)**.
+   > **Merged from three slices to one during the build, deliberately.** The plan had these as slice 3
+   > (`mark-sold`), slice 4 (`relist`) and slice 5 (notifications). The dependency it missed: the two routes
+   > are the *same transaction* differing only in two status strings and whether a price is derived, and the
+   > notification call lives inside that shared helper. Landing them separately would have meant either
+   > writing the transaction twice and deleting one copy, or shipping a helper with an unreachable branch and
+   > no test covering it — both worse than one honest commit. The plan is a design artifact, not a prophecy
+   > (`/run-milestone` step 5); this records what the design turned out to be.
+   >
+   > One real defect fell out of building it, and is worth keeping: the first version looked up the accepted
+   > offer **before** checking the listing's status, so a `live` listing's `mark-sold` was refused as
+   > `no_accepted_offer` instead of `invalid_transition`. C1's parameterization over all seven other states
+   > caught it. The ordering rule `_transition`'s docstring already stated — *the status check comes first* —
+   > is the reason the two 409s carry different machine codes at all.
 
-5. **`feat:` notifications for both paths.** Two templates + the role-based recipient branch. After both
-   routes, because a notification for a transition that does not exist cannot be tested. Turns green:
-   **E1, E2, E3**.
-
-6. **`feat:` the seller's deal actions UI.** `DealActions` + store methods + route wiring + the `MyListings`
+5. **`feat:` the seller's deal actions UI.** `DealActions` + store methods + route wiring + the `MyListings`
    final-price row. Last of the code slices — the backend contract is settled by now, so nothing here is built
    against a moving target. Turns green: **F1–F7**.
 
-7. **`docs:` retire every expired M12 deferral.** Turns no test green — it is the slice the run-milestone
+6. **`docs:` retire every expired M12 deferral.** Turns no test green — it is the slice the run-milestone
    playbook mandates when a milestone lands a feature earlier specs deferred to it. Run
    `git grep -in "until M12\|M12 \|(once M12\|M7/M12\|later, M12"` across `specs/`, `docs/`, `backend/` and
    `app/`, and fix **every** hit in this one commit — the prose copies are the ones that get missed. Known
@@ -211,5 +223,5 @@ Seven slices, each one trust boundary or one coherent surface, each ending in on
 **No checkboxes anywhere in this file, by design.** The red test list is the status
 (`cd backend && pytest -q --lf`) and the red count is the progress bar; a ticked box here would be a second
 source of truth that lies after the first crash, which is exactly why `/resume` rebuilds from git + tests
-alone (constitution Article 3 §1). The suite is **red overall** until slice 6 — that is the queue draining,
+alone (constitution Article 3 §1). The suite is **red overall** until slice 5 — that is the queue draining,
 not a broken build. No slice removes tests.

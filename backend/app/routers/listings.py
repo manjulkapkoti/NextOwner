@@ -11,14 +11,23 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile
 from fastapi.responses import Response
-from sqlalchemy import Numeric, cast, func, or_
+from sqlalchemy import Numeric, cast, func, or_, update
 from sqlmodel import Session, select
 
 from ..config import settings
 from ..db import get_session
 from ..errors import InvalidTransition, NotFound
-from ..models import Listing, ListingDocument, ListingEvent, ListingPrivate, User, _utcnow
-from ..notifications import fan_out_saved_searches, notify_listing_decision
+from ..models import (
+    Listing,
+    ListingDocument,
+    ListingEvent,
+    ListingPrivate,
+    Offer,
+    OfferEvent,
+    User,
+    _utcnow,
+)
+from ..notifications import fan_out_saved_searches, notify_deal, notify_listing_decision
 from ..permissions import (
     get_current_user,
     get_owned_listing,
@@ -449,6 +458,181 @@ def close_listing(
     session: Session = Depends(get_session),
 ) -> ListingRead:
     _transition(listing, {"draft", "pending_review", "live", "paused"}, "closed", session)
+    return _to_read(listing, session.get(ListingPrivate, listing.id))
+
+
+# ── Deal completion (M12, spec 012) ──────────────────────────────────────────
+#
+# The two transitions M7 deliberately stopped short of. Both are seller-only
+# and both go through `get_owned_listing` — **no new permission function**
+# (spec 012 D2): the boundary is not new, only the transition behind it is, and
+# a second gate that re-derived "is this the owner" would make the
+# one-function-per-boundary rule mean less. A non-owner gets 404, never 403, so
+# a listing's existence is never confirmed to a stranger (spec 012 D3).
+#
+# Neither route takes a body. The recorded price is derived from the accepted
+# offer and nothing else (Article 2 #4, spec 012 S1).
+
+
+def _resolve_deal(
+    listing: Listing,
+    session: Session,
+    user: User,
+    *,
+    to: str,
+    offer_to: str,
+    listing_action: str,
+    offer_action: str,
+    set_fields_from_offer=None,
+) -> Listing:
+    """The one transaction both deal resolutions run — CAS, CAS, audit, commit.
+
+    Compare-and-swap rather than read-then-write, the shape `accept_offer`
+    established after M7's independent review found the read-then-write version
+    was a TOCTOU. Production hands each request its own `Session` (`db.py`), so
+    the status this function was handed is a *snapshot*, not a lock: two
+    near-simultaneous closes would both pass a Python-side `if`. The WHERE
+    clauses below are evaluated against committed state at write time, and each
+    is checked by rowcount, so exactly one of them can win (spec 012 C5).
+    `SELECT ... FOR UPDATE` is not an option — SQLite drops it silently.
+
+    Ordered offer-first-then-listing? No: **listing first**. The listing status
+    is the thing two concurrent requests contend for, so claiming it first means
+    the loser never touches the offer at all.
+    """
+    # The status check comes **first**, so a listing in the wrong state is
+    # refused as an illegal transition rather than mis-reported as a missing
+    # offer — the same ordering rule `_transition` keeps, and the reason the
+    # two 409s carry different machine codes at all. This `if` decides the
+    # *error code* only; the compare-and-swap below is the actual guard, and it
+    # is what a concurrent request has to lose to (spec 012 C1/C4).
+    if listing.status != "under_offer":
+        raise InvalidTransition(f"Cannot go from {listing.status!r} to {to!r}")
+
+    accepted = session.exec(
+        select(Offer).where(Offer.listing_id == listing.id, Offer.status == "accepted")
+    ).first()
+    if accepted is None:
+        # Unreachable through the product — a listing is `under_offer` only
+        # because an accept put it there. Guarded anyway so a data anomaly
+        # answers with the contract instead of a `NoneType` 500 (spec 012 C4).
+        raise InvalidTransition(
+            "This listing has no accepted offer to resolve", code="no_accepted_offer"
+        )
+
+    now = _utcnow()
+    values = {"status": to}
+    if set_fields_from_offer is not None:
+        values.update(set_fields_from_offer(accepted, now))
+
+    flipped = session.execute(
+        update(Listing)
+        .where(Listing.id == listing.id, Listing.status == "under_offer")
+        .values(**values)
+        .execution_options(synchronize_session=False)
+    )
+    if flipped.rowcount != 1:
+        raise InvalidTransition(f"Cannot go from {listing.status!r} to {to!r}")
+
+    moved = session.execute(
+        update(Offer)
+        .where(Offer.id == accepted.id, Offer.status == "accepted")
+        .values(status=offer_to)
+        .execution_options(synchronize_session=False)
+    )
+    if moved.rowcount != 1:
+        # A concurrent request moved the offer between the select above and
+        # here. Nothing this transaction did may stand — including the listing
+        # flip already claimed — so roll back before refusing.
+        session.rollback()
+        raise InvalidTransition(
+            "This listing has no accepted offer to resolve", code="no_accepted_offer"
+        )
+
+    session.add(
+        ListingEvent(
+            listing_id=listing.id,
+            actor_id=user.id,               # from the JWT, never the body
+            action=listing_action,
+            from_status="under_offer",
+            to_status=to,
+        )
+    )
+    session.add(
+        OfferEvent(
+            offer_id=accepted.id,
+            actor_id=user.id,
+            action=offer_action,
+            from_status="accepted",
+            to_status=offer_to,
+        )
+    )
+    notify_deal(session, accepted, offer_action)
+
+    session.commit()
+    session.refresh(listing)
+    return listing
+
+
+@router.post("/listings/{listing_id}/mark-sold", response_model=ListingRead)
+def mark_listing_sold(
+    listing: Listing = Depends(get_owned_listing),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> ListingRead:
+    """The close ⭐ — `under_offer → sold`, at the accepted offer's price.
+
+    `final_price` is written in the same conditional UPDATE that claims the
+    transition, so a refused close can never leave a price behind (the rule
+    `_transition`'s `set_fields` encodes for `published_at`, applied here to
+    money). `sold` is terminal in both directions: there is no un-sell, and
+    `_EDIT_LOCKED` freezes the row (spec 012 S14).
+    """
+    _resolve_deal(
+        listing,
+        session,
+        user,
+        to="sold",
+        offer_to="completed",
+        listing_action="sold",
+        offer_action="completed",
+        set_fields_from_offer=lambda offer, now: {
+            "sold_at": now,
+            "final_price": offer.price,
+        },
+    )
+    return _to_read(listing, session.get(ListingPrivate, listing.id))
+
+
+@router.post("/listings/{listing_id}/relist", response_model=ListingRead)
+def relist_listing(
+    listing: Listing = Depends(get_owned_listing),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> ListingRead:
+    """The deal fell through — `under_offer → live`.
+
+    The accepted offer becomes `lapsed`, not `declined`: the seller *accepted*
+    it, and recording a collapsed deal as a refusal would destroy the very
+    distinction the audit rows exist to preserve (spec 012 D5). It must move
+    regardless, or a listing that sells again would carry two `accepted` offers
+    and `mark-sold`'s price derivation would have no unambiguous source.
+
+    Siblings auto-declined at accept time stay declined — M7's policy was an
+    honest, immediate, *notified* "no", and re-list does not retract it
+    (spec 012 D6). `published_at` is not restamped: it records first
+    publication. Skipping re-review is safe only because an edit while
+    `under_offer` is refused (`update_listing`, spec 012 D8).
+    """
+    _resolve_deal(
+        listing,
+        session,
+        user,
+        to="live",
+        offer_to="lapsed",
+        listing_action="fell_through",
+        offer_action="lapsed",
+    )
     return _to_read(listing, session.get(ListingPrivate, listing.id))
 
 
