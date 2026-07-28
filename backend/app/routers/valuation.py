@@ -27,11 +27,14 @@ missing `user_id` FK exists to prevent (D10).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
+from sqlmodel import Session
 
 from ..config import settings
+from ..db import get_session
+from ..models import ValuationLead
 from ..ratelimit import RateLimiter, enforce_per_ip
-from ..schemas import ValuationEstimateRead, ValuationRequest
+from ..schemas import ValuationEstimateRead, ValuationLeadCreate, ValuationRequest
 from ..valuation import DISCLAIMER, Estimate, estimate_valuation
 
 router = APIRouter(tags=["valuation"])
@@ -43,6 +46,11 @@ _valuation_limiter = RateLimiter(
     max_attempts=settings.valuation_rate_limit_max,
     window_seconds=settings.valuation_rate_limit_window_seconds,
     name="valuation",
+)
+_valuation_lead_limiter = RateLimiter(
+    max_attempts=settings.valuation_lead_rate_limit_max,
+    window_seconds=settings.valuation_lead_rate_limit_window_seconds,
+    name="valuation_lead",
 )
 
 
@@ -78,3 +86,55 @@ def calculate_valuation(body: ValuationRequest, request: Request) -> ValuationEs
             churn_pct=body.churn_pct,
         )
     )
+
+
+@router.post("/valuation/leads", response_model=ValuationEstimateRead, status_code=201)
+def capture_valuation_lead(
+    body: ValuationLeadCreate,
+    request: Request,
+    session: Session = Depends(get_session),
+) -> ValuationEstimateRead:
+    """FR-23's second half: the estimate, plus the address, on the record.
+
+    Three properties worth stating because each is a test:
+
+    - **The limiter runs before the insert** (S11). A cap checked after the write
+      still returns 429 and still leaves the row behind, which bounds nothing —
+      and bounding this table is the entire reason the cap is 5/hour rather than
+      the calculate route's 30/minute.
+    - **The stored estimate is ours** (L2/S5). `ValuationLeadCreate` has no
+      `low`/`high` fields to read even if we wanted to, so the recomputation
+      below is the only possible source.
+    - **The response is identical for a first-time and a repeat address** (D7).
+      No unique constraint and no 409: a duplicate-detecting error would answer
+      "is this address already known to NextOwner?" for anyone who asked.
+
+    The address is never logged (D10); it leaves this process only through the
+    `require_admin` route in `routers/admin.py`.
+    """
+    enforce_per_ip(_valuation_lead_limiter, request)
+
+    estimate = estimate_valuation(
+        type=body.type,
+        ttm_revenue=body.ttm_revenue,
+        ttm_profit=body.ttm_profit,
+        growth_pct=body.growth_pct,
+        churn_pct=body.churn_pct,
+    )
+
+    session.add(
+        ValuationLead(
+            email=body.email,
+            type=body.type,
+            ttm_revenue=body.ttm_revenue,
+            ttm_profit=body.ttm_profit,
+            growth_pct=body.growth_pct,
+            churn_pct=body.churn_pct,
+            estimate_low=estimate.low,
+            estimate_high=estimate.high,
+            driver=estimate.driver,
+        )
+    )
+    session.commit()
+
+    return _to_read(estimate)
