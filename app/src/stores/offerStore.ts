@@ -130,6 +130,20 @@ class OfferStore {
     })) as OfferRead
   }
 
+  /** M12 — the seller closes the deal (spec 012 A1). No body: the recorded
+   * sale price is derived server-side from the accepted offer, and a client
+   * that sent one would be ignored (spec 012 S1). Lives here rather than in a
+   * new store because the accepted offer is what both deal actions resolve
+   * around, and this store already owns the seller's per-listing offer view. */
+  async markSold(listingId: number): Promise<unknown> {
+    return await api(`/listings/${listingId}/mark-sold`, { method: 'POST' })
+  }
+
+  /** M12 — the deal fell through; the listing goes back to `live` (spec 012 B1). */
+  async relist(listingId: number): Promise<unknown> {
+    return await api(`/listings/${listingId}/relist`, { method: 'POST' })
+  }
+
   reset(): void {
     this.myOffers = []
     this.listingOffers = []

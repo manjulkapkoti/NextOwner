@@ -18,7 +18,7 @@
 
 **Scope fold-ins** (`docs/milestones.md` § Scope fold-ins → M7), each carried below as criteria:
 counter-offer model (a new linked offer row vs. status mutation — decided in D1); sibling-offers
-policy on accept (decided in D2, honored later by M12 on re-list); `GET /my/offers` (buyer) and
+policy on accept (decided in D2, **honored by M12 on re-list — shipped 2026-07-28, spec 012 D6**); `GET /my/offers` (buyer) and
 offers-per-listing (seller); offer **events**. Offer **expiry** is explicitly deferred — see
 § Out of scope.
 
@@ -95,7 +95,8 @@ given to the buyer who placed it. Auto-decline gives every other party an honest
 auditable "no," in the **same transaction** as the accept, and leaves the `offer_event` row
 (`action="auto_declined"`) that M8 is expected to notify from — the same relationship M3's
 `listingevent` and M5's `accessrequestevent` already have to M8 (`milestones.md` § Scope
-fold-ins → M8). M12 is told directly to honor this policy on re-list (`design_implementation.md`
+fold-ins → M8). M12 was told directly to honor this policy on re-list, and did — `relist` leaves auto-declined siblings
+exactly where this accept put them (spec 012 D6/B4). (`design_implementation.md`
 M12: *"sibling offers follow the policy M7 decided"*).
 
 **D3 — Offer creation is nested under the listing, not the flat `POST /offers` the build guide
@@ -259,7 +260,7 @@ Per `docs/error_handling.md` (§1 contract: `{detail, code, request_id}`).
 
 - **Offer expiry.** Named explicitly by the fold-in as acceptable to defer — an offer remains `submitted` indefinitely until a decision, a counter, or a withdrawal. Revisit once real negotiations show it's needed.
 - **Notification delivery.** M7 writes `offer_event` rows (creation, every decision, every auto-decline) exactly as M3/M5/M6 write their own events — M8 is the milestone that projects notifications from them (`milestones.md` § Scope fold-ins → M8).
-- **Deep due diligence, APA drafting, escrow.** `design_implementation.md`: "MVP stops here." `under_offer → sold` and the fell-through path back to `live` (honoring this spec's sibling policy on re-list) are M12's.
+- **Deep due diligence, APA drafting, escrow.** `design_implementation.md`: "MVP stops here." ~~`under_offer → sold` and the fell-through path back to `live` (honoring this spec's sibling policy on re-list) are M12's.~~ **M12 shipped both on 2026-07-28** (spec 012), and added two terminal states to *this* spec's offer machine — `completed` (the deal closed) and `lapsed` (it fell through) — so an accepted offer always leaves `accepted` when its listing leaves `under_offer`. Deep due diligence, APA drafting and escrow remain out of scope (FR-18, post-MVP).
 - **Re-opening a terminal offer.** `declined`/`withdrawn`/`countered`/`accepted` are all terminal for that row; there is no "un-decline" or "un-withdraw," matching `AccessRequest`'s own terminal philosophy (spec 005 D3) — a fresh `POST .../offers` (subject to D7) is the only way to restart, and only while the listing is still `live`.
 - **Exhaustive-depth negotiation testing.** The chain (`parent_offer_id`) supports arbitrary rounds by construction; this spec tests at least two rounds (C1–C5) rather than an unbounded depth search — no artificial cap exists in the model, but proving deeper chains is not this milestone's job.
 - **Currency / multi-currency.** Inherits M2's single-currency (USD) assumption; `price` is `Decimal` via the existing `Money` type, never a new representation.

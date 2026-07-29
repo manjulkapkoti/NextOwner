@@ -714,6 +714,75 @@ def verified_buyer(client, pending_verification, admin_headers):
 
 
 @pytest.fixture
+def under_offer_listing(client, live_listing, submitted_offer):
+    """Drive a listing all the way to `under_offer` through the real endpoints —
+    create → submit → admin approve → NDA → access → offer → seller accepts.
+
+    Returns `(listing_id, offer_id)`, the two ids every M12 criterion needs.
+    Same discipline as the M5/M7/M10 fixtures above: `under_offer` is composed
+    from the product's own routes, never forced with a column write. That is
+    load-bearing here — the whole milestone is about a transition *out* of
+    `under_offer`, and a forced status would leave no `accepted` offer behind,
+    which is precisely the state spec C4 treats as a data anomaly. A fixture
+    that forged it would make the happy path and the anomaly indistinguishable.
+
+    `listing_id=` accepts an already-`live` listing so a test can seed sibling
+    offers from other buyers *before* the accept happens (spec B4).
+    """
+    def _under_offer(seller_headers, buyer_headers, listing_id=None, **offer_overrides):
+        if listing_id is None:
+            listing_id = live_listing(seller_headers)
+        offer_id = submitted_offer(
+            listing_id, buyer_headers, seller_headers, **offer_overrides
+        )
+        accepted = client.post(f"/api/offers/{offer_id}/accept", headers=seller_headers)
+        assert accepted.status_code == 200, accepted.text
+        return listing_id, offer_id
+    return _under_offer
+
+
+@pytest.fixture
+def offer_status(session):
+    """One offer's current status, read straight from the row.
+
+    M12 adds two terminal states (`completed`/`lapsed`, spec D5) that no list
+    endpoint filters on, and several criteria assert on an offer belonging to a
+    *different* buyer than the caller (the sibling sweep, B4) — reading the row
+    is the only way to see all of them from one test without minting tokens for
+    every party.
+    """
+    from sqlalchemy import text
+
+    def _status(offer_id):
+        row = session.execute(
+            text("SELECT status FROM offer WHERE id = :i"), {"i": offer_id}
+        ).first()
+        return None if row is None else row[0]
+
+    return _status
+
+
+@pytest.fixture
+def force_offer_status(session):
+    """Force one offer's status directly (seeding the C4 data anomaly).
+
+    Deliberately narrow: the *only* legitimate use is spec C4's "an
+    `under_offer` listing whose accepted offer is somehow not `accepted`" — a
+    state the product cannot reach, which is exactly why the endpoint must
+    answer it with a 409 rather than a `NoneType` 500.
+    """
+    from sqlalchemy import text
+
+    def _force(offer_id, status):
+        session.execute(
+            text("UPDATE offer SET status = :s WHERE id = :i"),
+            {"s": status, "i": offer_id},
+        )
+        session.commit()
+    return _force
+
+
+@pytest.fixture
 def verification_events(session):
     """Read the append-only audit rows for a buyer, oldest first.
 

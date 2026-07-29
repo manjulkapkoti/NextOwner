@@ -211,7 +211,7 @@ Recorded because a lead magnet is the *first* surface where a conversion funnel 
 
 ## 8. Out of scope
 
-- **Comps from real closed deals.** The estimate is a published rule of thumb, not a data-driven comp. Upgrading it to pull from the platform's own closed-deal corpus is `agentic_scope.md` proposal F, and needs M12's `sold` rows to exist first.
+- **Comps from real closed deals.** The estimate is a published rule of thumb, not a data-driven comp. Upgrading it to pull from the platform's own closed-deal corpus is `agentic_scope.md` proposal F, and needs M12's `sold` rows to exist first. *(M12 shipped 2026-07-28 — `listing.final_price`/`sold_at` now accumulate, so the blocker named here is cleared. Proposal F itself remains post-MVP.)*
 - **Charts.** `docs/design_system_spec.md` notes charts "(M11+)" — the range is rendered as text and a simple bar, with no charting library added. The design-system note says *at or after* M11, not *in* it.
 - **Emailing the lead.** M8 owns the email channel and would make this a one-line add, but sending unsolicited mail to an address captured on a public form is a policy decision (consent, unsubscribe, CAN-SPAM/GDPR) that belongs to `legal-compliance`, not to a build milestone. The address is captured and readable by an admin; nothing is sent.
 - **Linking a lead to a user account.** A lead is anonymous by construction (D10). Reconciling a lead with the account that later signs up with the same address is a CRM concern, not an MVP one.

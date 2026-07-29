@@ -57,6 +57,11 @@ _TEMPLATES: dict[str, str] = {
     "offer_declined": "Your offer on “{headline}” was declined",
     "offer_auto_declined": "Your offer on “{headline}” was declined — another offer was accepted",
     "offer_withdrawn": "An offer on “{headline}” was withdrawn",
+    # M12 — the close. Both go to the buyer (spec 012 D9); neither carries the
+    # sale price, for the same reason no other template carries a private
+    # value: a notification is a projection that must stay harmless when stale.
+    "offer_completed": "The sale of “{headline}” has been completed",
+    "offer_lapsed": "The deal on “{headline}” did not complete — the listing is back on the market",
 }
 
 
@@ -242,6 +247,31 @@ def notify_offer(session: Session, offer: Offer, action: str) -> None:
     notify(
         session,
         recipient_id=recipient_id,
+        type=f"offer_{action}",
+        listing_id=offer.listing_id,
+        offer_id=offer.id,
+    )
+
+
+def notify_deal(session: Session, offer: Offer, action: str) -> None:
+    """A deal resolution (`completed` / `lapsed`) → the **buyer** (M12, spec 012 D9).
+
+    Deliberately not two more entries in `notify_offer`'s map above. That
+    function resolves its recipient from `proposed_by_role` because either party
+    can propose, and its docstring says so. These two actions are different in
+    kind: only the seller can cause them, so the recipient is fixed by **role**
+    — the buyer is told, whether or not they authored the accepted offer's
+    terms. An accepted seller-counter is still the seller's deal to close
+    (spec 012 E3), and folding a role-based rule into a proposer-based map would
+    make the shared function lie about itself.
+    """
+    parties = _offer_parties(session, offer)
+    if parties is None:
+        return
+    buyer_id, _seller_id = parties
+    notify(
+        session,
+        recipient_id=buyer_id,
         type=f"offer_{action}",
         listing_id=offer.listing_id,
         offer_id=offer.id,

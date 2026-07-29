@@ -518,8 +518,8 @@ The close is where the business model lives (the success fee recognizes at close
 - **`POST /listings/{id}/mark-sold`** (seller-only): `under_offer → sold`, stamps `sold_at`, records the **final sale price server-derived from the accepted offer** (never client-set — Article 2 #4), and moves the accepted offer to its terminal state — all in one transaction, with `listing_event` + `offer_event` audit rows.
 - **`POST /listings/{id}/relist`** (seller-only — the deal fell through): `under_offer → live`; the accepted offer becomes terminal (the spec names the status); sibling offers follow the policy M7 decided.
 - Terminal states weaken nothing: the NDA gate still guards a `sold` listing's private data; illegal transitions → 409.
-- **Optional extensions** (from the Little Exits research, fine to defer): invoice artifact on completion (L2), the asset-transfer checklist state machine (L3), and mocked escrow states (`initiated → funded → released`) surfacing `error_handling.md` §5's escrow failure modes. (This supersedes the M7 aside about "escrow/APA as mocked buttons on a deal page".)
-- The **E2E golden path extends to "sold"** once this lands (`testing_guide.md` §5).
+- **Optional extensions** (from the Little Exits research, fine to defer — and deferred: M12 shipped 2026-07-28 without them, and `milestones.md` § *Not yet sequenced — payments* now holds L2/L3 for `product-lead` to slot, so ownership lives in exactly one place): invoice artifact on completion (L2), the asset-transfer checklist state machine (L3), and mocked escrow states (`initiated → funded → released`) surfacing `error_handling.md` §5's escrow failure modes. (This supersedes the M7 aside about "escrow/APA as mocked buttons on a deal page".)
+- The **E2E golden path extends to "sold"** — M12 landed 2026-07-28, so the transition the path needs now exists (`testing_guide.md` §5). The golden-path script itself is still Phase D work.
 
 ### Post-MVP (when local is solid)
 
