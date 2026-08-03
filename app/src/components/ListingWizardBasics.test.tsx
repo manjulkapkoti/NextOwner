@@ -1,4 +1,4 @@
-// M13 — spec 013 criteria F3/F4: the two wizard defects the golden path found.
+// M13 — spec 013 criteria F3/F4/F5/F6: the wizard defects the golden path found.
 //
 // F3 — the wizard carried `type` in its form state and rendered no input for
 // it, so every listing created through the UI stored `type: ''` and could never
@@ -39,6 +39,7 @@ describe('ListingWizard — basics and metrics (spec 013)', () => {
     await user.type(screen.getByLabelText('Asking price'), '480000')
     await user.click(screen.getByLabelText('Business type'))
     await user.click(await screen.findByRole('option', { name: /saas/i }))
+    await user.type(screen.getByLabelText('Description'), 'A description.')
     await user.click(screen.getByRole('button', { name: 'Next' }))
 
     for (const label of REQUIRED_METRICS) {
@@ -47,12 +48,75 @@ describe('ListingWizard — basics and metrics (spec 013)', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }))
 
     await user.type(screen.getByLabelText('Company name'), 'Willowbrook Systems')
-    await user.type(screen.getByLabelText('Description'), 'A description.')
     await user.click(screen.getByRole('button', { name: 'Next' }))
     await user.click(screen.getByRole('button', { name: 'Create draft' }))
 
     expect(posted).not.toBeNull()
     expect(posted!.type).toBe('saas')
+  })
+
+  it('F5: the created listing carries the detailed financials the private step collects', async () => {
+    const user = userEvent.setup()
+    let posted: Record<string, unknown> | null = null
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        posted = JSON.parse(String(init?.body ?? '{}'))
+        return new Response(JSON.stringify({ id: 1 }), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }),
+    )
+
+    render(<ListingWizard />)
+
+    await user.type(screen.getByLabelText('Headline'), 'Vet practice SaaS')
+    await user.type(screen.getByLabelText('Asking price'), '480000')
+    await user.click(screen.getByLabelText('Business type'))
+    await user.click(await screen.findByRole('option', { name: /saas/i }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    for (const label of REQUIRED_METRICS) {
+      await user.type(screen.getByLabelText(new RegExp(`^${label.replace('%', '\\%')}`)), '10')
+    }
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    await user.type(screen.getByLabelText('Company name'), 'Willowbrook Systems')
+    await user.type(screen.getByLabelText('Detailed financials'), 'Net margin 34 percent.')
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByRole('button', { name: 'Create draft' }))
+
+    // Without this the data room is empty however the seller fills the wizard,
+    // and the seller half of M5's gate has no path through the product.
+    expect(posted).not.toBeNull()
+    expect(posted!.detailed_financials).toBe('Net margin 34 percent.')
+  })
+
+  it('F6: the step that promises privacy collects no publicly-visible field', async () => {
+    const user = userEvent.setup()
+    render(<ListingWizard />)
+
+    await user.type(screen.getByLabelText('Headline'), 'Vet practice SaaS')
+    await user.type(screen.getByLabelText('Asking price'), '480000')
+    await user.click(screen.getByLabelText('Business type'))
+    await user.click(await screen.findByRole('option', { name: /saas/i }))
+    // Description is on ListingPublic, so it belongs with the public card.
+    expect(screen.getByLabelText('Description')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    for (const label of REQUIRED_METRICS) {
+      await user.type(screen.getByLabelText(new RegExp(`^${label.replace('%', '\\%')}`)), '10')
+    }
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    // The step now carrying the "never shown publicly" promise.
+    expect(screen.getByText(/never shown publicly/i)).toBeInTheDocument()
+    // ...and nothing under it may be a field the anonymous card exposes.
+    expect(screen.queryByLabelText('Description')).toBeNull()
+    expect(screen.queryByLabelText('Headline')).toBeNull()
+    expect(screen.queryByLabelText('Asking price')).toBeNull()
   })
 
   it('F4: the metrics step marks required fields required and does not tell sellers to leave them blank', async () => {

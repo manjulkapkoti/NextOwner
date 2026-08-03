@@ -47,6 +47,14 @@ The golden path does not implement a requirement; it demonstrates that the ones 
 - **F2** — GIVEN a seller whose listings include one `live`, one `pending_review` and one `sold` row, WHEN `/my-listings` renders, THEN the submit-for-review action appears on none of them.
 - **F3** — GIVEN the wizard's Basics step, WHEN the seller selects a business type and completes the wizard, THEN the created listing carries that type rather than an empty string.
 - **F4** — GIVEN the wizard's Metrics step, WHEN it renders, THEN every field `ListingCreate` requires is marked as required and the step's guidance nowhere instructs the seller to leave a required field blank.
+- **F5** — GIVEN the wizard's private step, WHEN the seller enters detailed financials and completes the wizard, THEN the created listing carries them, rather than the field being held in form state and collected nowhere.
+- **F6** — GIVEN the wizard step whose guidance promises the seller that its contents are never shown publicly, WHEN it renders, THEN it contains no field that `ListingPublic` exposes.
+
+> **F5 and F6 were added mid-build, after the golden path ran.** They are two more instances of the D12(a) defect — a field carried in `EMPTY` that no input ever collects — found the only way they could be: by driving the real wizard and then reading the real listing it produced. Recorded as criteria rather than folded in silently, per the M10 rule that new surface gets criteria, not a pass.
+>
+> **F5** is the same bug as `type` on a more consequential field: `detailed_financials` is the data room's entire contents, so before this fix no listing created through the UI could have anything behind the NDA gate at all — M5 built the gate, M2 built the wizard, and nothing connected the seller to the room. It is invisible to every backend test, because the API accepts the field perfectly well; only a caller was missing.
+>
+> **F6** is the more serious of the two, because it is a false statement rather than an absent one. The step headed *"Only shared with buyers you approve — never shown publicly"* collected `description`, which is on `ListingPublic` and renders on the anonymous card. A seller who believed the sentence would put confidential detail in a public field — and the golden path did exactly that, which is how it was found. The fix moves the public copy to the public step rather than softening the sentence: the promise is the product's, and it should stay absolute.
 
 ### G — the golden path (one test, fourteen steps; D1)
 

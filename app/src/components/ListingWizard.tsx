@@ -45,8 +45,14 @@ const STEPS = ['Basics', 'Metrics', 'Private', 'Review']
 // would ripple into M4's filters, M11's valuation inputs and every response
 // model that reads them, to fix a sentence. Zero is also the more accurate
 // datum: "this business has no MRR" is a fact worth storing as 0, not as absent.
+// Step 3's line is load-bearing and was false (spec 013 F6). It promised
+// "never shown publicly" over a group that contained `description` — a field on
+// `ListingPublic`, rendered on the anonymous card to strangers. A seller
+// reading that sentence would reasonably put confidential detail in it. The
+// public copy now lives on step 1 with the rest of the public card, so the
+// promise on step 3 is true of everything under it.
 const STEP_BLURB = [
-  'The headline buyers see first, and what you want for the business.',
+  'The public card buyers see first: the headline, what you want, and how you describe it.',
   'The numbers buyers screen on. All five are required — enter 0 where one does not apply.',
   'Only shared with buyers you approve — never shown publicly.',
   'Check it over. This creates a private draft; nothing goes live yet.',
@@ -206,6 +212,17 @@ export function ListingWizard() {
                 </MenuItem>
               ))}
             </TextField>
+            {/* Public (`ListingPublic.description`) — so it sits with the rest
+                of the public card, not under step 3's privacy promise (F6). */}
+            <TextField
+              label="Description"
+              fullWidth
+              multiline
+              minRows={4}
+              value={form.description}
+              onChange={set('description')}
+              helperText="Shown on your public listing card. Describe the business without naming it."
+            />
           </Box>
         )}
 
@@ -230,13 +247,19 @@ export function ListingWizard() {
           <Box sx={fieldStack}>
             <TextField label="Company name" fullWidth value={form.company_name} onChange={set('company_name')} />
             <TextField label="Website URL" fullWidth value={form.website_url} onChange={set('website_url')} />
+            {/* The data room's contents (F5). This was carried in form state and
+                rendered nowhere — the same defect as `type`, on a more
+                consequential field: without it, no listing created through the
+                UI could ever have anything behind the NDA gate, so the seller
+                half of M5 had no path through the product at all. */}
             <TextField
-              label="Description"
+              label="Detailed financials"
               fullWidth
               multiline
               minRows={4}
-              value={form.description}
-              onChange={set('description')}
+              value={form.detailed_financials}
+              onChange={set('detailed_financials')}
+              helperText="Only buyers you approve can see this. Revenue breakdown, margins, concentration."
             />
           </Box>
         )}
