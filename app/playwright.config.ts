@@ -20,6 +20,12 @@ export const BASE_URL = `http://localhost:${PORT}`
 
 export default defineConfig({
   testDir: './e2e',
+  // The golden path belongs to playwright.golden.config.ts, which brings a real
+  // backend with it. This config starts `vite preview` and nothing else, so a
+  // bare `npm run e2e` would otherwise pick the golden files up (testDir has no
+  // testMatch) and run them against a server with no API behind it — a red run
+  // that says nothing about the product. Spec 013 § The red set, last note.
+  testIgnore: /golden-path(\.guards)?\.spec\.ts$/,
   // Screens are captured for reading, so a flake wastes a human's attention
   // rather than failing a build; retry once locally, twice in CI.
   retries: process.env.CI ? 2 : 1,
