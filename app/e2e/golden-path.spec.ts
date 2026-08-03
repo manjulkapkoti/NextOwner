@@ -169,13 +169,16 @@ async function openFromBrowse(page: Page, headline: string): Promise<string> {
   await page.getByLabel('Search').fill(headline)
 
   // Wait for the SEARCH to land in the URL before touching a result.
-  // BrowseListings debounces the search box by 250ms and then writes `q` to the
-  // query string; clicking a card inside that window navigates to the detail
-  // page and the debounce THEN fires from an unmounted component, throwing the
-  // browser back to the marketplace. That is a genuine race in the product, not
-  // a test artefact — but it is a navigation race and this is a trust-chain
-  // suite, so the path waits for the search to settle rather than encoding a
-  // sleep. Recorded in spec 013 § Errors so it is not rediscovered as new.
+  //
+  // This began as a workaround for a real race — the 250ms debounce fired from
+  // an unmounted BrowseListings and navigated the browser back to the
+  // marketplace. **That race is fixed** (F7, and pinned by its own Vitest test),
+  // so this is no longer load-bearing for stability.
+  //
+  // It stays because it is what makes G6 mean what it claims. The criterion is
+  // that the buyer finds the listing BY SEARCHING; without this wait the card
+  // on screen may still be from the unfiltered list, and the step would pass on
+  // a marketplace that ignored the search box entirely.
   await page.waitForURL(/[?&]q=/)
 
   const card = cardFor(page, headline)

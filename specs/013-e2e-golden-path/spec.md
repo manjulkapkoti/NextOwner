@@ -49,6 +49,7 @@ The golden path does not implement a requirement; it demonstrates that the ones 
 - **F4** — GIVEN the wizard's Metrics step, WHEN it renders, THEN every field `ListingCreate` requires is marked as required and the step's guidance nowhere instructs the seller to leave a required field blank.
 - **F5** — GIVEN the wizard's private step, WHEN the seller enters detailed financials and completes the wizard, THEN the created listing carries them, rather than the field being held in form state and collected nowhere.
 - **F6** — GIVEN the wizard step whose guidance promises the seller that its contents are never shown publicly, WHEN it renders, THEN it contains no field that `ListingPublic` exposes.
+- **F7** — GIVEN a visitor who types in the marketplace search box and opens a listing before the search has settled, WHEN the debounce interval elapses, THEN they remain on the listing they opened rather than being navigated back to the marketplace.
 
 > **F5 and F6 were added mid-build, after the golden path ran.** They are two more instances of the D12(a) defect — a field carried in `EMPTY` that no input ever collects — found the only way they could be: by driving the real wizard and then reading the real listing it produced. Recorded as criteria rather than folded in silently, per the M10 rule that new surface gets criteria, not a pass.
 >
