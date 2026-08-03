@@ -69,7 +69,7 @@
 - Non-fatal message validation (blank/oversized) vs. a fatal rate cap that counts every inbound frame, valid or not.
 - `GET /conversations` (unread counts via `last_read_at`), `GET /conversations/{id}/messages` (paginated history), `POST /conversations/{id}/read`.
 - The conversation list + chat window, plus a nav-bar unread badge.
-**Open PRs:** a **draft** PR for `feat/013-e2e-golden-path` (checkpoint only — the milestone is mid-build, not ready for review).
+**Open PRs:** none.
 
 ## ▶ NEXT ACTION
 **Pick the next piece of work — the numbered sequence and Phase D are both done.** Two candidates, both previously agreed, neither started:
@@ -86,6 +86,10 @@ cd app && npx playwright test --config=playwright.golden.config.ts
 *(The unsequenced work and the two next-milestone candidates are listed once, under ▶ NEXT ACTION above — `milestones.md` § Not yet sequenced is the authoritative list. The owner chose Phase D over production hardening on 2026-07-29; that choice is now spent.)*
 
 ## Carryover notes
+- **The `Open PRs:` line is part of the status refresh, and it was missed at the Phase D close (2026-08-03).** `/dod`'s step 6 refreshes three surfaces — `progress.md`'s milestone status, the `milestones.md` tracker tick, and `CLAUDE.md`'s status line — and this line is in none of them, so it still read *"a draft PR for `feat/013-e2e-golden-path` … mid-build, not ready for review"* the moment that branch merged and was deleted. `main` went red within a minute, which is the backstop doing exactly its job.
+  - **Why the pre-merge run could not have caught it:** `check_status_freshness.py --force` was run on the branch and passed. Its rule is *"this line names a branch that no longer exists on origin"* — and the branch still existed then. **The claim only became false at the instant the merge deleted it**, so this class is structurally invisible before the merge. That is the argument for the check being bound to the merge rather than to the ceremony, restated by a live example.
+  - **The script behaved correctly and needs no change.** The fix is to the refresh: when closing a milestone, set `Open PRs:` to `none` along with the other three surfaces. It is a fourth status claim in a file whose header only advertises three.
+  - Same shape as PR #28's *"PR open — awaiting approval"*: **a status line that is true when written and false when it lands.** Write these as they will read after the merge.
 - **Spec 013 built out 2026-08-03. What running the path actually established — the headline is that a browser found three defects that ~850 backend tests and every Vitest suite could not:**
   - **The wizard's privacy promise was false, and that is the most serious thing this milestone found (F6).** The step headed *"Only shared with buyers you approve — never shown publicly"* collected `description`, which is on `ListingPublic` and renders on the anonymous card. It was found because the golden path *took the wizard at its word* and put its secret there — and G8 then saw the secret on the public page. **No test could have caught this**, because both halves were individually correct: the field was public as designed, and the sentence was true of the other two fields under it. It took a test that behaved like a seller who reads the UI. The fix moves the public copy to the public step rather than softening the sentence — the promise is the product's and should stay absolute.
   - **`detailed_financials` was collected nowhere (F5)** — carried in the wizard's `EMPTY`, rendered by no input. So no listing created through the UI could have *anything* behind the NDA gate: M5 built the gate, M2 built the wizard, and nothing connected the seller to the room. Identical in shape to the `type` defect the spec already knew about, and to `POST /submit` having no caller. **Three instances of one class in one component** — a key in the form-state object is not evidence that a field exists.
