@@ -70,7 +70,10 @@ TRIGGERS: list[tuple[str, str, str, str | None]] = [
     (
         "file uploads",
         "uploads are hostile input — type, size and path confinement",
-        r"backend/app/(storage\.py|routers/.*upload.*\.py)$",
+        # `uploads.py` is named explicitly. The pattern used to read
+        # `storage.py|routers/*upload*.py`, and the module that actually holds
+        # the confinement logic — `backend/app/uploads.py` — matched neither.
+        r"backend/app/(storage|uploads)\.py$|backend/app/routers/.*upload.*\.py$",
         None,
     ),
     (
@@ -84,6 +87,84 @@ TRIGGERS: list[tuple[str, str, str, str | None]] = [
         "connect-time authN and per-message membership authZ",
         r"backend/app/.*\.py$",
         r"^\+.*(WebSocket|websocket)",
+    ),
+    # ── Added 2026-08-03, after M13's independent appsec pass ───────────────
+    #
+    # That pass was run because a human noticed the diff added a file whose job
+    # is granting `is_admin`. This script reported no trigger against the same
+    # diff: every path regex above is rooted at `backend/app/`, so privilege
+    # granted from `seed/` or `scripts/` was invisible. The list below closes
+    # the paths the pass demonstrated, each one verified against a synthetic
+    # diff. See `scripts/test_appsec_trigger.py`.
+    (
+        "privilege-granting or destructive tooling",
+        "a script that grants admin or deletes a database is a trust boundary that happens to live outside the API",
+        r"^(seed|scripts)/.*\.py$",
+        r"^\+.*(is_admin|\.unlink\(|rmtree|DATABASE_URL)",
+    ),
+    (
+        "security-relevant configuration",
+        "a default here is a control: JWT secret, debug routes, rate limits, upload ceilings",
+        r"backend/app/config\.py$",
+        None,
+    ),
+    (
+        "rate limiting",
+        "the limiter is the bound on brute force and abuse; changing it changes every surface it covers",
+        r"backend/app/ratelimit\.py$",
+        None,
+    ),
+    (
+        "account-recovery tokens",
+        "single-use, hashed-at-rest, purpose-separated — all three are load-bearing",
+        r"backend/app/tokens\.py$",
+        None,
+    ),
+    (
+        "recipient derivation",
+        "M8's stated trust boundary: who receives a notification is never caller-supplied",
+        r"backend/app/notifications\.py$",
+        None,
+    ),
+    (
+        "app wiring",
+        "middleware order, the error contract and router mounting decide what every route inherits",
+        r"backend/app/main\.py$",
+        None,
+    ),
+    (
+        "CI enforcement",
+        "the security jobs cannot be the only thing that notices they were removed",
+        r"^\.github/workflows/.*\.ya?ml$",
+        None,
+    ),
+]
+
+# Triggers that fire on what a diff REMOVES.
+#
+# `scan()` originally collected only `+` lines, so deleting
+# `admin: User = Depends(require_admin)` from a route fired nothing at all —
+# the archetypal security regression, invisible to the check that exists to
+# catch it. Kept deliberately small: these are the removals that are almost
+# never routine.
+REMOVAL_TRIGGERS: list[tuple[str, str, str, str]] = [
+    (
+        "a permission dependency was REMOVED",
+        "removing a gate is the regression this whole mechanism exists to catch",
+        r"backend/app/.*\.py$",
+        r"^-.*(require_admin|require_private_access|get_current_user|require_request_decider|Depends\()",
+    ),
+    (
+        "a response model was REMOVED from a route",
+        "without `response_model` a route returns whatever the ORM object holds",
+        r"backend/app/routers/.*\.py$",
+        r"^-.*response_model\s*=",
+    ),
+    (
+        "a security CI job was REMOVED",
+        "the enforcement layer must not be quietly deletable",
+        r"^\.github/workflows/.*\.ya?ml$",
+        r"^-.*(check_spec_coverage|check_status_freshness|check_pr_conventions|golden\.config|pip-audit|npm audit)",
     ),
 ]
 
@@ -109,12 +190,22 @@ def scan(diff: str) -> list[tuple[str, str, str]]:
     """(label, why, evidence) for every trigger the diff fires."""
     current_file = ""
     added_by_file: dict[str, list[str]] = {}
+    removed_by_file: dict[str, list[str]] = {}
     for line in diff.splitlines():
         if line.startswith("+++ b/"):
             current_file = line[6:]
             added_by_file.setdefault(current_file, [])
+            removed_by_file.setdefault(current_file, [])
+        elif line.startswith("--- a/") and current_file == "":
+            # A pure deletion has `+++ /dev/null`, so the path only ever appears
+            # on the `---` side. Without this the whole file is invisible.
+            current_file = line[6:]
+            added_by_file.setdefault(current_file, [])
+            removed_by_file.setdefault(current_file, [])
         elif line.startswith("+") and not line.startswith("+++") and current_file:
             added_by_file[current_file].append(line)
+        elif line.startswith("-") and not line.startswith("---") and current_file:
+            removed_by_file[current_file].append(line)
 
     fired: list[tuple[str, str, str]] = []
     for label, why, path_re, add_re in TRIGGERS:
@@ -122,7 +213,8 @@ def scan(diff: str) -> list[tuple[str, str, str]]:
             if not re.search(path_re, path):
                 continue
             if add_re is None:
-                if added:
+                # "any change", which must include a change that only deletes.
+                if added or removed_by_file.get(path):
                     fired.append((label, why, path))
                     break
             else:
@@ -130,6 +222,15 @@ def scan(diff: str) -> list[tuple[str, str, str]]:
                 if match:
                     fired.append((label, why, f"{path}: {match.strip()[:90]}"))
                     break
+
+    for label, why, path_re, remove_re in REMOVAL_TRIGGERS:
+        for path, removed in removed_by_file.items():
+            if not re.search(path_re, path):
+                continue
+            match = next((r for r in removed if re.search(remove_re, r)), None)
+            if match:
+                fired.append((label, why, f"{path}: {match.strip()[:90]}"))
+                break
     return fired
 
 

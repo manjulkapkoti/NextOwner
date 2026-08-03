@@ -6,8 +6,8 @@
 // "List a business" action lives in the nav, which is sticky and on screen
 // here — a second contained button would also break the design system's
 // one-primary-CTA-per-screen rule.
-import { useEffect, useState } from 'react'
-import { Alert, Box, Card, Skeleton, Stack, Typography } from '@mui/material'
+import { useCallback, useEffect, useState } from 'react'
+import { Alert, Box, Button, Card, Skeleton, Stack, Typography } from '@mui/material'
 import StorefrontOutlined from '@mui/icons-material/StorefrontOutlined'
 import { api } from '../lib/api'
 import { SpotlightCard } from './SpotlightCard'
@@ -54,12 +54,47 @@ interface ListingRow {
 export function MyListings() {
   const [rows, setRows] = useState<ListingRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Which row is mid-submit, so the action can't be fired twice — the second
+  // POST would be a 409 the seller did nothing to deserve.
+  const [submittingId, setSubmittingId] = useState<number | null>(null)
+  const [submitError, setSubmitError] = useState<{ id: number; message: string } | null>(null)
+
+  const load = useCallback(
+    () =>
+      api('/my/listings')
+        .then((data) => setRows(data))
+        .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e))),
+    [],
+  )
 
   useEffect(() => {
-    api('/my/listings')
-      .then((data) => setRows(data))
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
-  }, [])
+    void load()
+  }, [load])
+
+  // M13 (spec 013 F1/D11) — the missing caller. `POST /listings/{id}/submit`
+  // shipped with M2, gated by `get_owned_listing` and guarded to `draft`, and
+  // no button anywhere in the app ever called it: a seller could create a draft
+  // and then had no way to get it reviewed. M2 built the door, M3 built the
+  // room, nobody built the hallway.
+  //
+  // Hiding this on non-draft rows is UX, not a control. The server's 409 is the
+  // control, and a forged request for someone else's listing still gets the 404
+  // `get_owned_listing` has returned since M2.
+  async function submitForReview(id: number) {
+    setSubmitError(null)
+    setSubmittingId(id)
+    try {
+      await api(`/listings/${id}/submit`, { method: 'POST' })
+      // Re-read rather than patching the row locally: the server owns the
+      // status, and re-reading is how this screen learns anything else the
+      // transition changed.
+      await load()
+    } catch (e: unknown) {
+      setSubmitError({ id, message: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setSubmittingId(null)
+    }
+  }
 
   return (
     <Box>
@@ -138,6 +173,29 @@ export function MyListings() {
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                   Sold for {formatPrice(row.final_price)}
                 </Typography>
+              )}
+
+              {/* Draft rows only — the transition is one-way, so offering it
+                  anywhere else is offering a 409. Outlined, not contained: the
+                  screen's one primary CTA is "List a business" in the nav
+                  (design_system_spec.md §5). */}
+              {row.status === 'draft' && (
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1.5 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    disabled={submittingId === row.id}
+                    onClick={() => submitForReview(row.id)}
+                  >
+                    {submittingId === row.id ? 'Submitting…' : 'Submit for review'}
+                  </Button>
+                </Box>
+              )}
+
+              {submitError?.id === row.id && (
+                <Alert severity="error" sx={{ mt: 2 }}>
+                  Couldn't submit this listing: {submitError.message}
+                </Alert>
               )}
 
               {row.status === 'rejected' && row.rejection_reason && (

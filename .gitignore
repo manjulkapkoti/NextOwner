@@ -9,6 +9,11 @@ __pycache__/
 # Local database + uploaded data-room files (created at Milestone 0+)
 nextowner.db
 *.db-journal
+# The golden path's hermetic database (spec 013 D7) — deleted and recreated on
+# every run by scripts/e2e_serve.py, so it is never worth committing.
+e2e.db
+*.db-wal
+*.db-shm
 backend/uploads/
 uploads/
 

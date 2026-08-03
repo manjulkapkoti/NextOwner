@@ -102,6 +102,21 @@ export function BrowseListings() {
 
   // Debounced, so a typed word is one request rather than one per character.
   const debounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  // Cancel a pending debounce on unmount (M13, spec 013 F7).
+  //
+  // Without this the timer outlives the component and fires `setParams` after
+  // the visitor has navigated away — and `setParams` navigates the router, so
+  // someone who clicks a result within 250ms of typing is thrown straight back
+  // to the marketplace they just left. The fetch effect above already guards
+  // exactly this hazard with its `cancelled` flag; this is the other half of
+  // the same idea, and it was missing.
+  //
+  // Found by the golden path (spec 013), which fills and clicks faster than a
+  // human usually does — but the race is reachable by hand whenever results
+  // from a previous query are still on screen.
+  useEffect(() => () => clearTimeout(debounce.current), [])
+
   const onSearch = useCallback(
     (value: string) => {
       setTerm(value)

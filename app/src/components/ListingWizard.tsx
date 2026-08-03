@@ -13,6 +13,7 @@ import {
   Button,
   Card,
   Divider,
+  MenuItem,
   Step,
   StepLabel,
   Stepper,
@@ -35,11 +36,53 @@ const REVIEW_SPOTLIGHT_POINTS = [
 const STEPS = ['Basics', 'Metrics', 'Private', 'Review']
 
 // What each step is for, said once at the top of it rather than left implicit.
+//
+// The Metrics line used to read "Leave anything you do not have blank", which
+// contradicted the schema it was describing (spec 013 F4/D12): `ListingCreate`
+// requires all five of these, and a blank field serialises to "" which fails
+// Decimal validation — so following the wizard's own instruction produced a
+// 422. Fixed on the UI side rather than by making five columns nullable, which
+// would ripple into M4's filters, M11's valuation inputs and every response
+// model that reads them, to fix a sentence. Zero is also the more accurate
+// datum: "this business has no MRR" is a fact worth storing as 0, not as absent.
+// Step 3's line is load-bearing and was false (spec 013 F6). It promised
+// "never shown publicly" over a group that contained `description` — a field on
+// `ListingPublic`, rendered on the anonymous card to strangers. A seller
+// reading that sentence would reasonably put confidential detail in it. The
+// public copy now lives on step 1 with the rest of the public card, so the
+// promise on step 3 is true of everything under it.
 const STEP_BLURB = [
-  'The headline buyers see first, and what you want for the business.',
-  'The numbers buyers screen on. Leave anything you do not have blank.',
+  'The public card buyers see first: the headline, what you want, and how you describe it.',
+  'The numbers buyers screen on. All five are required — enter 0 where one does not apply.',
   'Only shared with buyers you approve — never shown publicly.',
   'Check it over. This creates a private draft; nothing goes live yet.',
+]
+
+// The listing-type vocabulary (spec 013 F3/D12). `Listing.type` is free text on
+// the server, so this list is the product's vocabulary rather than a schema
+// constraint — which is exactly why it must match what already exists instead
+// of being invented here. These five are the values `seed/seed.py` writes and
+// the ones M11's valuation whitelist names; M4's browse filter is an equality
+// match, so a sixth value invented here would be a type no buyer could filter
+// for and no seeded listing would sit beside.
+const BUSINESS_TYPES: Array<[value: string, label: string]> = [
+  ['saas', 'SaaS'],
+  ['ecommerce', 'E-commerce'],
+  ['content', 'Content / media'],
+  ['marketplace', 'Marketplace'],
+  ['agency', 'Agency / services'],
+]
+
+// The five `ListingCreate` requires with no default, and the reason step 1 now
+// marks them required (F4). `description`, `company_name` and `headline` are
+// required too, but they are strings where "" is merely empty rather than
+// invalid — these five are the ones that 422.
+const METRIC_FIELDS: Array<[label: string, key: string]> = [
+  ['TTM revenue', 'ttm_revenue'],
+  ['TTM profit', 'ttm_profit'],
+  ['MRR', 'mrr'],
+  ['Churn %', 'churn_pct'],
+  ['Customers', 'customers'],
 ]
 
 type Form = Record<string, string>
@@ -78,7 +121,9 @@ export function ListingWizard() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
 
-  const set = (name: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  // Widened from ChangeEvent<HTMLInputElement> so the same helper serves the
+  // Select on step 0, whose change event carries a different element type.
+  const set = (name: string) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [name]: e.target.value }))
 
   function validateStep(): boolean {
@@ -86,6 +131,9 @@ export function ListingWizard() {
     if (step === 0) {
       if (!form.headline.trim()) next.headline = 'A headline is required'
       if (!(Number(form.asking_price) > 0)) next.asking_price = 'Asking price must be greater than 0'
+      // Not cosmetic: M4's browse filter is `Listing.type == query.type`, so a
+      // listing created without one can never match a type filter (F3).
+      if (!form.type) next.type = 'Choose the type that fits best'
     }
     setErrors(next)
     return Object.keys(next).length === 0
@@ -149,21 +197,42 @@ export function ListingWizard() {
               inputProps={{ inputMode: 'decimal' }}
               sx={{ '& input': tabularNums }}
             />
+            <TextField
+              select
+              label="Business type"
+              fullWidth
+              value={form.type}
+              onChange={set('type')}
+              error={Boolean(errors.type)}
+              helperText={errors.type || 'Buyers filter the marketplace by this.'}
+            >
+              {BUSINESS_TYPES.map(([value, label]) => (
+                <MenuItem key={value} value={value}>
+                  {label}
+                </MenuItem>
+              ))}
+            </TextField>
+            {/* Public (`ListingPublic.description`) — so it sits with the rest
+                of the public card, not under step 3's privacy promise (F6). */}
+            <TextField
+              label="Description"
+              fullWidth
+              multiline
+              minRows={4}
+              value={form.description}
+              onChange={set('description')}
+              helperText="Shown on your public listing card. Describe the business without naming it."
+            />
           </Box>
         )}
 
         {step === 1 && (
           <Box sx={fieldStack}>
-            {([
-              ['TTM revenue', 'ttm_revenue'],
-              ['TTM profit', 'ttm_profit'],
-              ['MRR', 'mrr'],
-              ['Churn %', 'churn_pct'],
-              ['Customers', 'customers'],
-            ] as const).map(([label, key]) => (
+            {METRIC_FIELDS.map(([label, key]) => (
               <TextField
                 key={key}
                 label={label}
+                required
                 fullWidth
                 value={form[key]}
                 onChange={set(key)}
@@ -178,13 +247,19 @@ export function ListingWizard() {
           <Box sx={fieldStack}>
             <TextField label="Company name" fullWidth value={form.company_name} onChange={set('company_name')} />
             <TextField label="Website URL" fullWidth value={form.website_url} onChange={set('website_url')} />
+            {/* The data room's contents (F5). This was carried in form state and
+                rendered nowhere — the same defect as `type`, on a more
+                consequential field: without it, no listing created through the
+                UI could ever have anything behind the NDA gate, so the seller
+                half of M5 had no path through the product at all. */}
             <TextField
-              label="Description"
+              label="Detailed financials"
               fullWidth
               multiline
               minRows={4}
-              value={form.description}
-              onChange={set('description')}
+              value={form.detailed_financials}
+              onChange={set('detailed_financials')}
+              helperText="Only buyers you approve can see this. Revenue breakdown, margins, concentration."
             />
           </Box>
         )}
