@@ -13,10 +13,11 @@
 - **Agentic workflow** ✅ merged (#32).
 - **PR conventions guard** ✅ merged (#37).
 
-**In flight:** **E2E golden path (spec 013)** on `feat/013-e2e-golden-path` — **all 8 Build-order slices implemented; all 30 criteria green.** Phase: implementation complete, **awaiting branch review (inline + an independent appsec pass) and then the PR.**
-- The suite is `app/playwright.golden.config.ts` — 6 tests (the fourteen-step path, three trust checks, two anti-vacuity guards), **~17s** for the path itself, ~1 min end to end including both server starts and the frontend build.
-- The spec grew **28 → 30 criteria** mid-build: F5 and F6, both found by running the path, both defects in already-shipped code.
-- CI gains a blocking `golden-path` job that runs on every PR, with the report uploaded on failure.
+- **Phase D — E2E golden path** (spec 013) ✅ — the Playwright suite, reviewed inline and by an independent appsec pass.
+  - `app/playwright.golden.config.ts` runs 6 tests: the fourteen-step path, three trust checks, two anti-vacuity guards. **~13s** for the path itself, ~1 min end to end including both server starts and the frontend build.
+  - A real FastAPI on a dedicated `e2e.db` deleted before every run. Admin comes from a **promote-only CLI**, never an endpoint (D5/D6).
+  - The spec grew **28 → 31 criteria** mid-build (F5, F6, F7) — every one a defect in already-shipped code that running the path exposed.
+  - CI gains a blocking `golden-path` job on every PR, with the report uploaded on failure.
 
 **M12 (deal completion)** finished the listing state machine M7 stopped short of — and is the first milestone whose most valuable finding was a defect in *already-shipped* code:
 - **`mark-sold` and `relist`** over one shared `_resolve_deal` transaction: claim the listing with a compare-and-swap, read the accepted offer, move it, stamp the sale, two audit rows, one commit. `final_price` is derived from the accepted offer's price and nothing else (D4) — the routes take no body at all.
@@ -71,17 +72,18 @@
 **Open PRs:** a **draft** PR for `feat/013-e2e-golden-path` (checkpoint only — the milestone is mid-build, not ready for review).
 
 ## ▶ NEXT ACTION
-**Review the branch, then open the PR.** The build is done and green; what remains is the pre-PR gate the constitution puts before every PR:
-- **inline review** by the orchestrator — architecture + the `docs/security.md` §8 touched→must-cover matrix
-- **an independent `appsec-engineer` pass.** Required, and predicted at spec time: the milestone stopped being test-only the moment it added a caller of a state transition (`POST /listings/{id}/submit`) and touched two forms, so `scripts/check_appsec_trigger.py` fires on the diff. Give it the diff **and** the binding docs.
-- then `/dod` (full suite + matrix), then `/open-pr`.
+**Pick the next piece of work — the numbered sequence and Phase D are both done.** Two candidates, both previously agreed, neither started:
+- **The stakeholder test-health dashboard** — agreed to follow this milestone specifically because it should report on a *proven* MVP. It is a product surface (a route, a page, an admin gate), so it gets its own spec.
+- **Production hardening** (`security.md` §9) — the owner's standing directive plus the production pivot make this the other live candidate. §9 gained a new entry from this milestone's appsec pass (unbounded `ListingCreate` strings, served to anonymous browse callers).
+
+Still unsequenced and owned by `product-lead`, not by a milestone: **payments** (paywall + escrow), **trust & safety / admin ops**, and the **completion invoice (L2) + asset-transfer checklist (L3)** M12 de-scoped.
 
 Run the golden path with:
 ```
 cd app && npx playwright test --config=playwright.golden.config.ts
 ```
 
-Still unsequenced and owned by `product-lead`, not by a milestone: **payments** (paywall + escrow), **trust & safety / admin ops**, and the **completion invoice (L2) + asset-transfer checklist (L3)** that M12 de-scoped — see `milestones.md` § *Not yet sequenced*. **Production hardening** (`security.md` §9) is the other post-M12 candidate; the owner chose Phase D first on 2026-07-29. A **stakeholder test-health dashboard** is agreed to follow this milestone (live page, not a static report — deliberately after the golden path, so it reports on a proven MVP).
+*(The unsequenced work and the two next-milestone candidates are listed once, under ▶ NEXT ACTION above — `milestones.md` § Not yet sequenced is the authoritative list. The owner chose Phase D over production hardening on 2026-07-29; that choice is now spent.)*
 
 ## Carryover notes
 - **Spec 013 built out 2026-08-03. What running the path actually established — the headline is that a browser found three defects that ~850 backend tests and every Vitest suite could not:**

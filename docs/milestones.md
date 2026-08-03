@@ -137,7 +137,7 @@ Additions from the end-to-end gap review that belong to an **already-sequenced**
 - [x] **M10** ⭐ — buyer verification *(+ badge on profile **and** M7's offer queue, upload quota retrofitted onto M2's route too; `?status=` queue filter added mid-build as D13 — § Scope fold-ins)*
 - [x] **M11** — valuation calculator *(+ lead capture — § Scope fold-ins; server-owned calculation, a separate lead-capture route, and an admin read of captured leads)*
 - [x] **M12** — deal completion *(sold / fell-through + final price)*
-- [ ] **E2E** — Playwright golden path *(extends to "sold" — M12 landed 2026-07-28, so the transition the path needs now exists)*
+- [x] **E2E** — Playwright golden path *(spec 013; one business from registration to sold in a real browser against a real backend, plus three trust checks and two anti-vacuity guards. Fixed seven product defects it found on the way — including a wizard step that promised privacy over a public field, and `POST /listings/{id}/submit` having no caller at all.)*
 - [ ] **⚠ Payments & monetization** — subscription/listing-fee paywall + escrow settlement · **not yet sequenced** (`product-lead` to slot, ~M6–M7)
 - [ ] **⚠ Trust & safety / admin ops** — fraud reports, user management, deal monitoring (FR-21) · **not yet sequenced** (`product-lead` to slot)
 
