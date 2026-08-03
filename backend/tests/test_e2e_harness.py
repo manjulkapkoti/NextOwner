@@ -140,9 +140,9 @@ def test_h2_make_admin_refuses_a_user_that_does_not_exist(tmp_path):
 
     # And it must not have created the row as a side effect.
     if db.exists():
-        from app.models import User
-
         from sqlalchemy import create_engine
+
+        from app.models import User
 
         engine = create_engine(f"sqlite:///{db}")
         with Session(engine) as session:
