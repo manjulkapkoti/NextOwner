@@ -17,12 +17,20 @@ import { test, expect, type Browser, type Page } from '@playwright/test'
 const PASSWORD = 'correct horse battery staple'
 
 // One run, one empty database (spec 013 D7), so fixed addresses are safe. The
-// reserved .test TLD (RFC 2606) keeps these unmailable if a later milestone
-// adds a send. The admin is registered and then promoted by global setup —
-// `make_admin` only ever promotes an existing row (spec 013 D6).
-const SELLER = { email: 'seller@e2e.test', password: PASSWORD }
-const BUYER = { email: 'buyer@e2e.test', password: PASSWORD }
-const ADMIN = { email: 'admin@e2e.test', password: PASSWORD }
+// IANA-reserved example.com keeps these unmailable if a later milestone adds a
+// send, and matches what `seed/seed.py` already uses for its fixtures.
+//
+// NOT the `.test` TLD the plan originally prescribed, and the reason is a real
+// finding: `EmailStr` (email-validator) rejects RFC 2606 special-use TLDs
+// outright — "the part after the @-sign is a special-use or reserved name" —
+// so `seller@e2e.test` is an address no human could register either. The
+// harness moved rather than the validator, which is behaving correctly.
+//
+// The admin is registered and then promoted by global setup; `make_admin` only
+// ever promotes an existing row (spec 013 D6).
+const SELLER = { email: 'seller@e2e.example.com', password: PASSWORD }
+const BUYER = { email: 'buyer@e2e.example.com', password: PASSWORD }
+const ADMIN = { email: 'admin@e2e.example.com', password: PASSWORD }
 
 // D10 — the search term G6 uses. Unique enough that finding it is an assertion
 // about *this* listing rather than about the marketplace being non-empty.
@@ -59,12 +67,19 @@ async function registerAndLogIn(page: Page, who: { email: string; password: stri
   await logIn(page, who)
 }
 
+// The nav control that exists only for an authenticated visitor, and so is the
+// honest read of "there is a session". NOT a log-out button: logout lives
+// inside this menu (NavBar.tsx), so no such button is on the page at rest.
+function sessionMarker(page: Page) {
+  return page.getByRole('button', { name: 'Account menu' })
+}
+
 async function logIn(page: Page, who: { email: string; password: string }) {
   await page.goto('/login')
   await page.getByLabel('Email').fill(who.email)
   await page.getByLabel('Password').fill(who.password)
   await page.getByRole('button', { name: /log in|sign in/i }).click()
-  await expect(page.getByRole('button', { name: /log out|sign out/i })).toBeVisible()
+  await expect(sessionMarker(page)).toBeVisible()
 }
 
 // Fill and submit the wizard. Every metric is filled: `ListingCreate` requires
@@ -77,6 +92,11 @@ async function createDraft(page: Page, listing: Listing) {
   await page.getByLabel('Asking price').fill('480000')
   await page.getByLabel('Business type').click()
   await page.getByRole('option', { name: /saas/i }).click()
+  // Public copy, on the public step (F6). Deliberately says nothing the gate is
+  // meant to withhold — G6/T1 assert the anonymous page carries no identity,
+  // and a description that leaked one would make those pass or fail for the
+  // wrong reason.
+  await page.getByLabel('Description').fill('A subscription business serving veterinary clinics.')
   await page.getByRole('button', { name: 'Next' }).click()
 
   await page.getByLabel('TTM revenue').fill('320000')
@@ -88,7 +108,8 @@ async function createDraft(page: Page, listing: Listing) {
 
   await page.getByLabel('Company name').fill(listing.company)
   await page.getByLabel('Website URL').fill(listing.website)
-  await page.getByLabel('Description').fill(listing.detail)
+  // The data room's contents (F5) — the secret G8 must NOT see and G10 must.
+  await page.getByLabel('Detailed financials').fill(listing.detail)
   await page.getByRole('button', { name: 'Next' }).click()
 
   await page.getByRole('button', { name: 'Create draft' }).click()
@@ -126,15 +147,45 @@ async function publishListing(browser: Browser, seller: { email: string; passwor
   }
 }
 
+// Assert the marketplace returns no RESULT for a headline.
+//
+// Deliberately not `getByText(headline).toHaveCount(0)`, which is what this
+// started as and which fails against a working product: browse echoes the
+// search term back as an active-filter chip (`Search: "…"`, BrowseListings),
+// and Playwright matches text by substring — so the page always contains the
+// headline you just searched for, whether or not a listing does. Scoping to
+// the result cards is the assertion the criterion actually makes.
+async function expectNoBrowseResult(page: Page, headline: string) {
+  await page.goto(`/browse?q=${encodeURIComponent(headline)}`)
+  // Wait for the search to have actually resolved, so a count of 0 is a real
+  // empty result rather than a screenshot of the loading skeleton.
+  await expect(page.getByText(/No listings match these filters/i)).toBeVisible()
+  await expect(cardFor(page, headline)).toHaveCount(0)
+}
+
 // Search browse for a headline and open its detail page; returns the listing id.
 async function openFromBrowse(page: Page, headline: string): Promise<string> {
   await page.goto('/browse')
   await page.getByLabel('Search').fill(headline)
-  await page.keyboard.press('Enter')
+
+  // Wait for the SEARCH to land in the URL before touching a result.
+  // BrowseListings debounces the search box by 250ms and then writes `q` to the
+  // query string; clicking a card inside that window navigates to the detail
+  // page and the debounce THEN fires from an unmounted component, throwing the
+  // browser back to the marketplace. That is a genuine race in the product, not
+  // a test artefact — but it is a navigation race and this is a trust-chain
+  // suite, so the path waits for the search to settle rather than encoding a
+  // sleep. Recorded in spec 013 § Errors so it is not rediscovered as new.
+  await page.waitForURL(/[?&]q=/)
+
   const card = cardFor(page, headline)
   await expect(card).toBeVisible()
   await card.getByRole('link').first().click()
   await page.waitForURL(/\/browse\/\d+$/)
+  // The URL changing is not the same as the detail view rendering — assert the
+  // page itself, or a step that only checks the address bar can pass against a
+  // browser that bounced straight back.
+  await expect(page.getByRole('link', { name: /back to browse/i })).toBeVisible()
   return page.url().split('/').pop() as string
 }
 
@@ -179,8 +230,7 @@ test('golden path: a business goes from listed to sold', async ({ browser }) => 
     await expect(cardFor(sellerPage, HEADLINE).getByRole('button', { name: /submit for review/i })).toHaveCount(0)
 
     // Not public yet — curation is the only door to `live` (M3).
-    await buyerPage.goto(`/browse?q=${encodeURIComponent(HEADLINE)}`)
-    await expect(buyerPage.getByText(HEADLINE)).toHaveCount(0)
+    await expectNoBrowseResult(buyerPage, HEADLINE)
   })
 
   await test.step('G4: an admin approves it', async () => {
@@ -196,7 +246,7 @@ test('golden path: a business goes from listed to sold', async ({ browser }) => 
 
   await test.step('G5: the buyer registers in an independent session', async () => {
     await registerAndLogIn(buyerPage, BUYER, 'buyer')
-    await expect(buyerPage.getByRole('button', { name: /log out|sign out/i })).toBeVisible()
+    await expect(sessionMarker(buyerPage)).toBeVisible()
     // The seller's session is untouched — two humans, not one tab.
     await sellerPage.goto('/my-listings')
     await expect(sellerPage.getByRole('heading', { name: 'Your listings' })).toBeVisible()
@@ -234,9 +284,20 @@ test('golden path: a business goes from listed to sold', async ({ browser }) => 
 
   await test.step('G9: the seller approves the request', async () => {
     await sellerPage.goto(`/my-listings/${listingId}/requests`)
-    const row = sellerPage.locator('.MuiCard-root').filter({ hasText: BUYER.email })
-    await expect(row).toBeVisible()
-    await row.getByRole('button', { name: 'Approve' }).click()
+
+    // The buyer's EMAIL is not here, and its absence is the design rather than
+    // an omission: `BuyerProfile` carries no email by construction (spec 005
+    // G3/S3) — the seller decides on budget, sector and verification, and chat
+    // is the channel once they have decided. This step originally located the
+    // row *by* that email, which could never have matched; asserting the
+    // absence instead turns the miss into the check it should have been, in the
+    // one browser view where such a leak would surface.
+    const queue = await sellerPage.locator('body').innerText()
+    expect(queue).not.toContain(BUYER.email)
+
+    // Exactly one request is outstanding, so the action identifies the row.
+    await expect(sellerPage.getByRole('button', { name: 'Approve' })).toHaveCount(1)
+    await sellerPage.getByRole('button', { name: 'Approve' }).click()
     await expect(sellerPage.getByText(/approved/i).first()).toBeVisible()
   })
 
@@ -273,7 +334,17 @@ test('golden path: a business goes from listed to sold', async ({ browser }) => 
     await buyerPage.getByRole('button', { name: /make an offer/i }).click()
 
     await buyerPage.goto('/my-offers')
-    await expect(buyerPage.getByText(HEADLINE)).toBeVisible()
+    // Keyed on the listing id, not the headline: `OfferRead` carries no
+    // headline (it is deliberately minimal — spec 007 F), so this screen groups
+    // by "Listing #N". Asserting a headline here would be asserting a field the
+    // response model does not have and the criterion does not ask for.
+    //
+    // Worth recording as a product observation rather than a defect this
+    // milestone fixes: a buyer holding offers on several businesses sees
+    // "Listing #1 / Listing #4" and no names. Harmless (the headline is public
+    // anyway), but it is the one screen in the path where a real user would be
+    // lost. Carried to progress.md as a follow-up.
+    await expect(buyerPage.getByText(`Listing #${listingId}`)).toBeVisible()
     await expect(buyerPage.getByText(/submitted|awaiting/i).first()).toBeVisible()
   })
 
@@ -297,14 +368,16 @@ test('golden path: a business goes from listed to sold', async ({ browser }) => 
     await dialog.getByRole('button', { name: 'Mark as sold' }).click()
 
     await sellerPage.goto('/my-listings')
-    await expect(cardFor(sellerPage, HEADLINE).getByText('Sold')).toBeVisible()
+    // `exact` matters: the row also carries "Sold for $445,000", and a
+    // substring match would resolve to two elements and fail strict mode on a
+    // product that is behaving correctly.
+    await expect(cardFor(sellerPage, HEADLINE).getByText('Sold', { exact: true })).toBeVisible()
     // Server-derived from the accepted offer, never from a request body
     // (spec 012 D4). 445000 renders through formatPrice.
     await expect(cardFor(sellerPage, HEADLINE).getByText(/445,000/)).toBeVisible()
 
     // A sold listing leaves the marketplace (spec 012 D10 — browse is live-only).
-    await buyerPage.goto(`/browse?q=${encodeURIComponent(HEADLINE)}`)
-    await expect(buyerPage.getByText(HEADLINE)).toHaveCount(0)
+    await expectNoBrowseResult(buyerPage, HEADLINE)
   })
 
   await Promise.all([sellerContext.close(), buyerContext.close(), adminContext.close()])
@@ -326,8 +399,8 @@ test.describe('trust checks in a real browser', () => {
     website: 'https://northgate-billing.test',
     detail: 'Gross retention 96 percent across the top twenty accounts',
   }
-  const GATED_SELLER = { email: 'gated-seller@e2e.test', password: PASSWORD }
-  const OUTSIDER = { email: 'outsider@e2e.test', password: PASSWORD }
+  const GATED_SELLER = { email: 'gated-seller@e2e.example.com', password: PASSWORD }
+  const OUTSIDER = { email: 'outsider@e2e.example.com', password: PASSWORD }
 
   test.beforeAll(async ({ browser }) => {
     await publishListing(browser, GATED_SELLER, GATED)

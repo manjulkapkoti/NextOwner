@@ -14,7 +14,7 @@
 import { spawnSync } from 'node:child_process'
 import { API_URL, BACKEND_DIR, PYTHON, REPO_ROOT } from '../../playwright.golden.config'
 
-const ADMIN_EMAIL = 'admin@e2e.test'
+const ADMIN_EMAIL = 'admin@e2e.example.com'
 const PASSWORD = 'correct horse battery staple'
 
 // The backend serves with cwd=backend, so its relative `sqlite:///e2e.db`

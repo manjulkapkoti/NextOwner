@@ -22,6 +22,14 @@ import os
 import sys
 from pathlib import Path
 
+# Running `python ../scripts/e2e_serve.py` puts *this* directory on sys.path,
+# not the working directory, so `app` would not be importable. Added explicitly
+# rather than relying on the caller's cwd. Imported as `app`, exactly as the
+# backend and its tests do — `backend.app` would load a second copy of every
+# model, and rows written through it would not be the rows the API reads
+# (the same reason seed/seed.py gives).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
+
 # The one database this script is allowed to delete is named by DATABASE_URL,
 # and it must be an obviously-throwaway SQLite file. Both halves matter: the
 # first keeps the config the single source of truth for where the run writes,
