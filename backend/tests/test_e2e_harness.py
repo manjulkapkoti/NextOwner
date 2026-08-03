@@ -166,7 +166,15 @@ def test_h5_ci_runs_the_golden_path_as_a_blocking_job():
     # A job conditioned off pull_request would leave every PR unguarded — the
     # exact hole `status-freshness` and `pr-conventions` are allowed to have and
     # this one is not.
-    conditional = re.search(r"^\s*if:\s*(.+)$", job, re.MULTILINE)
+    #
+    # Anchored at the JOB's indent (four spaces), not `^\s*if:`. The looser
+    # pattern also matched the step-level `if: failure()` that gates the
+    # report upload — a conditional that decides whether to keep an artefact,
+    # not whether to run the suite. Reading it as the second thing put this
+    # criterion in conflict with the milestone's own § Errors & failure modes,
+    # which requires that upload. The criterion says "a conditional that skips
+    # it on pull requests"; only a job-level `if:` can do that.
+    conditional = re.search(r"^    if:\s*(.+)$", job, re.MULTILINE)
     if conditional:
         assert "pull_request" in conditional.group(1), (
             f"the golden-path job skips pull requests: if: {conditional.group(1)}"

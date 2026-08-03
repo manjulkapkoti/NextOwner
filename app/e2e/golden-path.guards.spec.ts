@@ -31,8 +31,14 @@ test('X1: a failing backend fails the run rather than passing it', async ({ page
   await page.getByRole('button', { name: 'Create account' }).click()
 
   // The two things that must NOT happen: a silent success, or a session.
+  //
+  // The session check reads the ACCOUNT MENU, which is what an authenticated
+  // nav actually renders. It was written against a log-out button, and that
+  // assertion could never have failed: logout lives inside this menu, so no
+  // button by that name exists on any page, signed in or out. A guard against
+  // vacuity that was itself vacuous — found while running the path.
   await expect(page).not.toHaveURL(/\/my-listings/)
-  await expect(page.getByRole('button', { name: /log out|sign out/i })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Account menu' })).toHaveCount(0)
   await expect(page.getByRole('alert')).toBeVisible()
 })
 
