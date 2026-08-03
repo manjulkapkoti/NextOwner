@@ -12,7 +12,7 @@
 // golden-path.guards.spec.ts, and it is the property that stops this suite
 // proving that the frontend can render fixtures. Its neighbours here
 // (screens/a11y/layout) stub everything, deliberately — do not copy them.
-import { test, expect, type Browser, type Page, type BrowserContext } from '@playwright/test'
+import { test, expect, type Browser, type Page } from '@playwright/test'
 
 const PASSWORD = 'correct horse battery staple'
 
