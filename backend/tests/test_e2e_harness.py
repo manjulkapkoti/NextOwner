@@ -14,9 +14,11 @@ Two kinds of test live here, and the difference matters when reading them:
 
 from __future__ import annotations
 
+import importlib.util
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -25,6 +27,18 @@ from sqlmodel import Session, select
 ROOT = Path(__file__).resolve().parents[2]
 GOLDEN_CONFIG = ROOT / "app" / "playwright.golden.config.ts"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+
+
+def _load_e2e_serve():
+    """Import `scripts/e2e_serve.py` by path — it is a script, not a package.
+
+    Safe to import: everything that opens a socket or a database lives inside
+    `main()`, so module import is pure definitions.
+    """
+    spec = importlib.util.spec_from_file_location("e2e_serve", ROOT / "scripts" / "e2e_serve.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _run_make_admin(*args: str, env_extra: dict[str, str] | None = None, cwd: Path | None = None):
@@ -73,6 +87,38 @@ def test_h1_golden_config_binds_a_dedicated_database():
         "the golden config must not reuse an existing server"
     )
 
+    # ── and the guard that actually makes the claim true ────────────────────
+    #
+    # Everything above reads the config's *intent*. H1 promises something
+    # stronger — that the developer's database is untouched — and the only code
+    # that can keep that promise is `_sqlite_path`, which decides what gets
+    # deleted. It had no direct test until the independent appsec pass
+    # (2026-08-03) showed the original hand-rolled parser accepting
+    # `sqlite:///nextowner.db?e2e=1`: refused by nothing here, opened as the
+    # real `nextowner.db` by SQLAlchemy. A guard that parses its input
+    # differently from the thing it guards is not a guard.
+    e2e_serve = _load_e2e_serve()
+    outside_the_repo = (Path(tempfile.gettempdir()) / "e2e-notes.db").as_posix()
+
+    hostile = [
+        "sqlite:///nextowner.db",                              # the obvious one
+        "sqlite:///../nextowner.db",                           # ...via a relative path
+        "sqlite:///nextowner.db?e2e=1",                        # the parser differential
+        "sqlite:///file:nextowner.db?uri=true&mode=rwc&e2e=1",  # SQLite's URI grammar
+        "postgresql://user:pw@localhost:5432/nextowner",       # not SQLite at all
+        "sqlite://",                                           # names no file
+        "sqlite:///:memory:",
+        f"sqlite:///{outside_the_repo}",                       # right name, wrong place
+        "sqlite:///scratch.db",                                # not named like a throwaway
+    ]
+    for url in hostile:
+        with pytest.raises(SystemExit):
+            e2e_serve._sqlite_path(url)
+
+    # ...and the one it must still accept, or the harness cannot run at all.
+    accepted = (ROOT / "backend" / "e2e.db").as_posix()
+    assert e2e_serve._sqlite_path(f"sqlite:///{accepted}").name == "e2e.db"
+
 
 # ── H2/H3/H4: the admin CLI refuses what it should ───────────────────────────
 
@@ -101,6 +147,25 @@ def test_h2_make_admin_refuses_a_user_that_does_not_exist(tmp_path):
         engine = create_engine(f"sqlite:///{db}")
         with Session(engine) as session:
             assert session.exec(select(User).where(User.email == "nobody@e2e.test")).first() is None
+
+    # "Creates nothing" has to hold for every spelling of a SQLite URL, not just
+    # the one the guard was written against. `sqlite+pysqlite:///` used to pass
+    # the dialect check and skip the existence check entirely, so it created a
+    # zero-byte file and then died in a raw OperationalError traceback rather
+    # than this CLI's plain refusal (appsec pass, 2026-08-03).
+    ghost = tmp_path / "e2e-ghost.db"
+    result = _run_make_admin(
+        "nobody@e2e.test",
+        env_extra={
+            "DATABASE_URL": f"sqlite+pysqlite:///{ghost}",
+            "NEXTOWNER_ALLOW_ADMIN_PROMOTION": "1",
+        },
+    )
+    assert result.returncode != 0
+    assert not ghost.exists(), "make_admin created a database file it was only asked to read"
+    assert "Traceback" not in result.stderr, (
+        "the operator should get the CLI's refusal, not a SQLAlchemy stack trace"
+    )
 
 
 def test_h3_make_admin_refuses_a_non_sqlite_database(tmp_path):

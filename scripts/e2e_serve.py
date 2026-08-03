@@ -22,6 +22,10 @@ import os
 import sys
 from pathlib import Path
 
+from sqlalchemy.engine.url import make_url
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 # Running `python ../scripts/e2e_serve.py` puts *this* directory on sys.path,
 # not the working directory, so `app` would not be importable. Added explicitly
 # rather than relying on the caller's cwd. Imported as `app`, exactly as the
@@ -40,21 +44,48 @@ DEFAULT_PORT = 8001
 
 
 def _sqlite_path(database_url: str) -> Path:
-    """The file a SQLite URL points at, or exit with the reason it is refused."""
-    if not database_url.startswith("sqlite:///"):
+    """The file a SQLite URL points at, or exit with the reason it is refused.
+
+    **Parsed with SQLAlchemy's own `make_url`, deliberately.** The first version
+    of this function sliced the string by hand, and the independent appsec pass
+    (2026-08-03) showed that a guard which parses a string differently from the
+    thing it guards is not a guard at all. `sqlite:///nextowner.db?e2e=1` passed
+    every check here — `Path(...).name` was the whole string `nextowner.db?e2e=1`,
+    which is not `nextowner.db` and does contain `e2e` — while SQLAlchemy opened
+    the developer's real `nextowner.db`. The run then printed "hermetic
+    database", deleted nothing, and wrote the entire golden path into it.
+
+    So: one parser, the same one `app/db.py` uses, and three checks on what it
+    actually resolves to.
+    """
+    try:
+        url = make_url(database_url)
+    except Exception:  # noqa: BLE001 — any parse failure is a refusal
+        raise SystemExit(f"Refusing to run: DATABASE_URL is not a URL SQLAlchemy can parse: {database_url!r}")
+
+    if url.get_backend_name() != "sqlite":
         raise SystemExit(
-            f"Refusing to run: DATABASE_URL is {database_url!r}, not a local SQLite file.\n"
+            f"Refusing to run: DATABASE_URL is a {url.get_backend_name()!r} database, not local SQLite.\n"
             "This script DELETES the database it is pointed at before starting."
         )
 
-    raw = database_url[len("sqlite:///") :]
-    if not raw or raw == ":memory:":
+    # No query parameters, at all. `?uri=true` hands SQLite a completely
+    # different filename grammar (`file:...?mode=rwc`), and a guard that cannot
+    # reason about what it is reading should refuse rather than guess.
+    if url.query:
+        raise SystemExit(
+            f"Refusing to run: DATABASE_URL carries query parameters ({dict(url.query)}).\n"
+            "They change how the filename is interpreted, so this script will not delete what they name."
+        )
+
+    if not url.database or url.database == ":memory:":
         raise SystemExit("Refusing to run: DATABASE_URL names no file on disk.")
 
-    path = Path(raw)
-    # Guard on the *name*, not on the resolved location: a run pointed at the
-    # developer's database would still pass every G criterion while destroying
-    # local data, which is exactly the failure H1 exists to make impossible.
+    path = Path(url.database).resolve()
+
+    # Guard on the *name* — a run pointed at the developer's database would
+    # still pass every G criterion while destroying local data, which is
+    # exactly the failure H1 exists to make impossible.
     if path.name == "nextowner.db":
         raise SystemExit(
             "Refusing to run: DATABASE_URL points at nextowner.db, the developer's "
@@ -64,6 +95,13 @@ def _sqlite_path(database_url: str) -> Path:
         raise SystemExit(
             f"Refusing to run: {path.name!r} is not an e2e database. Name it so the "
             "next person reading a `rm` in a script can tell it is throwaway."
+        )
+    # ...and on the *location*, which the name alone never bounded: `e2e-notes.db`
+    # in someone's documents folder satisfied every check above.
+    if not path.is_relative_to(REPO_ROOT):
+        raise SystemExit(
+            f"Refusing to run: {path} is outside the repository ({REPO_ROOT}).\n"
+            "This script deletes the file it is given; it will not reach outside the project to do it."
         )
     return path
 

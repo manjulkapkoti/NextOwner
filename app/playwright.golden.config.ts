@@ -28,6 +28,12 @@ export const API_URL = `http://127.0.0.1:${API_PORT}`
 // scripts/e2e_serve.py refuses to start if this ever names nextowner.db.
 const DATABASE_URL = 'sqlite:///e2e.db'
 
+// The same file, named absolutely, for anything that does NOT run with
+// cwd=backend — global setup runs from the repo root, so its relative form
+// would silently address a second, empty database. Exported so there is one
+// home for this fact rather than two that happen to agree (Article 4).
+export const E2E_DATABASE_FILE = 'e2e.db'
+
 // The venv on a dev machine, plain `python` in CI. Resolved here rather than
 // asked of the developer, because a config that needs an env var set correctly
 // is a config that fails confusingly the first time someone clones the repo.

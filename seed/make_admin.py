@@ -67,19 +67,33 @@ def promote(email: str) -> None:
     #    — `app.db` builds its engine at import time, so this order is load-
     #    bearing rather than stylistic.
     from app.config import settings  # noqa: PLC0415 — deliberately after the guard
+    from sqlalchemy.engine.url import make_url  # noqa: PLC0415 — parses only, opens nothing
 
     database_url = settings.database_url
-    if not database_url.startswith("sqlite"):
+    # Parsed with SQLAlchemy's own parser, not by string slicing. The first
+    # version tested `startswith("sqlite")` here and `startswith("sqlite:///")`
+    # below, so `sqlite+pysqlite:///new.db` passed the first and skipped the
+    # second entirely — creating a zero-byte file and dying in a raw
+    # OperationalError traceback instead of this script's plain refusal. One
+    # parser, used by both checks, is what closes that (appsec pass, 2026-08-03).
+    try:
+        url = make_url(database_url)
+    except Exception:  # noqa: BLE001 — any parse failure is a refusal
+        _fail(f"DATABASE_URL is not a URL SQLAlchemy can parse: {database_url!r}")
+
+    if url.get_backend_name() != "sqlite":
         _fail(
-            f"DATABASE_URL is not a local SQLite database ({database_url.split('://')[0]}://…).\n"
+            f"DATABASE_URL is not a local SQLite database ({url.get_backend_name()}://…).\n"
             "A non-SQLite URL means something closer to production, and granting admin "
             "there deserves a deliberate decision rather than this script."
         )
 
     # 3. The row must already exist. A database file that was never created
     #    cannot hold one, and saying so plainly beats a "no such table" traceback.
-    db_path = Path(database_url[len("sqlite:///") :]) if database_url.startswith("sqlite:///") else None
-    if db_path is not None and db_path.name != ":memory:" and not db_path.exists():
+    #    It also keeps H2's promise literally true: this script creates nothing,
+    #    not even an empty file.
+    db_path = Path(url.database) if url.database and url.database != ":memory:" else None
+    if db_path is not None and not db_path.exists():
         _fail(
             f"there is no database at {db_path.resolve()}.\n"
             f"{email} must register through the API first — this script only promotes an "

@@ -58,6 +58,14 @@ test('X2: the golden path never intercepts a request', async () => {
     ['route.fulfill (a synthesised response)', /\.fulfill\s*\(/],
     ['a pre-injected auth token', /localStorage\.setItem/],
     ['addInitScript (the usual way a token is injected)', /addInitScript\s*\(/],
+    // Added after the independent appsec pass (2026-08-03). The four above stop
+    // the path FAKING a response; these stop it SKIPPING the UI — driving the
+    // API directly is exactly what D11 rejected for G3, and it would leave the
+    // same shipped gap invisible for the same reason. Not a live violation when
+    // added: the golden spec used none of them.
+    ['a direct API call (bypassing the UI)', /\b(request|context)\.(post|put|patch|delete|fetch)\s*\(/],
+    ['pre-seeded cookies', /addCookies\s*\(/],
+    ['injected headers (the other way to carry a token)', /setExtraHTTPHeaders\s*\(/],
   ]
 
   for (const [what, pattern] of forbidden) {

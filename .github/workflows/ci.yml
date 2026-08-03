@@ -213,6 +213,14 @@ jobs:
       # because the first version of this check failed on its own PR.
       - name: Test the guards
         run: python scripts/test_pr_conventions.py
+      # Same reasoning, a different guard. `check_appsec_trigger.py` decides
+      # whether a branch needs an independent security review, and on 2026-08-03
+      # it reported "no trigger" against a diff that added an is_admin-granting
+      # CLI — the pass happened only because a human noticed. These cases pin
+      # the blind spots that caused it, including that removing a permission
+      # dependency used to fire nothing at all.
+      - name: Test the appsec trigger
+        run: python scripts/test_appsec_trigger.py
       - name: Check commits and the PR body
         run: python scripts/check_pr_conventions.py --base ${{ github.base_ref }}
       # A different guard, same reasoning: a squash-merge with no --body lets

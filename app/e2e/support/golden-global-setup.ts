@@ -12,7 +12,13 @@
 // bit on a row that already registered normally (D6), so it cannot inject a
 // principal even if it is pointed somewhere it should not be.
 import { spawnSync } from 'node:child_process'
-import { API_URL, BACKEND_DIR, PYTHON, REPO_ROOT } from '../../playwright.golden.config'
+import {
+  API_URL,
+  BACKEND_DIR,
+  E2E_DATABASE_FILE,
+  PYTHON,
+  REPO_ROOT,
+} from '../../playwright.golden.config'
 
 const ADMIN_EMAIL = 'admin@e2e.example.com'
 const PASSWORD = 'correct horse battery staple'
@@ -21,7 +27,7 @@ const PASSWORD = 'correct horse battery staple'
 // lands there. This process runs from the repo root, so the SAME file has to be
 // named absolutely — a relative URL here would silently create a SECOND, empty
 // database at the root and promote an admin nobody can log in as.
-const DATABASE_URL = `sqlite:///${BACKEND_DIR.replace(/\\/g, '/')}/e2e.db`
+const DATABASE_URL = `sqlite:///${BACKEND_DIR.replace(/\\/g, '/')}/${E2E_DATABASE_FILE}`
 
 async function waitForApi(timeoutMs = 60_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
